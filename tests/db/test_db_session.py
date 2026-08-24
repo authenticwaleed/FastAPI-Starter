@@ -6,16 +6,19 @@ These tests need the local PostgreSQL instance described in `.env.example`.
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.session import SessionDep, get_engine
 
 
 def test_engine_is_built_from_settings() -> None:
     url = get_engine().url
+    configured = make_url(str(get_settings().database_url))
 
-    assert url.drivername == "postgresql+psycopg"
-    assert url.database == "fastapi_starter"
+    assert url.drivername == configured.drivername
+    assert url.database == configured.database
 
 
 def test_engine_is_shared_across_calls() -> None:

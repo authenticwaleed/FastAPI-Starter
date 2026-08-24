@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch makes the previous run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fastapi_starter
+        ports:
+          - 5432:5432
+        # Without the health check the first test can start before the
+        # database is accepting connections.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_starter
+      # The suite creates this database itself if it is missing.
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_starter_test
+      # A throwaway value for CI. The real one is a deployment secret and
+      # has never been in this repository.
+      JWT_SECRET_KEY: ci-only-signing-key-not-used-for-anything-real
+      ENVIRONMENT: development
+      LOG_LEVEL: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        # --frozen: fail if the lock file and pyproject.toml disagree,
+        # rather than quietly resolving something different from local.
+        run: uv sync --frozen
+
+      # Each step is named so a red run says which gate failed without
+      # anyone having to open the log.
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Formatting
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy
+
+      - name: Migrations apply to a clean database
+        run: uv run alembic upgrade head
+
+      - name: Tests
+        run: uv run pytest
