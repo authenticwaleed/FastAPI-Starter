@@ -23,6 +23,8 @@ app/
 ├── db/
 │   ├── base.py
 │   └── session.py
+├── models/
+│   └── user.py
 ├── schemas/
 │   └── user.py
 └── services/
@@ -33,6 +35,7 @@ tests/
 ├── test_database_connection.py
 ├── test_db_session.py
 ├── test_health.py
+├── test_user_model.py
 └── test_users.py
 ```
 
@@ -296,11 +299,11 @@ hashed_password = "...password hash..."
 
 ### Acceptance criteria
 
-- [ ] User table model exists
-- [ ] Email is unique
-- [ ] Primary key is configured
-- [ ] Timestamps are handled consistently
-- [ ] Password field stores only a hash
+- [x] User table model exists
+- [x] Email is unique
+- [x] Primary key is configured
+- [x] Timestamps are handled consistently
+- [x] Password field stores only a hash
 
 ---
 
