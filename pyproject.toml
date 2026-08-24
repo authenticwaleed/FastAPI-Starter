@@ -3,6 +3,7 @@ name = "fastapi-starter"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.19.1",
     "fastapi[standard]>=0.141.1",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.15.0",

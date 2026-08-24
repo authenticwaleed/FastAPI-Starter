@@ -30,11 +30,16 @@ app/
 └── services/
     └── user_service.py
 
+alembic/
+├── env.py
+└── versions/
+
 tests/
 ├── conftest.py
 ├── test_database_connection.py
 ├── test_db_session.py
 ├── test_health.py
+├── test_migrations.py
 ├── test_user_model.py
 └── test_users.py
 ```
@@ -347,10 +352,10 @@ alembic downgrade -1
 
 ### Acceptance criteria
 
-- [ ] Alembic initialized
-- [ ] User table migration generated
-- [ ] Migration can upgrade a clean database
-- [ ] Migration can be rolled back
+- [x] Alembic initialized
+- [x] User table migration generated
+- [x] Migration can upgrade a clean database
+- [x] Migration can be rolled back
 
 ---
 
