@@ -62,6 +62,12 @@ tests/
 - [x] FastAPI dependency injection
 - [x] Basic `404` handling
 - [x] Request validation
+- [x] PostgreSQL persistence via SQLAlchemy 2.x
+- [x] Alembic migrations
+- [x] Repository layer
+- [x] Full user CRUD with pagination
+- [x] Duplicate-email handling (`409`)
+- [x] Argon2id password hashing
 - [x] Pytest tests
 - [x] Environment-based settings
 - [x] `.env.example`
@@ -456,13 +462,30 @@ DELETE /api/v1/users/{user_id}
 GET /api/v1/users?page=1&page_size=20
 ```
 
+`page` starts at 1 and `page_size` is capped at 100, so a client cannot ask
+for the whole table in one request.
+
+### Response shape
+
+The list endpoint returns an envelope rather than a bare array, so a client
+can work out how many pages exist without a second request:
+
+```text
+{
+  "items": [ ...users... ],
+  "total": 137,
+  "page": 1,
+  "page_size": 20
+}
+```
+
 ### Acceptance criteria
 
-- [ ] CRUD endpoints work against PostgreSQL
-- [ ] Duplicate emails return a useful error
-- [ ] Missing users return `404`
-- [ ] List endpoint supports pagination
-- [ ] Response schemas do not expose sensitive fields
+- [x] CRUD endpoints work against PostgreSQL
+- [x] Duplicate emails return a useful error
+- [x] Missing users return `404`
+- [x] List endpoint supports pagination
+- [x] Response schemas do not expose sensitive fields
 
 ---
 
@@ -502,10 +525,10 @@ Valid / Invalid
 
 ### Acceptance criteria
 
-- [ ] Plain password is accepted only as request input
-- [ ] Plain password is never persisted
-- [ ] Password hash is never returned through API responses
-- [ ] Password verification is covered by tests
+- [x] Plain password is accepted only as request input
+- [x] Plain password is never persisted
+- [x] Password hash is never returned through API responses
+- [x] Password verification is covered by tests
 
 ---
 
@@ -901,13 +924,13 @@ We will follow this order:
 
 ```text
 1.  Current FastAPI foundation             ✅
-2.  PostgreSQL
-3.  SQLAlchemy 2.x
-4.  User database model
-5.  Alembic migrations
-6.  Repository layer
-7.  Full user CRUD
-8.  Password hashing
+2.  PostgreSQL                             ✅
+3.  SQLAlchemy 2.x                         ✅
+4.  User database model                    ✅
+5.  Alembic migrations                     ✅
+6.  Repository layer                       ✅
+7.  Full user CRUD                         ✅
+8.  Password hashing                       ✅
 9.  JWT authentication
 10. Centralized error handling
 11. Logging
@@ -944,6 +967,13 @@ Throughout the project:
 
 The next implementation task is:
 
-> **Add PostgreSQL + SQLAlchemy 2.x and replace the in-memory user storage with real database persistence.**
+> **Phase 8 — JWT authentication: add `/auth/register`, `/auth/login` and a protected `/auth/me`, with an auth dependency that resolves the current user from a bearer token.**
+
+Groundwork that already exists: `verify_password()` in `app/core/security.py` is
+implemented and tested, and simply has no caller until login uses it.
+
+Still to add: token creation/decoding, JWT settings (secret, algorithm, expiry)
+in `Settings`, `app/schemas/auth.py`, `app/services/auth_service.py`,
+`app/api/dependencies/auth.py` and `app/api/routes/auth.py`.
 
 We will implement it incrementally so every new file and abstraction has a clear purpose.
