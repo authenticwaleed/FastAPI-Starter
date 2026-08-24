@@ -110,10 +110,13 @@ export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(3
 docker compose up --build
 ```
 
-> **Not yet verified.** The compose file validates and resolves as intended,
-> but no Docker daemon was available where this was written, so the image has
-> never been built. The same applies to `.github/workflows/ci.yml`: every
-> command in it passes locally, but the workflow itself only runs on a push.
+> **Verified.** The stack has been built and run: PostgreSQL comes up healthy,
+> `migrate` applies the migrations and exits, the API answers
+> `/health/ready` over the compose network, and data survives
+> `docker compose down` followed by `up`.
+>
+> `.github/workflows/ci.yml` is the one thing still unproven: every command
+> in it passes locally, but a workflow only executes on a push.
 
 - The API is on port 8000; PostgreSQL is published on **5433**, so it does
   not collide with an instance already running on the host.

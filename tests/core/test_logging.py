@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import Engine, text
 
 from app.core.config import Settings, get_settings
 from app.core.logging import JsonFormatter, configure_logging
@@ -252,3 +253,30 @@ def test_a_json_record_carries_its_traceback() -> None:
     payload = json.loads(JsonFormatter().format(record))
 
     assert "ValueError: the cause" in payload["exception"]
+
+
+def test_sql_statements_are_logged_once(engine: Engine) -> None:
+    # create_engine's `echo` would attach a handler to
+    # sqlalchemy.engine.Engine on top of the one on root, and every
+    # statement would appear twice. The level does the same job alone.
+    configure_logging()
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+
+    try:
+        with capture(logging.INFO) as records, engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    finally:
+        configure_logging()
+
+    statements = [
+        record.getMessage()
+        for record in records
+        if record.name.startswith("sqlalchemy")
+    ]
+
+    assert statements.count("SELECT 1") == 1
+
+
+def test_no_engine_is_built_with_echo() -> None:
+    # The setting that reintroduces the duplicate, as a guard.
+    assert "echo=" not in Path("app/db/session.py").read_text()

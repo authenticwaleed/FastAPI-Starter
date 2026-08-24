@@ -18,9 +18,14 @@ def get_engine() -> Engine:
     """
     settings = get_settings()
 
+    # `echo` is deliberately not passed. It is documented as attaching a
+    # handler, and SQLAlchemy attaches it to the sqlalchemy.engine.Engine
+    # logger after checking that logger alone for handlers -- not its
+    # parents -- so every statement would be logged twice: once there, and
+    # once more after propagating up. app.core.logging sets the level
+    # instead, which is the same switch without the second handler.
     return create_engine(
         str(settings.database_url),
-        echo=settings.debug,
         pool_pre_ping=True,
     )
 

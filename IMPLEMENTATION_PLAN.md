@@ -804,29 +804,31 @@ FastAPI + PostgreSQL
 
 ### Acceptance criteria
 
-- [ ] API runs inside a container
-- [ ] PostgreSQL runs as a separate service
-- [ ] Application can connect using container networking
-- [ ] Database data uses persistent volume storage
+- [x] API runs inside a container
+- [x] PostgreSQL runs as a separate service
+- [x] Application can connect using container networking
+- [x] Database data uses persistent volume storage
 - [x] Secrets/config are not baked into the image
 
-### Status
+### Verified by
 
-`Dockerfile`, `docker-compose.yml` and `.dockerignore` are written, and
-`docker compose config` validates and resolves as intended: the API is given
-`postgresql+psycopg://...@postgres:5432/...`, so it reaches the database over
-the compose network rather than localhost, and compose refuses to start
-without `JWT_SECRET_KEY` in the environment.
+Built and run, not just written. `docker compose up` brought the stack up in
+the intended order — volume created, PostgreSQL healthy, `migrate` applied
+`3b0273bf371d` and exited, then the API started — and from the host:
 
-The four unticked boxes need a Docker daemon, which was not running where
-this was built, so **the image has never been built or run**. Confirm them
-with:
+- all three health endpoints answered 200, including `/health/ready`, which
+  only succeeds if the API reached PostgreSQL over the compose network by
+  its service name
+- register, login and `/auth/me` worked end to end against the container
+- a user created before `docker compose down` was still there after
+  `docker compose up`, so the named volume really does outlive the container
 
-```bash
-export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-docker compose up --build
-curl localhost:8000/api/v1/health/ready
-```
+Running it also found a bug that no amount of reading the file would have:
+every SQL statement was logged twice. `create_engine(echo=True)` attaches a
+handler to the `sqlalchemy.engine.Engine` logger, having checked that logger
+alone for handlers rather than its parents, so each record was emitted there
+and again after propagating to root. SQL logging is now a level rather than
+`echo`, and a test asserts a statement is logged exactly once.
 
 ---
 
@@ -993,7 +995,7 @@ We will follow this order:
 11. Logging                                ✅
 12. Stronger tests / test database         ✅
 13. CORS + security configuration          ✅
-14. Docker                                 written, not yet run
+14. Docker                                 ✅
 15. Ruff + type checking + pre-commit      ✅
 16. CI pipeline                            written, not yet run
 17. Production readiness                   ✅
@@ -1029,10 +1031,9 @@ only be written, and then deciding what this becomes.
 
 **Confirm what has not run yet**
 
-1. `docker compose up --build`, then `curl localhost:8000/api/v1/health/ready`.
-   No Docker daemon was available where this was built, so the image has
-   never been built.
-2. Push, and watch the first CI run go green.
+Only CI. Open a pull request and watch the first run go green — a workflow
+executes on a push, and nothing else can stand in for that. Docker has since
+been built and run, and its criteria are ticked above on that basis.
 
 **Then, before this serves anything real**
 
