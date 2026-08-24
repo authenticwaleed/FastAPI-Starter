@@ -1,9 +1,7 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.schemas.user import UserCreate, UserRead
-from app.services.user_service import UserService, get_user_service
+from app.services.user_service import EmailAlreadyExistsError, UserServiceDep
 
 
 router = APIRouter(
@@ -11,24 +9,31 @@ router = APIRouter(
     tags=["users"],
 )
 
-UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
-
+# These handlers are sync on purpose. The session is a blocking, sync
+# SQLAlchemy session, so FastAPI runs them in a threadpool instead of letting
+# a slow query stall the event loop for every other request.
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_user(
+def create_user(
     payload: UserCreate,
     service: UserServiceDep,
 ) -> UserRead:
-    return service.create_user(payload)
+    try:
+        return service.create_user(payload)
+    except EmailAlreadyExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        ) from None
 
 
 @router.get("")
-async def list_users(service: UserServiceDep) -> list[UserRead]:
+def list_users(service: UserServiceDep) -> list[UserRead]:
     return service.list_users()
 
 
 @router.get("/{user_id}")
-async def get_user(
+def get_user(
     user_id: int,
     service: UserServiceDep,
 ) -> UserRead:
