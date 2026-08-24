@@ -19,12 +19,15 @@ app/
 │       ├── health.py
 │       └── users.py
 ├── core/
-│   └── config.py
+│   ├── config.py
+│   └── security.py
 ├── db/
 │   ├── base.py
 │   └── session.py
 ├── models/
 │   └── user.py
+├── repositories/
+│   └── user_repository.py
 ├── schemas/
 │   └── user.py
 └── services/
@@ -40,7 +43,10 @@ tests/
 ├── test_db_session.py
 ├── test_health.py
 ├── test_migrations.py
+├── test_security.py
 ├── test_user_model.py
+├── test_user_repository.py
+├── test_user_service.py
 └── test_users.py
 ```
 
@@ -60,19 +66,23 @@ tests/
 - [x] Environment-based settings
 - [x] `.env.example`
 
-### Current limitation
+### Current storage
 
-Users are stored in an in-memory Python dictionary.
+Users are persisted in PostgreSQL through a repository layer.
 
 ```text
 FastAPI process
     ↓
 UserService
     ↓
-Python dictionary
+UserRepository
+    ↓
+SQLAlchemy
+    ↓
+PostgreSQL
 ```
 
-This is useful for learning, but it is **not real persistence**. Restarting the application loses all users, and multiple application workers would not share the same data.
+Users now survive a restart and are shared across workers. Passwords are stored only as Argon2id hashes.
 
 ---
 
@@ -407,10 +417,10 @@ A repository layer before a database would have been unnecessary abstraction. On
 
 ### Acceptance criteria
 
-- [ ] Routes contain no raw SQLAlchemy queries
-- [ ] User service contains business logic
-- [ ] User repository owns persistence operations
-- [ ] Repository methods are independently testable
+- [x] Routes contain no raw SQLAlchemy queries
+- [x] User service contains business logic
+- [x] User repository owns persistence operations
+- [x] Repository methods are independently testable
 
 ---
 
