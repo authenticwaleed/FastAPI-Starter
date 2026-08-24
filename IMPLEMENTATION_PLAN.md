@@ -20,6 +20,9 @@ app/
 │       └── users.py
 ├── core/
 │   └── config.py
+├── db/
+│   ├── base.py
+│   └── session.py
 ├── schemas/
 │   └── user.py
 └── services/
@@ -28,6 +31,7 @@ app/
 tests/
 ├── conftest.py
 ├── test_database_connection.py
+├── test_db_session.py
 ├── test_health.py
 └── test_users.py
 ```
@@ -243,10 +247,10 @@ They are related, but they are **not the same thing**.
 
 ### Acceptance criteria
 
-- [ ] SQLAlchemy engine is configured
-- [ ] Database session can be injected into FastAPI endpoints/services
-- [ ] Session lifecycle is handled correctly
-- [ ] Database configuration stays outside route files
+- [x] SQLAlchemy engine is configured
+- [x] Database session can be injected into FastAPI endpoints/services
+- [x] Session lifecycle is handled correctly
+- [x] Database configuration stays outside route files
 
 ---
 
