@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -24,6 +25,22 @@ class UserCreate(UserBase):
     )
 
 
+class UserUpdate(BaseModel):
+    """Request body for a partial update.
+
+    Every field is optional, and an omitted field means "leave this alone".
+    The constraints sit inside `Annotated` so they apply to the value itself
+    rather than to the nullable union around it.
+    """
+
+    name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    email: Annotated[EmailStr, Field(max_length=320)] | None = None
+
+    # Supplying this replaces the stored hash. As with UserCreate, the plain
+    # password only ever exists as request input.
+    password: Annotated[str, Field(min_length=8, max_length=128)] | None = None
+
+
 class UserRead(UserBase):
     """User representation returned by the API.
 
@@ -37,3 +54,16 @@ class UserRead(UserBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class UserPage(BaseModel):
+    """One page of users plus the context needed to ask for the next one.
+
+    `total` counts every user, not just this page, so a client can work out
+    how many pages exist without a second request.
+    """
+
+    items: list[UserRead]
+    total: int
+    page: int
+    page_size: int
