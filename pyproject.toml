@@ -9,11 +9,57 @@ dependencies = [
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
     "pydantic[email]>=2.13.4",
+    "pyjwt>=2.13.0",
     "sqlalchemy>=2.0.52",
 ]
 
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "mypy>=2.3.1",
+    "pre-commit>=4.6.2",
     "pytest>=9.1.1",
+    "ruff>=0.16.4",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# --strict-markers and --strict-config turn a typo in a marker or a stray
+# setting into an error rather than something silently ignored.
+addopts = "--strict-markers --strict-config"
+filterwarnings = [
+    # Raised by Starlette's own TestClient import. Nothing in this project
+    # can act on it, and it drowns out warnings that are ours.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "B",    # bugbear: likely bugs rather than style
+    "UP",   # constructs superseded by newer Python
+    "SIM",  # needless complexity
+    "C4",   # comprehensions
+    "S",    # bandit: common security mistakes
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S101: asserting is what a test does.
+# S105/S106: the "passwords" in tests are fixtures, not credentials.
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+strict = true
+# Third-party packages without type information should not fail the run.
+ignore_missing_imports = true

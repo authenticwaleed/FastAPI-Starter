@@ -1,0 +1,32 @@
+# Secrets must never reach the image. Configuration arrives as environment
+# variables at run time, which is also why .env is listed first.
+.env
+.env.*
+!.env.example
+
+.git/
+.gitignore
+
+# Built on the host for the host. The image builds its own.
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+.idea/
+.vscode/
+.DS_Store
+
+Dockerfile
+.dockerignore
+docker-compose.yml

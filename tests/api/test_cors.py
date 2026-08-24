@@ -1,0 +1,202 @@
+"""Phase 12 acceptance: cross-origin access and host checks come from
+configuration, and production is held to a stricter standard than a laptop."""
+
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from app.core.config import Settings
+from app.main import create_app
+
+ORIGIN = "http://localhost:3000"
+OTHER = "http://somewhere-else.example"
+
+
+def _settings(**overrides: object) -> Settings:
+    # _env_file=None so a value in the developer's .env cannot change what
+    # these tests are asserting about.
+    return Settings(
+        _env_file=None,
+        database_url="postgresql+psycopg://u:p@localhost:5432/db",
+        jwt_secret_key="a-signing-key-long-enough-to-be-plausible",
+        **overrides,
+    )
+
+
+def _client(**overrides: object) -> TestClient:
+    return TestClient(create_app(_settings(**overrides)))
+
+
+def test_a_configured_origin_is_allowed() -> None:
+    client = _client(cors_origins=[ORIGIN])
+
+    response = client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": ORIGIN,
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.headers["Access-Control-Allow-Origin"] == ORIGIN
+
+
+def test_an_unconfigured_origin_is_not() -> None:
+    client = _client(cors_origins=[ORIGIN])
+
+    response = client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": OTHER,
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert "Access-Control-Allow-Origin" not in response.headers
+
+
+def test_no_configured_origins_means_no_cross_origin_access() -> None:
+    client = _client(cors_origins=[])
+
+    response = client.get("/api/v1/health", headers={"Origin": ORIGIN})
+
+    assert response.status_code == 200
+    assert "Access-Control-Allow-Origin" not in response.headers
+
+
+def test_credentials_are_advertised_when_enabled() -> None:
+    client = _client(cors_origins=[ORIGIN], cors_allow_credentials=True)
+
+    response = client.get("/api/v1/health", headers={"Origin": ORIGIN})
+
+    assert response.headers["Access-Control-Allow-Credentials"] == "true"
+
+
+def test_the_allowed_methods_are_named_rather_than_wildcarded() -> None:
+    client = _client(cors_origins=[ORIGIN])
+
+    response = client.options(
+        "/api/v1/health",
+        headers={"Origin": ORIGIN, "Access-Control-Request-Method": "GET"},
+    )
+
+    allowed = response.headers["Access-Control-Allow-Methods"]
+
+    assert "*" not in allowed
+    assert "TRACE" not in allowed
+
+
+def test_origins_can_be_given_as_a_comma_separated_string() -> None:
+    settings = _settings(cors_origins=f"{ORIGIN}, {OTHER}")
+
+    assert settings.cors_origins == [ORIGIN, OTHER]
+
+
+def test_origins_can_still_be_given_as_json() -> None:
+    settings = _settings(cors_origins=f'["{ORIGIN}"]')
+
+    assert settings.cors_origins == [ORIGIN]
+
+
+def test_an_unknown_host_header_is_rejected() -> None:
+    client = _client(allowed_hosts=["api.example.com"])
+
+    response = client.get("/api/v1/health", headers={"Host": "evil.example"})
+
+    assert response.status_code == 400
+
+
+def test_a_known_host_header_is_accepted() -> None:
+    client = _client(allowed_hosts=["api.example.com"])
+
+    response = client.get("/api/v1/health", headers={"Host": "api.example.com"})
+
+    assert response.status_code == 200
+
+
+def test_a_wildcard_origin_with_credentials_is_refused() -> None:
+    # Browsers will not honour it, so accepting the configuration would only
+    # hide the mistake until someone tried to use it.
+    with pytest.raises(ValidationError):
+        _settings(cors_origins=["*"], cors_allow_credentials=True)
+
+
+def test_production_refuses_debug() -> None:
+    with pytest.raises(ValidationError):
+        _settings(environment="production", debug=True)
+
+
+def test_production_refuses_a_wildcard_origin() -> None:
+    with pytest.raises(ValidationError):
+        _settings(
+            environment="production",
+            cors_origins=["*"],
+            cors_allow_credentials=False,
+        )
+
+
+def test_production_refuses_a_wildcard_host() -> None:
+    with pytest.raises(ValidationError):
+        _settings(environment="production", allowed_hosts=["*"])
+
+
+def test_development_allows_what_production_refuses() -> None:
+    # The same settings object, judged differently by environment.
+    settings = _settings(environment="development", debug=True)
+
+    assert settings.debug is True
+    assert settings.allowed_hosts == ["*"]
+
+
+def test_production_is_satisfied_by_explicit_values() -> None:
+    settings = _settings(
+        environment="production",
+        debug=False,
+        cors_origins=["https://app.example.com"],
+        allowed_hosts=["api.example.com"],
+    )
+
+    assert settings.is_production
+    assert not settings.is_development
+
+
+def test_an_unknown_environment_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        _settings(environment="prod")
+
+
+def test_the_signing_key_must_come_from_the_environment() -> None:
+    # No default, so a deployment that forgets it fails at startup rather
+    # than signing tokens with something published in the repository.
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            database_url="postgresql+psycopg://u:p@localhost:5432/db",
+        )
+
+
+def test_the_signing_key_is_masked_in_a_repr() -> None:
+    settings = _settings()
+
+    assert "a-signing-key-long-enough-to-be-plausible" not in repr(settings)
+
+
+def test_origins_parse_the_same_way_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The form .env.example documents. pydantic-settings would otherwise
+    # insist this were JSON and fail at startup.
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "a-signing-key-long-enough-to-be-plausible")
+    monkeypatch.setenv("CORS_ORIGINS", f"{ORIGIN},{OTHER}")
+    monkeypatch.setenv("ALLOWED_HOSTS", "api.example.com, localhost")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.cors_origins == [ORIGIN, OTHER]
+    assert settings.allowed_hosts == ["api.example.com", "localhost"]
+
+
+def test_a_malformed_json_list_is_a_validation_error() -> None:
+    with pytest.raises(ValidationError):
+        _settings(cors_origins='["unclosed')

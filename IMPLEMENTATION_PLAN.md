@@ -68,7 +68,13 @@ tests/
 - [x] Full user CRUD with pagination
 - [x] Duplicate-email handling (`409`)
 - [x] Argon2id password hashing
-- [x] Pytest tests
+- [x] JWT authentication with a bearer-token dependency
+- [x] Centralised error handling with one response shape
+- [x] Configurable logging, text or JSON
+- [x] CORS, trusted hosts and production-only settings checks
+- [x] Liveness and readiness probes
+- [x] Ruff, mypy and pre-commit
+- [x] Pytest tests against a separate test database
 - [x] Environment-based settings
 - [x] `.env.example`
 
@@ -582,13 +588,38 @@ app/schemas/auth.py
 app/services/auth_service.py
 ```
 
+### Decisions
+
+- Login takes a JSON body of `email` + `password` rather than an OAuth2
+  password form. That is what this section describes, and it is why
+  `schemas/auth.py` exists. The cost is that Swagger's Authorize button
+  takes a pasted token instead of driving the login form
+- Tokens are read with `HTTPBearer`, which pairs with a JSON login and
+  answers a missing header with 401 rather than FastAPI's default 403
+- The token's subject is the user id, not the email, so changing an address
+  does not invalidate live tokens and the token carries no personal data
+- The signing algorithm is pinned at decode time. Without that, a token
+  claiming `alg: none` would be accepted unsigned
+- An unknown email and a wrong password give the same 401, and an unknown
+  email still pays for a password verification, so neither the message nor
+  the response time reveals who has an account
+
+### Deliberately not done yet
+
+- Nothing is stored server side: no refresh tokens and no revocation list.
+  Logging out is the client discarding its token, and a stolen token stays
+  valid until it expires
+- The `/users` endpoints are still unauthenticated. Deciding who may list,
+  edit or delete users is an authorisation question, separate from proving
+  who someone is
+
 ### Acceptance criteria
 
-- [ ] User can register
-- [ ] User can log in
-- [ ] Valid token grants access
-- [ ] Invalid/expired token is rejected
-- [ ] Protected endpoint receives current user through dependency injection
+- [x] User can register
+- [x] User can log in
+- [x] Valid token grants access
+- [x] Invalid/expired token is rejected
+- [x] Protected endpoint receives current user through dependency injection
 
 ---
 
@@ -625,9 +656,9 @@ FastAPI exception handler
 
 ### Acceptance criteria
 
-- [ ] Business logic is not tightly coupled to `HTTPException`
-- [ ] Error responses have a consistent shape
-- [ ] Common errors are handled centrally
+- [x] Business logic is not tightly coupled to `HTTPException`
+- [x] Error responses have a consistent shape
+- [x] Common errors are handled centrally
 
 ---
 
@@ -654,9 +685,9 @@ Add useful application logs without dumping random `print()` statements everywhe
 
 ### Acceptance criteria
 
-- [ ] Application uses Python logging rather than debugging `print()` calls
-- [ ] Log level can be controlled by environment
-- [ ] Secrets are not written to logs
+- [x] Application uses Python logging rather than debugging `print()` calls
+- [x] Log level can be controlled by environment
+- [x] Secrets are not written to logs
 
 ---
 
@@ -706,10 +737,10 @@ tests/
 
 ### Acceptance criteria
 
-- [ ] Tests do not depend on production database data
-- [ ] Each test can run independently
-- [ ] Authentication behavior is tested
-- [ ] CRUD success and error paths are tested
+- [x] Tests do not depend on production database data
+- [x] Each test can run independently
+- [x] Authentication behavior is tested
+- [x] CRUD success and error paths are tested
 
 ---
 
@@ -735,9 +766,9 @@ Do not blindly use permissive production settings such as unrestricted origins u
 
 ### Acceptance criteria
 
-- [ ] Development and production settings can differ
-- [ ] Allowed origins come from configuration
-- [ ] Secrets are supplied through environment variables
+- [x] Development and production settings can differ
+- [x] Allowed origins come from configuration
+- [x] Secrets are supplied through environment variables
 
 ---
 
@@ -777,7 +808,25 @@ FastAPI + PostgreSQL
 - [ ] PostgreSQL runs as a separate service
 - [ ] Application can connect using container networking
 - [ ] Database data uses persistent volume storage
-- [ ] Secrets/config are not baked into the image
+- [x] Secrets/config are not baked into the image
+
+### Status
+
+`Dockerfile`, `docker-compose.yml` and `.dockerignore` are written, and
+`docker compose config` validates and resolves as intended: the API is given
+`postgresql+psycopg://...@postgres:5432/...`, so it reaches the database over
+the compose network rather than localhost, and compose refuses to start
+without `JWT_SECRET_KEY` in the environment.
+
+The four unticked boxes need a Docker daemon, which was not running where
+this was built, so **the image has never been built or run**. Confirm them
+with:
+
+```bash
+export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+docker compose up --build
+curl localhost:8000/api/v1/health/ready
+```
 
 ---
 
@@ -807,10 +856,10 @@ tests
 
 ### Acceptance criteria
 
-- [ ] Formatting is automated
-- [ ] Lint checks pass
-- [ ] Important modules are type checked
-- [ ] Tests are runnable through one documented command
+- [x] Formatting is automated
+- [x] Lint checks pass
+- [x] Important modules are type checked
+- [x] Tests are runnable through one documented command
 
 ---
 
@@ -845,6 +894,14 @@ GitHub Actions
 - [ ] CI runs for pull requests/pushes
 - [ ] Broken tests fail the pipeline
 - [ ] Lint/type failures fail the pipeline
+
+### Status
+
+`.github/workflows/ci.yml` is written and parses, and every command in it —
+`ruff check`, `ruff format --check`, `mypy`, `alembic upgrade head`,
+`pytest` — was run locally and passes. The workflow itself has **never
+executed**, because that only happens on a push to GitHub, so these boxes
+stay open until the first run goes green.
 
 ---
 
@@ -883,10 +940,10 @@ readiness → service dependencies are usable
 
 ### Acceptance criteria
 
-- [ ] Production startup procedure is documented
-- [ ] Database migrations are applied safely
-- [ ] Health checks are deployment-friendly
-- [ ] Secrets are not committed to Git
+- [x] Production startup procedure is documented
+- [x] Database migrations are applied safely
+- [x] Health checks are deployment-friendly
+- [x] Secrets are not committed to Git
 
 ---
 
@@ -931,15 +988,15 @@ We will follow this order:
 6.  Repository layer                       ✅
 7.  Full user CRUD                         ✅
 8.  Password hashing                       ✅
-9.  JWT authentication
-10. Centralized error handling
-11. Logging
-12. Stronger tests / test database
-13. CORS + security configuration
-14. Docker
-15. Ruff + type checking + pre-commit
-16. CI pipeline
-17. Production readiness
+9.  JWT authentication                     ✅
+10. Centralized error handling             ✅
+11. Logging                                ✅
+12. Stronger tests / test database         ✅
+13. CORS + security configuration          ✅
+14. Docker                                 written, not yet run
+15. Ruff + type checking + pre-commit      ✅
+16. CI pipeline                            written, not yet run
+17. Production readiness                   ✅
 ```
 
 We should resist jumping directly to JWT, Docker, or deployment before understanding persistence and database sessions. Each phase depends on concepts from the previous one.
@@ -967,13 +1024,26 @@ Throughout the project:
 
 The next implementation task is:
 
-> **Phase 8 — JWT authentication: add `/auth/register`, `/auth/login` and a protected `/auth/me`, with an auth dependency that resolves the current user from a bearer token.**
+Every phase is implemented. What is left is confirming the two that could
+only be written, and then deciding what this becomes.
 
-Groundwork that already exists: `verify_password()` in `app/core/security.py` is
-implemented and tested, and simply has no caller until login uses it.
+**Confirm what has not run yet**
 
-Still to add: token creation/decoding, JWT settings (secret, algorithm, expiry)
-in `Settings`, `app/schemas/auth.py`, `app/services/auth_service.py`,
-`app/api/dependencies/auth.py` and `app/api/routes/auth.py`.
+1. `docker compose up --build`, then `curl localhost:8000/api/v1/health/ready`.
+   No Docker daemon was available where this was built, so the image has
+   never been built.
+2. Push, and watch the first CI run go green.
 
-We will implement it incrementally so every new file and abstraction has a clear purpose.
+**Then, before this serves anything real**
+
+The gaps are listed under each phase, and these are the ones that matter:
+
+- The `/users` endpoints have no authorisation. Anyone can list, edit or
+  delete any user. That is the largest single gap in the project
+- No refresh tokens and no revocation. A stolen token is valid until it
+  expires, and there is no way to end a session early
+- No rate limiting on login, which makes password guessing free
+
+None of these is a phase in the plan above, which is the point: the plan
+carried the project to a working, tested, deployable shape, and what to
+build next is now a decision about the product rather than the scaffolding.

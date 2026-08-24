@@ -1,0 +1,72 @@
+# Configuration is interpolated from the shell or from .env, never written
+# into the image. JWT_SECRET_KEY has no default on purpose: `docker compose
+# up` fails outright rather than starting with a signing key from a file
+# that is in version control.
+x-api-environment: &api-environment
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-fastapi_starter}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY before starting}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  DEBUG: ${DEBUG:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fastapi_starter}
+    volumes:
+      # A named volume, so the data outlives `docker compose down` and only
+      # goes away with an explicit `down -v`.
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      # 5433 on the host: a developer running PostgreSQL locally already has
+      # 5432, and a port clash here is a confusing way to find that out.
+      - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Migrations run as their own one-off step rather than from the API's
+  # entrypoint. With more than one API replica, an entrypoint would have
+  # every one of them racing to migrate the same database.
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request
+          urllib.request.urlopen("http://localhost:8000/api/v1/health/ready")
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

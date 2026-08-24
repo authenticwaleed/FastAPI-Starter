@@ -2,14 +2,13 @@ from logging.config import fileConfig
 
 from sqlalchemy import create_engine, pool
 
-from alembic import context
-from app.core.config import get_settings
-from app.db.base import Base
-
 # Importing the model package registers every table on Base.metadata.
 # Without it autogenerate would compare against an empty schema and happily
 # produce a migration that drops everything.
 import app.models  # noqa: F401  (imported for the side effect)
+from alembic import context
+from app.core.config import get_settings
+from app.db.base import Base
 
 config = context.config
 
@@ -20,12 +19,17 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """Read the connection URL from application settings.
+    """The database this migration run targets.
 
-    Keeping it here rather than in alembic.ini means migrations use exactly
-    the same configuration as the app, and no credentials are committed.
+    A `sqlalchemy.url` set on the Config wins, which is how the test suite
+    points a run at its own database without touching application settings.
+    Otherwise it comes from settings, so a plain `alembic upgrade head` uses
+    exactly the same configuration as the app and no credentials are
+    committed to alembic.ini.
     """
-    return str(get_settings().database_url)
+    configured = config.get_main_option("sqlalchemy.url", None)
+
+    return configured or str(get_settings().database_url)
 
 
 def run_migrations_offline() -> None:

@@ -76,6 +76,11 @@ def test_model_compiles_to_valid_postgresql_ddl() -> None:
 
 
 def test_repr_does_not_leak_the_password_hash() -> None:
-    user = User(id=1, name="Ada", email="ada@example.com", hashed_password="secret-hash")
+    user = User(
+        id=1,
+        name="Ada",
+        email="ada@example.com",
+        hashed_password="secret-hash",
+    )
 
     assert "secret-hash" not in repr(user)

@@ -5,36 +5,12 @@ from fastapi import Depends
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import EmailAlreadyExistsError, UserNotFoundError
 from app.core.security import hash_password
 from app.db.session import SessionDep
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
-
-
-class EmailAlreadyExistsError(Exception):
-    """A user was created with an email address that is already taken.
-
-    Deliberately not an HTTPException: the service should not know about
-    status codes. Phase 9 moves this to a central exceptions module with a
-    matching handler.
-    """
-
-    def __init__(self, email: str) -> None:
-        super().__init__(f"Email already registered: {email}")
-        self.email = email
-
-
-class UserNotFoundError(Exception):
-    """No user exists with the requested id.
-
-    Like the error above, this stays free of HTTP concerns and becomes a 404
-    only at the route boundary.
-    """
-
-    def __init__(self, user_id: int) -> None:
-        super().__init__(f"User not found: {user_id}")
-        self.user_id = user_id
 
 
 class UserService:
@@ -95,9 +71,12 @@ class UserService:
         # without needing to reload the row.
         current_email = user.email
 
-        if payload.email is not None and payload.email != current_email:
-            if self._repository.get_by_email(payload.email) is not None:
-                raise EmailAlreadyExistsError(payload.email)
+        if (
+            payload.email is not None
+            and payload.email != current_email
+            and self._repository.get_by_email(payload.email) is not None
+        ):
+            raise EmailAlreadyExistsError(payload.email)
 
         try:
             self._repository.update(
