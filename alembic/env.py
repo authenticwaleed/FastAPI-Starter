@@ -1,6 +1,7 @@
 from logging.config import fileConfig
+from typing import Any
 
-from sqlalchemy import create_engine, pool
+from sqlalchemy import Enum, create_engine, pool
 
 # Importing the model package registers every table on Base.metadata.
 # Without it autogenerate would compare against an empty schema and happily
@@ -16,6 +17,43 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+
+def _enum_constraint_names() -> frozenset[str]:
+    """Names of the CHECK constraints that back the enum columns.
+
+    `Enum(native_enum=False, create_constraint=True)` puts the allowed
+    values in a CHECK constraint rather than a PostgreSQL type. SQLAlchemy
+    attaches that constraint to the table, but Alembic's comparison does
+    not pair it with the reflected one, so every autogenerate run reports
+    all of them as removed and writes a migration that drops them.
+
+    Dropping them is not cosmetic: it is the difference between a database
+    that refuses a fifth workspace status and one that stores anything.
+    They are excluded from comparison below, which is correct as well as
+    convenient -- the constraint belongs to the column's type, so it is
+    created and dropped with the column and is not autogenerate's to
+    manage. Read from the models, so adding an enum needs nothing here.
+    """
+    return frozenset(
+        column.type.name
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if isinstance(column.type, Enum) and column.type.name
+    )
+
+
+ENUM_CONSTRAINTS = _enum_constraint_names()
+
+
+def include_object(
+    object_: Any,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: Any,
+) -> bool:
+    return not (type_ == "check_constraint" and name in ENUM_CONSTRAINTS)
 
 
 def get_url() -> str:
@@ -40,6 +78,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -57,6 +96,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             # Detect column type changes, which Alembic ignores by default.
             compare_type=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

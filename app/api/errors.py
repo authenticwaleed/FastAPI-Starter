@@ -9,11 +9,24 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import (
+    AlreadyAMemberError,
     AppError,
     EmailAlreadyExistsError,
     InactiveUserError,
+    IncorrectPasswordError,
+    InsufficientWorkspaceRoleError,
     InvalidCredentialsError,
+    InvitationAlreadyAcceptedError,
+    InvitationExpiredError,
+    InvitationNotFoundError,
+    InvitationNotYoursError,
+    LastOwnerError,
+    MembershipNotFoundError,
+    PendingInvitationExistsError,
+    SlugAlreadyExistsError,
     UserNotFoundError,
+    WorkspaceNotFoundError,
+    WorkspaceOwnershipError,
 )
 from app.schemas.errors import ErrorResponse
 
@@ -44,9 +57,80 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         {"WWW-Authenticate": "Bearer"},
     ),
     InactiveUserError: _Answer(status.HTTP_403_FORBIDDEN, "inactive_user"),
+    IncorrectPasswordError: _Answer(
+        status.HTTP_400_BAD_REQUEST,
+        "incorrect_password",
+    ),
+    WorkspaceNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "workspace_not_found",
+    ),
+    SlugAlreadyExistsError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "slug_already_exists",
+    ),
+    InsufficientWorkspaceRoleError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "insufficient_workspace_role",
+    ),
+    WorkspaceOwnershipError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "workspace_ownership_required",
+    ),
+    MembershipNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "membership_not_found",
+    ),
+    LastOwnerError: _Answer(status.HTTP_409_CONFLICT, "last_owner"),
+    InvitationNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "invitation_not_found",
+    ),
+    # 410 rather than 404: the link was real, and saying so is the
+    # difference between "ask for another" and "check the address".
+    InvitationExpiredError: _Answer(status.HTTP_410_GONE, "invitation_expired"),
+    InvitationAlreadyAcceptedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "invitation_already_accepted",
+    ),
+    InvitationNotYoursError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "invitation_not_yours",
+    ),
+    AlreadyAMemberError: _Answer(status.HTTP_409_CONFLICT, "already_a_member"),
+    PendingInvitationExistsError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "invitation_already_pending",
+    ),
 }
 
 _UNEXPECTED = _Answer(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error")
+
+
+# Path parameters whose value is a credential rather than an identifier.
+# An invitation token lives in the path, so a line logging the raw path
+# would write a working invitation link into the log every time somebody
+# followed one that had expired -- and a log is exactly where a secret
+# gets copied, shipped, and kept longest.
+_SECRET_PATH_PARAMS = frozenset({"token", "secret", "key", "password"})
+
+
+def _loggable_path(request: Request) -> str:
+    """The request path with any secret in it replaced by its name.
+
+    `/api/v1/invitations/{token}`, but `/api/v1/workspaces/9f2c.../members/3`
+    left exactly as it is. Only the parameters named above are hidden,
+    because a workspace id in a log line is the thing that makes the line
+    worth having, and blanket-redacting every parameter would throw that
+    away to solve a problem only one of them has.
+    """
+    path = request.url.path
+
+    for name, value in request.path_params.items():
+        if name in _SECRET_PATH_PARAMS:
+            path = path.replace(str(value), f"{{{name}}}")
+
+    return path
 
 
 def _body(code: str, detail: str, **extra: Any) -> dict[str, Any]:
@@ -73,7 +157,7 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     logger.warning(
         "%s %s failed: %s",
         request.method,
-        request.url.path,
+        _loggable_path(request),
         exc,
     )
 
@@ -131,7 +215,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
     logger.exception(
         "Unhandled error on %s %s",
         request.method,
-        request.url.path,
+        _loggable_path(request),
     )
 
     return JSONResponse(
@@ -153,7 +237,50 @@ def _documented(status_code: int, description: str) -> dict[int | str, dict[str,
 
 # Routes no longer raise these by hand, so OpenAPI can no longer infer them.
 # Spreading the relevant ones into a route's `responses` keeps the docs true.
-NOT_FOUND = _documented(status.HTTP_404_NOT_FOUND, "User not found")
+BAD_REQUEST = _documented(
+    status.HTTP_400_BAD_REQUEST,
+    "Current password is incorrect",
+)
 CONFLICT = _documented(status.HTTP_409_CONFLICT, "Email already registered")
 UNAUTHORISED = _documented(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
 FORBIDDEN = _documented(status.HTTP_403_FORBIDDEN, "Inactive user")
+
+# A route documents one description per status code, so where two errors
+# share a code the description has to cover both rather than pick one.
+WORKSPACE_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or you are not a member of it",
+)
+WORKSPACE_FORBIDDEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Inactive user, or your role does not permit this",
+)
+SLUG_CONFLICT = _documented(status.HTTP_409_CONFLICT, "Workspace slug already taken")
+OWNERSHIP_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "You are still the only owner of a workspace",
+)
+MEMBER_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or that user is not a member of it",
+)
+MEMBER_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "A workspace must keep at least one owner",
+)
+INVITATION_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such invitation",
+)
+INVITATION_GONE = _documented(
+    status.HTTP_410_GONE,
+    "This invitation has expired",
+)
+INVITATION_FORBIDDEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Inactive user, or the invitation was sent to a different address",
+)
+INVITATION_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "Already a member, already invited, or already accepted",
+)

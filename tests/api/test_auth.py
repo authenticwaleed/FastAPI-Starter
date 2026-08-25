@@ -99,11 +99,13 @@ def test_register_applies_the_same_rules_as_creating_a_user(
 
 
 def test_a_registered_user_is_a_user(client: TestClient) -> None:
-    # Registration goes through the same service as POST /users, so the two
-    # cannot drift into creating different kinds of user.
+    # What registration returns and what the account API reads back have to
+    # be the same user, described the same way. They share one schema and
+    # one service, and this is that, as a test.
     created = _register(client)
+    token = _login(client).json()["access_token"]
 
-    response = client.get(f"/api/v1/users/{created['id']}")
+    response = client.get("/api/v1/account", headers=_bearer(token))
 
     assert response.status_code == 200
     assert response.json() == created
@@ -254,12 +256,13 @@ def test_another_authorization_scheme_is_rejected(client: TestClient) -> None:
 def test_a_token_survives_an_email_change(client: TestClient) -> None:
     # The subject is the user id, so changing the address does not lock the
     # holder out of a token they already have.
-    created = _register(client)
+    _register(client)
     token = _login(client).json()["access_token"]
 
     client.patch(
-        f"/api/v1/users/{created['id']}",
+        "/api/v1/account",
         json={"email": "ada.lovelace@example.com"},
+        headers=_bearer(token),
     )
 
     response = client.get("/api/v1/auth/me", headers=_bearer(token))
@@ -269,10 +272,10 @@ def test_a_token_survives_an_email_change(client: TestClient) -> None:
 
 
 def test_a_token_for_a_deleted_account_is_rejected(client: TestClient) -> None:
-    created = _register(client)
+    _register(client)
     token = _login(client).json()["access_token"]
 
-    client.delete(f"/api/v1/users/{created['id']}")
+    client.delete("/api/v1/account", headers=_bearer(token))
 
     response = client.get("/api/v1/auth/me", headers=_bearer(token))
 

@@ -790,9 +790,9 @@ app/schemas/account.py
 
 ## Acceptance criteria
 
-- [ ] Public `/users` operations are removed or restricted appropriately
-- [ ] Self-service account API exists
-- [ ] Authorization tests pass
+- [x] Public `/users` operations are removed or restricted appropriately
+- [x] Self-service account API exists
+- [x] Authorization tests pass
 
 ---
 
@@ -871,11 +871,11 @@ app/api/dependencies/workspace.py
 
 ## Acceptance criteria
 
-- [ ] Workspace model exists
-- [ ] Membership model exists
-- [ ] Alembic migration exists
-- [ ] Workspace CRUD implemented
-- [ ] Every operation checks membership
+- [x] Workspace model exists
+- [x] Membership model exists
+- [x] Alembic migration exists
+- [x] Workspace CRUD implemented
+- [x] Every operation checks membership
 
 ---
 
@@ -959,9 +959,9 @@ Avoid hard-coding role checks repeatedly inside routes.
 
 ## Acceptance criteria
 
-- [ ] Reusable workspace authorization dependency exists
-- [ ] Role checks are centralized
-- [ ] Cross-tenant tests exist
+- [x] Reusable workspace authorization dependency exists
+- [x] Role checks are centralized
+- [x] Cross-tenant tests exist
 
 ---
 
@@ -1016,11 +1016,11 @@ Create membership
 
 ## Acceptance criteria
 
-- [ ] Team member can be invited
-- [ ] Invitation expires
-- [ ] Invitation can be accepted once
-- [ ] Membership created correctly
-- [ ] Permission checks covered by tests
+- [x] Team member can be invited
+- [x] Invitation expires
+- [x] Invitation can be accepted once
+- [x] Membership created correctly
+- [x] Permission checks covered by tests
 
 ---
 

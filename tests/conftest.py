@@ -20,6 +20,13 @@ from app.core.config import get_settings
 from app.db.session import get_db_session, get_engine, get_session_factory
 from app.main import create_app
 from app.repositories.user_repository import UserRepository
+from app.repositories.workspace_invitation_repository import (
+    WorkspaceInvitationRepository,
+)
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
+)
+from app.repositories.workspace_repository import WorkspaceRepository
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -109,9 +116,18 @@ def engine() -> Iterator[Engine]:
     engine = create_engine(TEST_DATABASE, pool_pre_ping=True)
 
     # A crashed earlier run could have left rows behind. Nothing in the
-    # suite should depend on what is in the table when it starts.
+    # suite should depend on what is in the tables when it starts.
+    #
+    # Named rather than relying on CASCADE to reach them from users: a
+    # table that stops referencing users would quietly stop being cleaned,
+    # and the failure would look like a flaky test somewhere else.
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE users RESTART IDENTITY CASCADE"))
+        connection.execute(
+            text(
+                "TRUNCATE workspace_invitations, workspace_memberships, "
+                "workspaces, users RESTART IDENTITY CASCADE"
+            )
+        )
 
     yield engine
 
@@ -149,6 +165,21 @@ def db_session(engine: Engine) -> Iterator[Session]:
 @pytest.fixture
 def user_repository(db_session: Session) -> UserRepository:
     return UserRepository(db_session)
+
+
+@pytest.fixture
+def workspace_repository(db_session: Session) -> WorkspaceRepository:
+    return WorkspaceRepository(db_session)
+
+
+@pytest.fixture
+def membership_repository(db_session: Session) -> WorkspaceMembershipRepository:
+    return WorkspaceMembershipRepository(db_session)
+
+
+@pytest.fixture
+def invitation_repository(db_session: Session) -> WorkspaceInvitationRepository:
+    return WorkspaceInvitationRepository(db_session)
 
 
 @pytest.fixture

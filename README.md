@@ -61,19 +61,87 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `/api/v1/auth/register` | Create an account |
 | POST | `/api/v1/auth/login` | Exchange credentials for a token |
 | GET | `/api/v1/auth/me` | The current user, requires a token |
-| POST | `/api/v1/users` | Create a user |
-| GET | `/api/v1/users` | List users, paginated |
-| GET | `/api/v1/users/{id}` | Fetch one user |
-| PATCH | `/api/v1/users/{id}` | Update name, email or password |
-| DELETE | `/api/v1/users/{id}` | Delete a user |
+| GET | `/api/v1/account` | Read your own account |
+| PATCH | `/api/v1/account` | Change your own name or email |
+| POST | `/api/v1/account/change-password` | Replace your password |
+| DELETE | `/api/v1/account` | Delete your own account |
+| POST | `/api/v1/workspaces` | Create a workspace; you become its owner |
+| GET | `/api/v1/workspaces` | List the workspaces you belong to |
+| GET | `/api/v1/workspaces/{workspace_id}` | Read one workspace |
+| PATCH | `/api/v1/workspaces/{workspace_id}` | Update it, if you administer it |
+| DELETE | `/api/v1/workspaces/{workspace_id}` | Close it, if you own it |
+| GET | `…/{workspace_id}/members` | List the team |
+| PATCH | `…/{workspace_id}/members/{user_id}` | Change a member's role |
+| DELETE | `…/{workspace_id}/members/{user_id}` | Remove a member, or leave |
+| POST | `…/{workspace_id}/invitations` | Invite somebody by email |
+| GET | `…/{workspace_id}/invitations` | List invitations sent |
+| DELETE | `…/{workspace_id}/invitations/{invitation_id}` | Revoke one |
+| GET | `/api/v1/invitations/{token}` | Preview a link, no account needed |
+| POST | `/api/v1/invitations/{token}/accept` | Take the seat |
 
 Protected endpoints take `Authorization: Bearer <token>`.
+
+Everything under `/account` acts on the account the token belongs to. None
+of those paths takes a user id, which is deliberate: there is no id for a
+caller to substitute, and so no ownership check for anyone to forget.
+
+A **workspace** is the tenant boundary: one customer business, with the
+users who work in it attached through memberships. Four roles exist,
+ranked `owner` > `admin` > `agent` > `viewer`.
+
+What a role admits is declared in the route's signature, through one of
+`WorkspaceMemberDep`, `WorkspaceAdminDep` or `WorkspaceOwnerDep` — all
+built by `require_workspace_role(...)` in
+`app/api/dependencies/workspace.py`. No handler compares a role itself,
+which is enforced by a test: a check written inside one handler is a rule
+the next handler can silently fail to repeat.
+
+Acting on a *person* needs rank rather than a fixed role. You may manage
+somebody you outrank strictly, which is the plan's "owner manages admins,
+admin manages agents" as one rule — so an admin cannot demote another
+admin, and cannot promote anyone into the rank they hold themselves. An
+owner may act on anyone, including another owner. Any member may leave a
+workspace without needing rank at all.
+
+A workspace must keep at least one owner: the last one cannot be demoted,
+removed, or walk out, and cannot delete their account either. Every route
+into a workspace's settings needs an owner, so a workspace without one is
+a business its own members are locked out of. To leave, invite a
+successor at `owner` first.
+
+**Invitations** are how anyone else gets in. The link's token is 32 bytes
+of CSPRNG output; what is stored is its SHA-256 digest, so the table is
+not a set of working links. SHA-256 rather than Argon2 deliberately — the
+value is high-entropy with no dictionary to attack, and an unsalted digest
+is what lets acceptance be one indexed lookup instead of a slow
+verification against every outstanding row.
+
+The token is returned by the create call and by nothing else, because
+nothing else can reproduce it. Once there is an email to put the link in,
+that is where it should go and the field should stop being returned.
+
+An invitation admits only the address it names, so forwarding the link
+does not hand somebody else a seat. Accepting is single-use: `accepted_at`
+is set in the same transaction that creates the membership. An expired
+link answers `410`, not `404` — the holder had a real link, and "ask for
+another" is different advice from "check the address".
+
+A workspace nobody has a membership of answers `404`, not `403`, whether or
+not it exists. Telling those apart would turn the id in the URL into a way
+of asking which businesses have accounts here. A member whose *role* is
+insufficient does get a `403`: they have already proved they belong.
+
+`DELETE /workspaces/{id}` closes a workspace rather than erasing it — the
+status becomes `cancelled`, it leaves every listing, and every path to it
+starts answering `404`. The rows survive, because a workspace is about to
+own contacts, conversations and message history that one call should not
+be able to destroy.
 
 Every error, including validation failures and unknown paths, has the same
 shape:
 
 ```json
-{ "detail": "User not found", "code": "user_not_found" }
+{ "detail": "Email already registered", "code": "email_already_exists" }
 ```
 
 Branch on `code`, which is stable; `detail` is prose and may be reworded.
@@ -224,9 +292,22 @@ database you have already created if that is not available.
 Worth knowing before this is used for something real:
 
 - **No refresh tokens or revocation.** A token is valid until it expires;
-  logging out is the client discarding it.
-- **The `/users` endpoints are unauthenticated.** Who may list, edit or
-  delete users is an authorisation question this starter does not answer.
+  logging out is the client discarding it, and changing a password does not
+  sign anyone out.
+- **No administration API.** A user can manage their own account and nothing
+  else.
+- **No email is sent.** An invitation's link has to be handed over by
+  whoever created it, because the API returns the token once for exactly
+  that reason. Delivering it is a later phase.
+- **Invitation tokens travel in the URL path**, which is what makes a link
+  a link. This application redacts them from its own log lines, but an
+  access log written by uvicorn, a proxy or a CDN sits outside that and
+  will record the full path. Anywhere this is deployed for real needs an
+  access-log policy that redacts `/invitations/*`.
+- **Email addresses are compared case-sensitively by the users table.**
+  `Ada@example.com` and `ada@example.com` can both register. Invitation
+  matching is case-insensitive and works either way, but the accounts
+  themselves should probably not be two.
 - **No rate limiting**, on login or anywhere else.
 
 ## Layout
