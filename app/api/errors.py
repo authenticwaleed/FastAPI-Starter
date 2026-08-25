@@ -12,6 +12,7 @@ from app.core.exceptions import (
     AppError,
     EmailAlreadyExistsError,
     InactiveUserError,
+    IncorrectPasswordError,
     InvalidCredentialsError,
     UserNotFoundError,
 )
@@ -44,6 +45,10 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         {"WWW-Authenticate": "Bearer"},
     ),
     InactiveUserError: _Answer(status.HTTP_403_FORBIDDEN, "inactive_user"),
+    IncorrectPasswordError: _Answer(
+        status.HTTP_400_BAD_REQUEST,
+        "incorrect_password",
+    ),
 }
 
 _UNEXPECTED = _Answer(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error")
@@ -153,7 +158,10 @@ def _documented(status_code: int, description: str) -> dict[int | str, dict[str,
 
 # Routes no longer raise these by hand, so OpenAPI can no longer infer them.
 # Spreading the relevant ones into a route's `responses` keeps the docs true.
-NOT_FOUND = _documented(status.HTTP_404_NOT_FOUND, "User not found")
+BAD_REQUEST = _documented(
+    status.HTTP_400_BAD_REQUEST,
+    "Current password is incorrect",
+)
 CONFLICT = _documented(status.HTTP_409_CONFLICT, "Email already registered")
 UNAUTHORISED = _documented(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
 FORBIDDEN = _documented(status.HTTP_403_FORBIDDEN, "Inactive user")

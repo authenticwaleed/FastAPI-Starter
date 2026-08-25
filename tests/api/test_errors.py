@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.exceptions import UserNotFoundError
 from app.main import create_app
 
 PASSWORD = "correct horse battery staple"
@@ -17,17 +18,30 @@ def _register(client: TestClient, email: str = "ada@example.com") -> dict:
     ).json()
 
 
-def test_a_missing_user_is_reported_consistently(client: TestClient) -> None:
-    body = client.get("/api/v1/users/999").json()
+def test_a_missing_user_is_reported_consistently() -> None:
+    # No route raises this any more: `/users` is gone, and the account API
+    # only ever reaches the account its own token resolved. The mapping from
+    # the error to a 404 is still what every service will rely on, so it is
+    # tested where it lives rather than through a route that used to raise
+    # it by accident of having an id in the path.
+    app = create_app()
 
-    assert body == {"detail": "User not found", "code": "user_not_found"}
+    @app.get("/missing")
+    def missing() -> None:
+        raise UserNotFoundError(999)
+
+    with TestClient(app) as error_client:
+        response = error_client.get("/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "User not found", "code": "user_not_found"}
 
 
 def test_a_duplicate_email_is_reported_consistently(client: TestClient) -> None:
     _register(client)
 
     response = client.post(
-        "/api/v1/users",
+        "/api/v1/auth/register",
         json={"name": "Ada", "email": "ada@example.com", "password": PASSWORD},
     )
 
@@ -42,7 +56,7 @@ def test_the_conflict_message_does_not_repeat_the_address(
     _register(client)
 
     response = client.post(
-        "/api/v1/users",
+        "/api/v1/auth/register",
         json={"name": "Ada", "email": "ada@example.com", "password": PASSWORD},
     )
 
@@ -62,7 +76,7 @@ def test_a_rejected_login_is_reported_consistently(client: TestClient) -> None:
 
 def test_a_validation_failure_uses_the_same_shape(client: TestClient) -> None:
     response = client.post(
-        "/api/v1/users",
+        "/api/v1/auth/register",
         json={"name": "Ada", "email": "not-an-email", "password": PASSWORD},
     )
 
@@ -92,7 +106,7 @@ def test_a_wrong_method_uses_the_same_shape(client: TestClient) -> None:
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("/api/v1/users/999", "user_not_found"),
+        ("/api/v1/account", "invalid_credentials"),
         ("/api/v1/auth/me", "invalid_credentials"),
         ("/api/v1/nothing-here", "http_error"),
     ],

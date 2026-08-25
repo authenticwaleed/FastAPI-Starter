@@ -1039,8 +1039,10 @@ been built and run, and its criteria are ticked above on that basis.
 
 The gaps are listed under each phase, and these are the ones that matter:
 
-- The `/users` endpoints have no authorisation. Anyone can list, edit or
-  delete any user. That is the largest single gap in the project
+- ~~The `/users` endpoints have no authorisation. Anyone can list, edit or
+  delete any user. That is the largest single gap in the project~~ Closed.
+  That surface is gone, replaced by a self-service `/account` API, in
+  Phase 1 of `leadpilot_implementation_plan.md`
 - No refresh tokens and no revocation. A stolen token is valid until it
   expires, and there is no way to end a session early
 - No rate limiting on login, which makes password guessing free

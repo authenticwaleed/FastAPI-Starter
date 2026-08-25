@@ -61,19 +61,22 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `/api/v1/auth/register` | Create an account |
 | POST | `/api/v1/auth/login` | Exchange credentials for a token |
 | GET | `/api/v1/auth/me` | The current user, requires a token |
-| POST | `/api/v1/users` | Create a user |
-| GET | `/api/v1/users` | List users, paginated |
-| GET | `/api/v1/users/{id}` | Fetch one user |
-| PATCH | `/api/v1/users/{id}` | Update name, email or password |
-| DELETE | `/api/v1/users/{id}` | Delete a user |
+| GET | `/api/v1/account` | Read your own account |
+| PATCH | `/api/v1/account` | Change your own name or email |
+| POST | `/api/v1/account/change-password` | Replace your password |
+| DELETE | `/api/v1/account` | Delete your own account |
 
 Protected endpoints take `Authorization: Bearer <token>`.
+
+Everything under `/account` acts on the account the token belongs to. None
+of those paths takes a user id, which is deliberate: there is no id for a
+caller to substitute, and so no ownership check for anyone to forget.
 
 Every error, including validation failures and unknown paths, has the same
 shape:
 
 ```json
-{ "detail": "User not found", "code": "user_not_found" }
+{ "detail": "Email already registered", "code": "email_already_exists" }
 ```
 
 Branch on `code`, which is stable; `detail` is prose and may be reworded.
@@ -224,9 +227,11 @@ database you have already created if that is not available.
 Worth knowing before this is used for something real:
 
 - **No refresh tokens or revocation.** A token is valid until it expires;
-  logging out is the client discarding it.
-- **The `/users` endpoints are unauthenticated.** Who may list, edit or
-  delete users is an authorisation question this starter does not answer.
+  logging out is the client discarding it, and changing a password does not
+  sign anyone out.
+- **No administration API.** A user can manage their own account and nothing
+  else. Reading or editing somebody else's needs a role to check first, and
+  there are no roles yet.
 - **No rate limiting**, on login or anywhere else.
 
 ## Layout

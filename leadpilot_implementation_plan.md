@@ -790,9 +790,9 @@ app/schemas/account.py
 
 ## Acceptance criteria
 
-- [ ] Public `/users` operations are removed or restricted appropriately
-- [ ] Self-service account API exists
-- [ ] Authorization tests pass
+- [x] Public `/users` operations are removed or restricted appropriately
+- [x] Self-service account API exists
+- [x] Authorization tests pass
 
 ---
 

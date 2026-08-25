@@ -62,3 +62,19 @@ class InactiveUserError(AppError):
     def __init__(self, user_id: int) -> None:
         super().__init__(f"User is not active: {user_id}")
         self.user_id = user_id
+
+
+class IncorrectPasswordError(AppError):
+    """A password change was attempted without the current password.
+
+    Separate from InvalidCredentialsError on purpose. The bearer token is
+    valid and the caller is who they claim to be, so a 401 would tell the
+    client its session had expired and send a perfectly good one back to
+    the login screen. What failed is one field of the request.
+    """
+
+    detail = "Current password is incorrect"
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"Incorrect current password for user: {user_id}")
+        self.user_id = user_id

@@ -55,6 +55,17 @@ def _messages(records: list[logging.LogRecord]) -> str:
     return "\n".join(record.getMessage() for record in records)
 
 
+def _register(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Ada",
+            "email": "ada@example.com",
+            "password": "correct horse battery staple",
+        },
+    )
+
+
 def test_the_root_level_comes_from_settings() -> None:
     configure_logging()
 
@@ -110,10 +121,15 @@ def test_startup_does_not_log_the_configuration() -> None:
 
 
 def test_a_rejected_request_is_logged(client: TestClient) -> None:
-    with capture(logging.WARNING) as records:
-        client.get("/api/v1/users/999")
+    # The log line carries what the response deliberately does not. The
+    # client is told only "Email already registered"; which address it was
+    # is the part that makes the line worth having.
+    _register(client)
 
-    assert "User not found: 999" in _messages(records)
+    with capture(logging.WARNING) as records:
+        _register(client)
+
+    assert "Email already registered: ada@example.com" in _messages(records)
 
 
 def test_a_failed_login_is_logged(client: TestClient) -> None:
@@ -162,7 +178,7 @@ def test_no_secret_reaches_the_log(client: TestClient) -> None:
 
     with capture(logging.DEBUG) as records:
         client.post(
-            "/api/v1/users",
+            "/api/v1/auth/register",
             json={
                 "name": "Ada",
                 "email": "ada@example.com",
@@ -173,7 +189,7 @@ def test_no_secret_reaches_the_log(client: TestClient) -> None:
             "/api/v1/auth/login",
             json={"email": "ada@example.com", "password": "wrong"},
         )
-        client.get("/api/v1/users/999")
+        client.get("/api/v1/account")
 
     text = _messages(records)
 
