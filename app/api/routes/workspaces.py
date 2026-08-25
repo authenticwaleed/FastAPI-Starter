@@ -3,7 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Query, status
 
 from app.api.dependencies.auth import CurrentUserDep
-from app.api.dependencies.workspace import WorkspaceAccessDep
+from app.api.dependencies.workspace import (
+    WorkspaceAdminDep,
+    WorkspaceMemberDep,
+    WorkspaceOwnerDep,
+)
 from app.api.errors import (
     SLUG_CONFLICT,
     UNAUTHORISED,
@@ -64,14 +68,14 @@ def list_workspaces(
 
 
 @router.get("/{workspace_id}", responses=SCOPED)
-def read_workspace(access: WorkspaceAccessDep) -> WorkspaceRead:
+def read_workspace(access: WorkspaceMemberDep) -> WorkspaceRead:
     """The dependency has already proved the caller belongs here."""
     return WorkspaceRead.model_validate(access.workspace)
 
 
 @router.patch("/{workspace_id}", responses=SCOPED)
 def update_workspace(
-    access: WorkspaceAccessDep,
+    access: WorkspaceAdminDep,
     payload: WorkspaceUpdate,
     service: WorkspaceServiceDep,
 ) -> WorkspaceRead:
@@ -84,7 +88,7 @@ def update_workspace(
     responses=SCOPED,
 )
 def close_workspace(
-    access: WorkspaceAccessDep,
+    access: WorkspaceOwnerDep,
     service: WorkspaceServiceDep,
 ) -> None:
     """Close the workspace.

@@ -15,6 +15,8 @@ from app.core.exceptions import (
     IncorrectPasswordError,
     InsufficientWorkspaceRoleError,
     InvalidCredentialsError,
+    LastOwnerError,
+    MembershipNotFoundError,
     SlugAlreadyExistsError,
     UserNotFoundError,
     WorkspaceNotFoundError,
@@ -69,6 +71,11 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         status.HTTP_409_CONFLICT,
         "workspace_ownership_required",
     ),
+    MembershipNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "membership_not_found",
+    ),
+    LastOwnerError: _Answer(status.HTTP_409_CONFLICT, "last_owner"),
 }
 
 _UNEXPECTED = _Answer(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error")
@@ -200,4 +207,12 @@ SLUG_CONFLICT = _documented(status.HTTP_409_CONFLICT, "Workspace slug already ta
 OWNERSHIP_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "You are still the only owner of a workspace",
+)
+MEMBER_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or that user is not a member of it",
+)
+MEMBER_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "A workspace must keep at least one owner",
 )

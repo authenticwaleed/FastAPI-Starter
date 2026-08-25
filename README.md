@@ -70,6 +70,9 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `/api/v1/workspaces/{workspace_id}` | Read one workspace |
 | PATCH | `/api/v1/workspaces/{workspace_id}` | Update it, if you administer it |
 | DELETE | `/api/v1/workspaces/{workspace_id}` | Close it, if you own it |
+| GET | `…/{workspace_id}/members` | List the team |
+| PATCH | `…/{workspace_id}/members/{user_id}` | Change a member's role |
+| DELETE | `…/{workspace_id}/members/{user_id}` | Remove a member, or leave |
 
 Protected endpoints take `Authorization: Bearer <token>`.
 
@@ -78,10 +81,27 @@ of those paths takes a user id, which is deliberate: there is no id for a
 caller to substitute, and so no ownership check for anyone to forget.
 
 A **workspace** is the tenant boundary: one customer business, with the
-users who work in it attached through memberships. Four roles exist —
-`owner`, `admin`, `agent`, `viewer` — of which this phase enforces two
-rules: administering a workspace needs `owner` or `admin`, and closing one
-needs `owner`.
+users who work in it attached through memberships. Four roles exist,
+ranked `owner` > `admin` > `agent` > `viewer`.
+
+What a role admits is declared in the route's signature, through one of
+`WorkspaceMemberDep`, `WorkspaceAdminDep` or `WorkspaceOwnerDep` — all
+built by `require_workspace_role(...)` in
+`app/api/dependencies/workspace.py`. No handler compares a role itself,
+which is enforced by a test: a check written inside one handler is a rule
+the next handler can silently fail to repeat.
+
+Acting on a *person* needs rank rather than a fixed role. You may manage
+somebody you outrank strictly, which is the plan's "owner manages admins,
+admin manages agents" as one rule — so an admin cannot demote another
+admin, and cannot promote anyone into the rank they hold themselves. An
+owner may act on anyone, including another owner. Any member may leave a
+workspace without needing rank at all.
+
+A workspace must keep at least one owner: the last one cannot be demoted,
+removed, or walk out, and cannot delete their account either. Every route
+into a workspace's settings needs an owner, so a workspace without one is
+a business its own members are locked out of.
 
 A workspace nobody has a membership of answers `404`, not `403`, whether or
 not it exists. Telling those apart would turn the id in the URL into a way

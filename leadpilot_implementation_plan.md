@@ -959,9 +959,9 @@ Avoid hard-coding role checks repeatedly inside routes.
 
 ## Acceptance criteria
 
-- [ ] Reusable workspace authorization dependency exists
-- [ ] Role checks are centralized
-- [ ] Cross-tenant tests exist
+- [x] Reusable workspace authorization dependency exists
+- [x] Role checks are centralized
+- [x] Cross-tenant tests exist
 
 ---
 

@@ -146,3 +146,35 @@ class WorkspaceOwnershipError(AppError):
         )
         self.user_id = user_id
         self.workspace_ids = workspace_ids
+
+
+class MembershipNotFoundError(AppError):
+    """That user is not a member of this workspace.
+
+    Safe to distinguish from every other refusal, unlike the workspace
+    errors above: whoever is asking has already proved they belong here,
+    so being told who is and is not on their own team reveals nothing.
+    """
+
+    detail = "That user is not a member of this workspace"
+
+    def __init__(self, workspace_id: object, user_id: int) -> None:
+        super().__init__(f"User {user_id} is not a member of workspace {workspace_id}")
+        self.workspace_id = workspace_id
+        self.user_id = user_id
+
+
+class LastOwnerError(AppError):
+    """The workspace would be left with nobody able to administer it.
+
+    Raised for the last owner being removed, demoted, or leaving. Every
+    route into a workspace's settings requires an owner, so a workspace
+    without one is a business its own members are locked out of, with no
+    way back in that does not involve support.
+    """
+
+    detail = "A workspace must keep at least one owner"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} would be left without an owner")
+        self.workspace_id = workspace_id

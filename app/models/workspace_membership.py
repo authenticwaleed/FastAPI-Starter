@@ -23,6 +23,27 @@ class WorkspaceRole(StrEnum):
     VIEWER = "viewer"
 
 
+# Least authority first. The plan's permissions say an owner manages
+# admins and an admin manages agents, which is one rule -- you may act on
+# somebody below you -- rather than four tables of who may touch whom.
+_PRECEDENCE = (
+    WorkspaceRole.VIEWER,
+    WorkspaceRole.AGENT,
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.OWNER,
+)
+
+
+def outranks(actor: WorkspaceRole, target: WorkspaceRole) -> bool:
+    """Whether `actor` sits strictly above `target`.
+
+    Strictly, so that equal roles cannot manage each other: one admin
+    demoting another is how a disagreement between two people with the
+    same authority turns into whoever clicks first winning.
+    """
+    return _PRECEDENCE.index(actor) > _PRECEDENCE.index(target)
+
+
 class MembershipStatus(StrEnum):
     ACTIVE = "active"
     # Set rather than deleting the row, so that re-adding somebody restores
