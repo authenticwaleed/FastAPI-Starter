@@ -13,8 +13,12 @@ from app.core.exceptions import (
     EmailAlreadyExistsError,
     InactiveUserError,
     IncorrectPasswordError,
+    InsufficientWorkspaceRoleError,
     InvalidCredentialsError,
+    SlugAlreadyExistsError,
     UserNotFoundError,
+    WorkspaceNotFoundError,
+    WorkspaceOwnershipError,
 )
 from app.schemas.errors import ErrorResponse
 
@@ -48,6 +52,22 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     IncorrectPasswordError: _Answer(
         status.HTTP_400_BAD_REQUEST,
         "incorrect_password",
+    ),
+    WorkspaceNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "workspace_not_found",
+    ),
+    SlugAlreadyExistsError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "slug_already_exists",
+    ),
+    InsufficientWorkspaceRoleError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "insufficient_workspace_role",
+    ),
+    WorkspaceOwnershipError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "workspace_ownership_required",
     ),
 }
 
@@ -165,3 +185,19 @@ BAD_REQUEST = _documented(
 CONFLICT = _documented(status.HTTP_409_CONFLICT, "Email already registered")
 UNAUTHORISED = _documented(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
 FORBIDDEN = _documented(status.HTTP_403_FORBIDDEN, "Inactive user")
+
+# A route documents one description per status code, so where two errors
+# share a code the description has to cover both rather than pick one.
+WORKSPACE_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or you are not a member of it",
+)
+WORKSPACE_FORBIDDEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Inactive user, or your role does not permit this",
+)
+SLUG_CONFLICT = _documented(status.HTTP_409_CONFLICT, "Workspace slug already taken")
+OWNERSHIP_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "You are still the only owner of a workspace",
+)

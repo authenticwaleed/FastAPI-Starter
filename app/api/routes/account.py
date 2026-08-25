@@ -1,7 +1,13 @@
 from fastapi import APIRouter, status
 
 from app.api.dependencies.auth import CurrentUserDep
-from app.api.errors import BAD_REQUEST, CONFLICT, FORBIDDEN, UNAUTHORISED
+from app.api.errors import (
+    BAD_REQUEST,
+    CONFLICT,
+    FORBIDDEN,
+    OWNERSHIP_CONFLICT,
+    UNAUTHORISED,
+)
 from app.schemas.account import AccountUpdate, PasswordChange
 from app.schemas.user import UserRead
 from app.services.account_service import AccountServiceDep
@@ -53,7 +59,7 @@ def change_password(
 @router.delete(
     "",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={**UNAUTHORISED, **FORBIDDEN},
+    responses={**UNAUTHORISED, **FORBIDDEN, **OWNERSHIP_CONFLICT},
 )
 def delete_account(
     user: CurrentUserDep,

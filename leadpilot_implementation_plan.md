@@ -871,11 +871,11 @@ app/api/dependencies/workspace.py
 
 ## Acceptance criteria
 
-- [ ] Workspace model exists
-- [ ] Membership model exists
-- [ ] Alembic migration exists
-- [ ] Workspace CRUD implemented
-- [ ] Every operation checks membership
+- [x] Workspace model exists
+- [x] Membership model exists
+- [x] Alembic migration exists
+- [x] Workspace CRUD implemented
+- [x] Every operation checks membership
 
 ---
 

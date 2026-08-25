@@ -13,6 +13,9 @@ from app.core.exceptions import (
 from app.core.security import verify_password
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
+)
 from app.schemas.account import AccountUpdate, PasswordChange
 from app.schemas.user import UserCreate
 from app.services.account_service import AccountService
@@ -28,8 +31,11 @@ def users(db_session: Session, user_repository: UserRepository) -> UserService:
 
 
 @pytest.fixture
-def service(users: UserService) -> AccountService:
-    return AccountService(users=users)
+def service(
+    users: UserService,
+    membership_repository: WorkspaceMembershipRepository,
+) -> AccountService:
+    return AccountService(users=users, memberships=membership_repository)
 
 
 @pytest.fixture

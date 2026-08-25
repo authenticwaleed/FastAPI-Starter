@@ -78,3 +78,71 @@ class IncorrectPasswordError(AppError):
     def __init__(self, user_id: int) -> None:
         super().__init__(f"Incorrect current password for user: {user_id}")
         self.user_id = user_id
+
+
+class WorkspaceNotFoundError(AppError):
+    """No workspace with that id is visible to this user.
+
+    Deliberately the same error whether the workspace does not exist, has
+    been cancelled, or belongs to somebody else. Distinguishing them would
+    turn the id in the URL into a way of asking which businesses have
+    accounts here, which is not a question a stranger gets to ask.
+    """
+
+    detail = "Workspace not found"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace not found or not accessible: {workspace_id}")
+        self.workspace_id = workspace_id
+
+
+class SlugAlreadyExistsError(AppError):
+    """The workspace slug is taken.
+
+    Cancelled workspaces keep their slug. It may already be in a customer's
+    bookmarks or a public URL, and handing it to somebody else would let
+    them inherit that.
+    """
+
+    detail = "Workspace slug already taken"
+
+    def __init__(self, slug: str) -> None:
+        super().__init__(f"Workspace slug already taken: {slug}")
+        self.slug = slug
+
+
+class InsufficientWorkspaceRoleError(AppError):
+    """The user is a member, but their role does not permit this.
+
+    A 403 rather than the 404 a stranger gets: this caller has already
+    proved they belong here, so confirming the workspace exists tells them
+    nothing they did not know.
+    """
+
+    detail = "Your role does not permit this action"
+
+    def __init__(self, workspace_id: object, role: object) -> None:
+        super().__init__(
+            f"Role {role} may not perform this action in workspace {workspace_id}"
+        )
+        self.workspace_id = workspace_id
+        self.role = role
+
+
+class WorkspaceOwnershipError(AppError):
+    """The account still solely owns a workspace.
+
+    Deleting it would leave a business with no one able to administer it,
+    so the owner has to hand it over first. There is nothing to hand it
+    over with yet, which is the honest state of things until memberships
+    can be managed.
+    """
+
+    detail = "Transfer or close your workspaces before deleting your account"
+
+    def __init__(self, user_id: int, workspace_ids: list[object]) -> None:
+        super().__init__(
+            f"User {user_id} is the only owner of workspaces: {workspace_ids}"
+        )
+        self.user_id = user_id
+        self.workspace_ids = workspace_ids

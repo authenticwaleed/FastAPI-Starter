@@ -65,12 +65,34 @@ test is rolled back afterwards, so it never touches application data. Set
 | PATCH | `/api/v1/account` | Change your own name or email |
 | POST | `/api/v1/account/change-password` | Replace your password |
 | DELETE | `/api/v1/account` | Delete your own account |
+| POST | `/api/v1/workspaces` | Create a workspace; you become its owner |
+| GET | `/api/v1/workspaces` | List the workspaces you belong to |
+| GET | `/api/v1/workspaces/{workspace_id}` | Read one workspace |
+| PATCH | `/api/v1/workspaces/{workspace_id}` | Update it, if you administer it |
+| DELETE | `/api/v1/workspaces/{workspace_id}` | Close it, if you own it |
 
 Protected endpoints take `Authorization: Bearer <token>`.
 
 Everything under `/account` acts on the account the token belongs to. None
 of those paths takes a user id, which is deliberate: there is no id for a
 caller to substitute, and so no ownership check for anyone to forget.
+
+A **workspace** is the tenant boundary: one customer business, with the
+users who work in it attached through memberships. Four roles exist —
+`owner`, `admin`, `agent`, `viewer` — of which this phase enforces two
+rules: administering a workspace needs `owner` or `admin`, and closing one
+needs `owner`.
+
+A workspace nobody has a membership of answers `404`, not `403`, whether or
+not it exists. Telling those apart would turn the id in the URL into a way
+of asking which businesses have accounts here. A member whose *role* is
+insufficient does get a `403`: they have already proved they belong.
+
+`DELETE /workspaces/{id}` closes a workspace rather than erasing it — the
+status becomes `cancelled`, it leaves every listing, and every path to it
+starts answering `404`. The rows survive, because a workspace is about to
+own contacts, conversations and message history that one call should not
+be able to destroy.
 
 Every error, including validation failures and unknown paths, has the same
 shape:
@@ -230,8 +252,11 @@ Worth knowing before this is used for something real:
   logging out is the client discarding it, and changing a password does not
   sign anyone out.
 - **No administration API.** A user can manage their own account and nothing
-  else. Reading or editing somebody else's needs a role to check first, and
-  there are no roles yet.
+  else.
+- **No way to add anyone to a workspace.** Memberships are only created by
+  creating a workspace, so every workspace has exactly one member until
+  invitations exist. Until then the only owner of a workspace cannot delete
+  their account, because there is no one to hand it to.
 - **No rate limiting**, on login or anywhere else.
 
 ## Layout

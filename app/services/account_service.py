@@ -2,12 +2,16 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.core.exceptions import IncorrectPasswordError
+from app.core.exceptions import IncorrectPasswordError, WorkspaceOwnershipError
 from app.core.security import verify_password
 from app.models.user import User
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
+)
 from app.schemas.account import AccountUpdate, PasswordChange
 from app.schemas.user import UserUpdate
 from app.services.user_service import UserService, UserServiceDep
+from app.services.workspace_service import WorkspaceMembershipRepositoryDep
 
 
 class AccountService:
@@ -24,8 +28,13 @@ class AccountService:
     not a second copy of it.
     """
 
-    def __init__(self, users: UserService) -> None:
+    def __init__(
+        self,
+        users: UserService,
+        memberships: WorkspaceMembershipRepository,
+    ) -> None:
         self._users = users
+        self._memberships = memberships
 
     def update(self, user: User, payload: AccountUpdate) -> User:
         return self._users.update_user(
@@ -51,11 +60,28 @@ class AccountService:
         )
 
     def delete(self, user: User) -> None:
+        """Delete the account, unless a business still depends on it.
+
+        Closing an account used to affect nobody else. Now that a user can
+        own a workspace, the last owner leaving would strand a business
+        that no one is able to administer -- its members locked out of
+        their own settings, with no route back in. Handing ownership over
+        first is the answer, and there is nothing to hand it over with yet,
+        so for now this refuses and says so.
+        """
+        stranded = self._memberships.sole_owned_workspace_ids(user.id)
+
+        if stranded:
+            raise WorkspaceOwnershipError(user.id, list(stranded))
+
         self._users.delete_user(user.id)
 
 
-def get_account_service(users: UserServiceDep) -> AccountService:
-    return AccountService(users=users)
+def get_account_service(
+    users: UserServiceDep,
+    memberships: WorkspaceMembershipRepositoryDep,
+) -> AccountService:
+    return AccountService(users=users, memberships=memberships)
 
 
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]

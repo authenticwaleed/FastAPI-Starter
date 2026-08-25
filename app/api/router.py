@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import account, auth, health
+from app.api.routes import account, auth, health, workspaces
 
 api_router = APIRouter()
 
@@ -12,3 +12,4 @@ api_router.include_router(auth.router)
 # before it needs a route. UserService still holds the logic, so the admin
 # surface that eventually needs it has something to build on.
 api_router.include_router(account.router)
+api_router.include_router(workspaces.router)
