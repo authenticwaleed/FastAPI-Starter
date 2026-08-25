@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    # How long an invitation link stays usable. A week is long enough to
+    # survive somebody being on holiday and short enough that a link found
+    # in an old mailbox is no longer a way into a workspace.
+    invitation_expire_hours: int = 168
+
     log_level: str = "INFO"
     # "text" reads better in a terminal; "json" is what a log aggregator can
     # actually query. Left unset it follows the environment, which is the

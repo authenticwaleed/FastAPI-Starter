@@ -7,6 +7,7 @@ half arrives with Phase 8, where login finally has a use for verification.
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 import jwt
 import pytest
@@ -15,7 +16,9 @@ from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     decode_access_token,
+    generate_token,
     hash_password,
+    hash_token,
     unusable_hash,
     verify_password,
 )
@@ -158,3 +161,39 @@ def test_a_token_without_a_subject_is_rejected() -> None:
 def test_garbage_is_rejected() -> None:
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token("not-a-token")
+
+
+def test_a_generated_token_is_url_safe() -> None:
+    token = generate_token()
+
+    assert token == quote(token, safe="")
+
+
+def test_two_generated_tokens_differ() -> None:
+    # Not a randomness test, which a unit test cannot do. It catches the
+    # mistake that matters: a constant where a secret should be.
+    assert generate_token() != generate_token()
+
+
+def test_a_generated_token_carries_enough_entropy_to_be_unguessable() -> None:
+    # 32 bytes, URL-safe base64: 43 characters once the padding is gone.
+    assert len(generate_token()) >= 43
+
+
+def test_hashing_a_token_is_repeatable() -> None:
+    # Unlike a password hash, and deliberately: this is what lets an
+    # invitation be found by one indexed lookup rather than by verifying
+    # every outstanding row.
+    token = generate_token()
+
+    assert hash_token(token) == hash_token(token)
+
+
+def test_different_tokens_hash_differently() -> None:
+    assert hash_token(generate_token()) != hash_token(generate_token())
+
+
+def test_a_token_hash_does_not_contain_the_token() -> None:
+    token = generate_token()
+
+    assert token not in hash_token(token)

@@ -178,3 +178,75 @@ class LastOwnerError(AppError):
     def __init__(self, workspace_id: object) -> None:
         super().__init__(f"Workspace {workspace_id} would be left without an owner")
         self.workspace_id = workspace_id
+
+
+class InvitationNotFoundError(AppError):
+    """No usable invitation matches that token.
+
+    Covers an unknown token, one whose workspace has since been closed,
+    and one that was revoked. All three are the same answer for the same
+    reason the workspace errors are: whoever is holding the link has not
+    proved anything yet.
+    """
+
+    detail = "Invitation not found"
+
+
+class InvitationExpiredError(AppError):
+    """The invitation was real, and is no longer.
+
+    Distinguished from "not found" on purpose. This is not a secret --
+    the holder had a valid link -- and "your link expired, ask for
+    another" is a different thing to tell somebody than "no such link".
+    """
+
+    detail = "This invitation has expired"
+
+
+class InvitationAlreadyAcceptedError(AppError):
+    """The invitation has been used.
+
+    Acceptance is single-use: `accepted_at` is set once, inside the same
+    transaction that creates the membership, so a link that arrives twice
+    cannot produce a second one.
+    """
+
+    detail = "This invitation has already been accepted"
+
+
+class InvitationNotYoursError(AppError):
+    """The invitation names a different address than the account using it.
+
+    An invitation is addressed to a person, and a forwarded link should
+    not hand somebody else a seat in a workspace that was never offered
+    to them.
+    """
+
+    detail = "This invitation was sent to a different email address"
+
+
+class AlreadyAMemberError(AppError):
+    """That person already belongs to this workspace."""
+
+    detail = "That person is already a member of this workspace"
+
+    def __init__(self, workspace_id: object, email: str) -> None:
+        super().__init__(f"{email} is already a member of workspace {workspace_id}")
+        self.workspace_id = workspace_id
+        self.email = email
+
+
+class PendingInvitationExistsError(AppError):
+    """An invitation to that address is already outstanding.
+
+    Sending a second would leave two live links to one seat, and revoking
+    one of them would look like revoking access when it was not. Revoke
+    the first, then invite again.
+    """
+
+    detail = "An invitation to that address is already outstanding"
+
+    def __init__(self, workspace_id: object, email: str) -> None:
+        super().__init__(f"{email} already has a pending invitation to {workspace_id}")
+        self.workspace_id = workspace_id
+        self.email = email

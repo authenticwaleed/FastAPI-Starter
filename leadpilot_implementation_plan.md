@@ -1016,11 +1016,11 @@ Create membership
 
 ## Acceptance criteria
 
-- [ ] Team member can be invited
-- [ ] Invitation expires
-- [ ] Invitation can be accepted once
-- [ ] Membership created correctly
-- [ ] Permission checks covered by tests
+- [x] Team member can be invited
+- [x] Invitation expires
+- [x] Invitation can be accepted once
+- [x] Membership created correctly
+- [x] Permission checks covered by tests
 
 ---
 

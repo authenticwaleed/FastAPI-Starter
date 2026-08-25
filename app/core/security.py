@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
@@ -83,3 +85,28 @@ def decode_access_token(token: str) -> str:
         raise jwt.InvalidTokenError("token carries no subject")
 
     return subject
+
+
+def generate_token() -> str:
+    """A single-use secret to put in a link, such as an invitation.
+
+    32 bytes from the system CSPRNG, URL-safe so it survives being pasted
+    into an address bar. This is the only moment the value exists in
+    readable form: what gets stored is the hash below.
+    """
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """Hash a link token for storage, so a leaked table is not a set of keys.
+
+    SHA-256, deliberately, where a password gets Argon2. The two are
+    protecting against different things. A password is low-entropy and
+    guessable, so its hash must be slow and salted -- and being salted is
+    exactly why you cannot look a password up by its hash. This value is
+    256 bits of uniform randomness with no dictionary to attack, so speed
+    buys an attacker nothing, and an unsalted digest is what lets the
+    lookup be a single indexed query rather than a slow verification
+    against every outstanding invitation in the table.
+    """
+    return hashlib.sha256(token.encode()).hexdigest()

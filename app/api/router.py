@@ -1,6 +1,13 @@
 from fastapi import APIRouter
 
-from app.api.routes import account, auth, health, memberships, workspaces
+from app.api.routes import (
+    account,
+    auth,
+    health,
+    invitations,
+    memberships,
+    workspaces,
+)
 
 api_router = APIRouter()
 
@@ -14,3 +21,5 @@ api_router.include_router(auth.router)
 api_router.include_router(account.router)
 api_router.include_router(workspaces.router)
 api_router.include_router(memberships.router)
+api_router.include_router(invitations.workspace_router)
+api_router.include_router(invitations.token_router)

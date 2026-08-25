@@ -73,6 +73,11 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `…/{workspace_id}/members` | List the team |
 | PATCH | `…/{workspace_id}/members/{user_id}` | Change a member's role |
 | DELETE | `…/{workspace_id}/members/{user_id}` | Remove a member, or leave |
+| POST | `…/{workspace_id}/invitations` | Invite somebody by email |
+| GET | `…/{workspace_id}/invitations` | List invitations sent |
+| DELETE | `…/{workspace_id}/invitations/{invitation_id}` | Revoke one |
+| GET | `/api/v1/invitations/{token}` | Preview a link, no account needed |
+| POST | `/api/v1/invitations/{token}/accept` | Take the seat |
 
 Protected endpoints take `Authorization: Bearer <token>`.
 
@@ -101,7 +106,25 @@ workspace without needing rank at all.
 A workspace must keep at least one owner: the last one cannot be demoted,
 removed, or walk out, and cannot delete their account either. Every route
 into a workspace's settings needs an owner, so a workspace without one is
-a business its own members are locked out of.
+a business its own members are locked out of. To leave, invite a
+successor at `owner` first.
+
+**Invitations** are how anyone else gets in. The link's token is 32 bytes
+of CSPRNG output; what is stored is its SHA-256 digest, so the table is
+not a set of working links. SHA-256 rather than Argon2 deliberately — the
+value is high-entropy with no dictionary to attack, and an unsalted digest
+is what lets acceptance be one indexed lookup instead of a slow
+verification against every outstanding row.
+
+The token is returned by the create call and by nothing else, because
+nothing else can reproduce it. Once there is an email to put the link in,
+that is where it should go and the field should stop being returned.
+
+An invitation admits only the address it names, so forwarding the link
+does not hand somebody else a seat. Accepting is single-use: `accepted_at`
+is set in the same transaction that creates the membership. An expired
+link answers `410`, not `404` — the holder had a real link, and "ask for
+another" is different advice from "check the address".
 
 A workspace nobody has a membership of answers `404`, not `403`, whether or
 not it exists. Telling those apart would turn the id in the URL into a way
@@ -273,10 +296,18 @@ Worth knowing before this is used for something real:
   sign anyone out.
 - **No administration API.** A user can manage their own account and nothing
   else.
-- **No way to add anyone to a workspace.** Memberships are only created by
-  creating a workspace, so every workspace has exactly one member until
-  invitations exist. Until then the only owner of a workspace cannot delete
-  their account, because there is no one to hand it to.
+- **No email is sent.** An invitation's link has to be handed over by
+  whoever created it, because the API returns the token once for exactly
+  that reason. Delivering it is a later phase.
+- **Invitation tokens travel in the URL path**, which is what makes a link
+  a link. This application redacts them from its own log lines, but an
+  access log written by uvicorn, a proxy or a CDN sits outside that and
+  will record the full path. Anywhere this is deployed for real needs an
+  access-log policy that redacts `/invitations/*`.
+- **Email addresses are compared case-sensitively by the users table.**
+  `Ada@example.com` and `ada@example.com` can both register. Invitation
+  matching is case-insensitive and works either way, but the accounts
+  themselves should probably not be two.
 - **No rate limiting**, on login or anywhere else.
 
 ## Layout

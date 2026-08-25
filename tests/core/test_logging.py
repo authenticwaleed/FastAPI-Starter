@@ -198,6 +198,51 @@ def test_no_secret_reaches_the_log(client: TestClient) -> None:
     assert "correct horse battery staple" not in text
 
 
+def _application_messages(records: list[logging.LogRecord]) -> str:
+    """Only what this application logged.
+
+    The test client's own HTTP logger writes the request URL, and so does
+    uvicorn's access log in production. Neither is written by code in this
+    repository, and neither is what these two tests are about -- see the
+    note in the README about keeping tokens out of access logs at the
+    edge.
+    """
+    return "\n".join(
+        record.getMessage() for record in records if record.name.startswith("app.")
+    )
+
+
+def test_an_invitation_token_never_reaches_the_log(client: TestClient) -> None:
+    """The one credential that travels in a URL path.
+
+    Following an expired or revoked link is an ordinary thing to do, and
+    it goes through the error handler, which logs the path. Logging that
+    raw would copy a working invitation link into the one place a secret
+    is kept longest.
+    """
+    token = "a-token-that-must-not-be-logged"
+
+    with capture(logging.DEBUG) as records:
+        client.get(f"/api/v1/invitations/{token}")
+
+    messages = _application_messages(records)
+
+    assert token not in messages
+    assert "/api/v1/invitations/{token}" in messages
+
+
+def test_an_identifier_in_a_path_is_still_logged(client: TestClient) -> None:
+    # Only credentials are hidden. A workspace id in a log line is the
+    # thing that makes the line worth having, and redacting every path
+    # parameter would throw that away to solve a problem one of them has.
+    workspace_id = "3f1d9a0c-0000-4000-8000-000000000000"
+
+    with capture(logging.DEBUG) as records:
+        client.get(f"/api/v1/workspaces/{workspace_id}")
+
+    assert workspace_id in _application_messages(records)
+
+
 def test_the_application_does_not_debug_with_print() -> None:
     for module in sorted(Path("app").rglob("*.py")):
         assert "print(" not in module.read_text(), module
