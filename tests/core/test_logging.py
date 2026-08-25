@@ -36,11 +36,18 @@ def capture(level: int = logging.DEBUG) -> Iterator[list[logging.LogRecord]]:
 
     handler = _Collect(level=level)
     root = logging.getLogger()
+    previous_level = root.level
     root.addHandler(handler)
+    # Lower the logger as well as the handler. A record below its logger's
+    # own level never reaches a handler, so with LOG_LEVEL=WARNING -- which
+    # is what CI runs -- every INFO line asserted on below would vanish
+    # before this could collect it.
+    root.setLevel(level)
 
     try:
         yield records
     finally:
+        root.setLevel(previous_level)
         root.removeHandler(handler)
 
 

@@ -165,9 +165,17 @@ def test_an_unknown_environment_is_rejected() -> None:
         _settings(environment="prod")
 
 
-def test_the_signing_key_must_come_from_the_environment() -> None:
+def test_the_signing_key_must_come_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # No default, so a deployment that forgets it fails at startup rather
     # than signing tokens with something published in the repository.
+    #
+    # _env_file=None only skips .env; os.environ is still a source. CI
+    # exports JWT_SECRET_KEY for the application, so without clearing it
+    # here the field is satisfied and this asserts nothing at all.
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+
     with pytest.raises(ValidationError):
         Settings(
             _env_file=None,
