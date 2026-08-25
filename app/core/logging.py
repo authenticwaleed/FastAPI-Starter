@@ -84,14 +84,12 @@ def configure_logging() -> None:
                 for name in ("uvicorn", "uvicorn.error", "uvicorn.access")
             }
             | {
-                # SQLAlchemy attaches a handler of its own the first time an
-                # engine is built with echo on. Configuring the logger here
-                # replaces that handler with ours, so a statement is logged
-                # once and in the same format as everything else. The level
-                # is left alone: `echo` sets it on sqlalchemy.engine.
-                "sqlalchemy": {
-                    "handlers": ["console"],
-                    "propagate": False,
+                # SQL logging is a level here rather than create_engine's
+                # `echo`, which would attach a second handler and double
+                # every statement. No handler of its own: these propagate to
+                # root and come out in the same format as everything else.
+                "sqlalchemy.engine": {
+                    "level": "INFO" if settings.debug else "WARNING",
                 },
             },
         }
