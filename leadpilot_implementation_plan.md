@@ -1112,12 +1112,12 @@ POST /api/v1/workspaces/{workspace_id}/conversations/{conversation_id}/messages
 
 ## Acceptance criteria
 
-- [ ] Conversation CRUD/domain operations exist
-- [ ] Messages persisted
-- [ ] Assignment works
-- [ ] Close/reopen works
-- [ ] Message ordering is deterministic
-- [ ] Pagination exists
+- [x] Conversation CRUD/domain operations exist
+- [x] Messages persisted
+- [x] Assignment works
+- [x] Close/reopen works
+- [x] Message ordering is deterministic
+- [x] Pagination exists
 
 ---
 

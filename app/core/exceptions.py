@@ -284,3 +284,46 @@ class ContactAlreadyExistsError(AppError):
         )
         self.workspace_id = workspace_id
         self.phone_number = phone_number
+
+
+class ConversationNotFoundError(AppError):
+    """No conversation with that id exists in this workspace."""
+
+    detail = "Conversation not found"
+
+    def __init__(self, workspace_id: object, conversation_id: object) -> None:
+        super().__init__(
+            f"Conversation {conversation_id} not found in workspace {workspace_id}"
+        )
+        self.workspace_id = workspace_id
+        self.conversation_id = conversation_id
+
+
+class ConversationAlreadyOpenError(AppError):
+    """That contact already has a thread that is not closed.
+
+    One live conversation per person per channel. Two would split a
+    customer's history down the middle, with half of it in an inbox row
+    nobody is looking at.
+    """
+
+    detail = "That contact already has an open conversation"
+
+    def __init__(self, contact_id: object) -> None:
+        super().__init__(f"Contact {contact_id} already has an open conversation")
+        self.contact_id = contact_id
+
+
+class ConversationClosedError(AppError):
+    """The conversation is closed, and this needs it not to be.
+
+    Reopening is a decision somebody makes rather than something a reply
+    does silently: a closed thread is a resolved one, and an agent typing
+    into it should be told they are reopening it.
+    """
+
+    detail = "This conversation is closed. Reopen it first"
+
+    def __init__(self, conversation_id: object) -> None:
+        super().__init__(f"Conversation {conversation_id} is closed")
+        self.conversation_id = conversation_id

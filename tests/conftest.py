@@ -20,6 +20,8 @@ from app.core.config import get_settings
 from app.db.session import get_db_session, get_engine, get_session_factory
 from app.main import create_app
 from app.repositories.contact_repository import ContactRepository
+from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_invitation_repository import (
     WorkspaceInvitationRepository,
@@ -125,9 +127,9 @@ def engine() -> Iterator[Engine]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE contacts, workspace_invitations, "
-                "workspace_memberships, workspaces, users "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE messages, conversations, contacts, "
+                "workspace_invitations, workspace_memberships, "
+                "workspaces, users RESTART IDENTITY CASCADE"
             )
         )
 
@@ -187,6 +189,16 @@ def invitation_repository(db_session: Session) -> WorkspaceInvitationRepository:
 @pytest.fixture
 def contact_repository(db_session: Session) -> ContactRepository:
     return ContactRepository(db_session)
+
+
+@pytest.fixture
+def conversation_repository(db_session: Session) -> ConversationRepository:
+    return ConversationRepository(db_session)
+
+
+@pytest.fixture
+def message_repository(db_session: Session) -> MessageRepository:
+    return MessageRepository(db_session)
 
 
 @pytest.fixture

@@ -13,6 +13,9 @@ from app.core.exceptions import (
     AppError,
     ContactAlreadyExistsError,
     ContactNotFoundError,
+    ConversationAlreadyOpenError,
+    ConversationClosedError,
+    ConversationNotFoundError,
     EmailAlreadyExistsError,
     InactiveUserError,
     IncorrectPasswordError,
@@ -104,6 +107,18 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     ContactAlreadyExistsError: _Answer(
         status.HTTP_409_CONFLICT,
         "contact_already_exists",
+    ),
+    ConversationNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "conversation_not_found",
+    ),
+    ConversationAlreadyOpenError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "conversation_already_open",
+    ),
+    ConversationClosedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "conversation_closed",
     ),
     PendingInvitationExistsError: _Answer(
         status.HTTP_409_CONFLICT,
@@ -298,4 +313,12 @@ CONTACT_NOT_FOUND = _documented(
 CONTACT_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "A contact with that phone number already exists",
+)
+CONVERSATION_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace or conversation, or you are not a member",
+)
+CONVERSATION_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That contact already has an open conversation, or this one is closed",
 )

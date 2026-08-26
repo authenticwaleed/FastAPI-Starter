@@ -82,6 +82,15 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `…/{workspace_id}/contacts` | List them, filtered and paged |
 | GET | `…/{workspace_id}/contacts/{contact_id}` | Read one |
 | PATCH | `…/{workspace_id}/contacts/{contact_id}` | Update one |
+| POST | `…/{workspace_id}/conversations` | Open a thread with a contact |
+| GET | `…/{workspace_id}/conversations` | The inbox, filtered and paged |
+| GET | `…/conversations/{conversation_id}` | Read one |
+| PATCH | `…/conversations/{conversation_id}` | Change status or AI mode |
+| POST | `…/conversations/{conversation_id}/assign` | Hand it over, or unassign |
+| POST | `…/conversations/{conversation_id}/close` | Close it |
+| POST | `…/conversations/{conversation_id}/reopen` | Reopen it |
+| GET | `…/conversations/{conversation_id}/messages` | Read the thread |
+| POST | `…/conversations/{conversation_id}/messages` | Reply |
 
 Protected endpoints take `Authorization: Bearer <token>`.
 
@@ -141,6 +150,28 @@ are two contacts who must not see each other's history.
 Reading contacts takes any membership; adding and editing takes `agent` or
 above, because handling the people who message a business is an agent's
 job rather than an administrative act.
+
+**Conversations** are threads with a contact, and a contact has at most
+one that is not closed — enforced by a partial unique index, so two agents
+opening a thread with the same customer at the same moment cannot split
+that customer's history in half. Closed conversations accumulate as
+history without blocking the next one.
+
+Two composite foreign keys make cross-tenant rows impossible rather than
+merely refused: a conversation's `(workspace_id, contact_id)` points at
+`contacts (workspace_id, id)`, and a message's
+`(workspace_id, conversation_id)` at `conversations (workspace_id, id)`.
+The database rejects a conversation naming another workspace's contact
+even if every check in the application were skipped.
+
+Messages carry a `sequence` — a database-assigned counter, never exposed —
+because ordering by id would be random (UUIDs) and `created_at` alone is
+not enough: Postgres fixes `now()` for a transaction, so a webhook writing
+three messages from one payload gives all three the same timestamp.
+
+A reply is stored `queued` and stays there. Nothing delivers it yet;
+marking it `sent` would tell an agent their customer was answered when
+nothing left the building.
 
 A workspace nobody has a membership of answers `404`, not `403`, whether or
 not it exists. Telling those apart would turn the id in the URL into a way
@@ -312,6 +343,10 @@ Worth knowing before this is used for something real:
   sign anyone out.
 - **No administration API.** A user can manage their own account and nothing
   else.
+- **Nothing sends or receives a message.** Replies are persisted as
+  `queued`, and inbound messages have no way in at all — connecting a
+  provider is the next phase. `ai_mode` is stored on every conversation
+  and read by nothing.
 - **No email is sent.** An invitation's link has to be handed over by
   whoever created it, because the API returns the token once for exactly
   that reason. Delivering it is a later phase.

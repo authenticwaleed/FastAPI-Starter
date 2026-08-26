@@ -57,6 +57,15 @@ class Contact(Base):
             "external_id",
             name="uq_contacts_workspace_id_external_id",
         ),
+        # The target of the composite foreign key on conversations.
+        # Redundant with the primary key as an index, and not redundant as
+        # a constraint: it is what lets another table say "this contact,
+        # in this workspace" rather than "this contact, and trust me".
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_contacts_workspace_id_id",
+        ),
         # The shape the list endpoint actually asks for: one workspace's
         # contacts, newest first. A plain index on workspace_id would be
         # redundant -- the unique constraints above already lead with it,
