@@ -1059,11 +1059,11 @@ Do not make phone number globally unique because the same customer can interact 
 
 ## Acceptance criteria
 
-- [ ] Contacts belong to workspace
-- [ ] Phone number normalized
-- [ ] Duplicate handling defined
-- [ ] Pagination exists
-- [ ] Cross-tenant access rejected
+- [x] Contacts belong to workspace
+- [x] Phone number normalized
+- [x] Duplicate handling defined
+- [x] Pagination exists
+- [x] Cross-tenant access rejected
 
 ---
 
@@ -1112,12 +1112,12 @@ POST /api/v1/workspaces/{workspace_id}/conversations/{conversation_id}/messages
 
 ## Acceptance criteria
 
-- [ ] Conversation CRUD/domain operations exist
-- [ ] Messages persisted
-- [ ] Assignment works
-- [ ] Close/reopen works
-- [ ] Message ordering is deterministic
-- [ ] Pagination exists
+- [x] Conversation CRUD/domain operations exist
+- [x] Messages persisted
+- [x] Assignment works
+- [x] Close/reopen works
+- [x] Message ordering is deterministic
+- [x] Pagination exists
 
 ---
 

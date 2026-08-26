@@ -11,6 +11,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.exceptions import (
     AlreadyAMemberError,
     AppError,
+    ContactAlreadyExistsError,
+    ContactNotFoundError,
+    ConversationAlreadyOpenError,
+    ConversationClosedError,
+    ConversationNotFoundError,
     EmailAlreadyExistsError,
     InactiveUserError,
     IncorrectPasswordError,
@@ -98,6 +103,23 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         "invitation_not_yours",
     ),
     AlreadyAMemberError: _Answer(status.HTTP_409_CONFLICT, "already_a_member"),
+    ContactNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "contact_not_found"),
+    ContactAlreadyExistsError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "contact_already_exists",
+    ),
+    ConversationNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "conversation_not_found",
+    ),
+    ConversationAlreadyOpenError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "conversation_already_open",
+    ),
+    ConversationClosedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "conversation_closed",
+    ),
     PendingInvitationExistsError: _Answer(
         status.HTTP_409_CONFLICT,
         "invitation_already_pending",
@@ -283,4 +305,20 @@ INVITATION_FORBIDDEN = _documented(
 INVITATION_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "Already a member, already invited, or already accepted",
+)
+CONTACT_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace or contact, or you are not a member",
+)
+CONTACT_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "A contact with that phone number already exists",
+)
+CONVERSATION_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace or conversation, or you are not a member",
+)
+CONVERSATION_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That contact already has an open conversation, or this one is closed",
 )

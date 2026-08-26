@@ -32,6 +32,13 @@ from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate
 MAY_ADMINISTER = frozenset({WorkspaceRole.OWNER, WorkspaceRole.ADMIN})
 MAY_CLOSE = frozenset({WorkspaceRole.OWNER})
 
+# Everyone whose job involves customers. An agent handles the people
+# messaging the business, so adding and correcting a contact is the work
+# rather than an administrative act. A viewer reads and nothing else.
+MAY_HANDLE_CUSTOMERS = frozenset(
+    {WorkspaceRole.OWNER, WorkspaceRole.ADMIN, WorkspaceRole.AGENT}
+)
+
 
 @dataclass(frozen=True)
 class WorkspaceAccess:
