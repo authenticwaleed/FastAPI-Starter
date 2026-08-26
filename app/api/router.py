@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     account,
     auth,
+    contacts,
     health,
     invitations,
     memberships,
@@ -23,3 +24,4 @@ api_router.include_router(workspaces.router)
 api_router.include_router(memberships.router)
 api_router.include_router(invitations.workspace_router)
 api_router.include_router(invitations.token_router)
+api_router.include_router(contacts.router)

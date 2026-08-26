@@ -78,6 +78,10 @@ test is rolled back afterwards, so it never touches application data. Set
 | DELETE | `…/{workspace_id}/invitations/{invitation_id}` | Revoke one |
 | GET | `/api/v1/invitations/{token}` | Preview a link, no account needed |
 | POST | `/api/v1/invitations/{token}/accept` | Take the seat |
+| POST | `…/{workspace_id}/contacts` | Add an end customer |
+| GET | `…/{workspace_id}/contacts` | List them, filtered and paged |
+| GET | `…/{workspace_id}/contacts/{contact_id}` | Read one |
+| PATCH | `…/{workspace_id}/contacts/{contact_id}` | Update one |
 
 Protected endpoints take `Authorization: Bearer <token>`.
 
@@ -125,6 +129,18 @@ does not hand somebody else a seat. Accepting is single-use: `accepted_at`
 is set in the same transaction that creates the membership. An expired
 link answers `410`, not `404` — the holder had a real link, and "ask for
 another" is different advice from "check the address".
+
+**Contacts** are the first table holding somebody else's customers rather
+than this product's users. A contact is identified within its workspace by
+phone number, stored in E.164 — so a number typed with spaces in the
+dashboard and the same number arriving from WhatsApp are one row, not two.
+That uniqueness is **per workspace and deliberately not global**: one
+person can be a customer of two businesses using this product, and those
+are two contacts who must not see each other's history.
+
+Reading contacts takes any membership; adding and editing takes `agent` or
+above, because handling the people who message a business is an agent's
+job rather than an administrative act.
 
 A workspace nobody has a membership of answers `404`, not `403`, whether or
 not it exists. Telling those apart would turn the id in the URL into a way
@@ -304,6 +320,11 @@ Worth knowing before this is used for something real:
   access log written by uvicorn, a proxy or a CDN sits outside that and
   will record the full path. Anywhere this is deployed for real needs an
   access-log policy that redacts `/invitations/*`.
+- **Phone numbers must already be international.** `+92 300 1234567` and
+  `0092 300 1234567` both work; a bare national number like `0300 1234567`
+  is refused, because resolving it needs a country the product does not
+  record yet. When that changes, the fix is a `country` on the workspace
+  and a real libphonenumber parse — not a looser rule.
 - **Email addresses are compared case-sensitively by the users table.**
   `Ada@example.com` and `ada@example.com` can both register. Invitation
   matching is case-insensitive and works either way, but the accounts

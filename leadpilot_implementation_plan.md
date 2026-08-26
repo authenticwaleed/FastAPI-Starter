@@ -1059,11 +1059,11 @@ Do not make phone number globally unique because the same customer can interact 
 
 ## Acceptance criteria
 
-- [ ] Contacts belong to workspace
-- [ ] Phone number normalized
-- [ ] Duplicate handling defined
-- [ ] Pagination exists
-- [ ] Cross-tenant access rejected
+- [x] Contacts belong to workspace
+- [x] Phone number normalized
+- [x] Duplicate handling defined
+- [x] Pagination exists
+- [x] Cross-tenant access rejected
 
 ---
 

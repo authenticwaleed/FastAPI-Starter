@@ -250,3 +250,37 @@ class PendingInvitationExistsError(AppError):
         super().__init__(f"{email} already has a pending invitation to {workspace_id}")
         self.workspace_id = workspace_id
         self.email = email
+
+
+class ContactNotFoundError(AppError):
+    """No contact with that id exists in this workspace.
+
+    The workspace is part of the question, not a filter applied to the
+    answer: a contact id that belongs to another business is not found
+    here, which is the same thing as not existing as far as this caller
+    is concerned.
+    """
+
+    detail = "Contact not found"
+
+    def __init__(self, workspace_id: object, contact_id: object) -> None:
+        super().__init__(f"Contact {contact_id} not found in workspace {workspace_id}")
+        self.workspace_id = workspace_id
+        self.contact_id = contact_id
+
+
+class ContactAlreadyExistsError(AppError):
+    """The workspace already has a contact with that phone number.
+
+    Per workspace, deliberately. The same person can be a customer of two
+    businesses using this product, and those are two contacts.
+    """
+
+    detail = "A contact with that phone number already exists"
+
+    def __init__(self, workspace_id: object, phone_number: str) -> None:
+        super().__init__(
+            f"Contact {phone_number} already exists in workspace {workspace_id}"
+        )
+        self.workspace_id = workspace_id
+        self.phone_number = phone_number

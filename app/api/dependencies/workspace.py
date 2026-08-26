@@ -10,6 +10,7 @@ from app.models.workspace_membership import WorkspaceRole
 from app.services.workspace_service import (
     MAY_ADMINISTER,
     MAY_CLOSE,
+    MAY_HANDLE_CUSTOMERS,
     WorkspaceAccess,
     WorkspaceServiceDep,
 )
@@ -63,6 +64,11 @@ def require_workspace_role(
 
 # Any active member, whatever their role: the check is membership itself.
 WorkspaceMemberDep = WorkspaceAccessDep
+
+WorkspaceAgentDep = Annotated[
+    WorkspaceAccess,
+    Depends(require_workspace_role(*MAY_HANDLE_CUSTOMERS)),
+]
 
 WorkspaceAdminDep = Annotated[
     WorkspaceAccess,
