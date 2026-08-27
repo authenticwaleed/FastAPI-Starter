@@ -1,13 +1,16 @@
-from fastapi import APIRouter, BackgroundTasks, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 
 from app.api.dependencies.auth import CurrentUserDep
+from app.api.dependencies.rate_limit import limit_by_client
 from app.api.errors import (
     BAD_LINK,
     CONFLICT,
     FORBIDDEN,
+    RATE_LIMITED,
     REFRESH_UNAUTHORISED,
     UNAUTHORISED,
 )
+from app.core.rate_limit import RateLimited
 from app.schemas.auth import (
     EmailRequest,
     LoginRequest,
@@ -31,6 +34,19 @@ router = APIRouter(
     tags=["auth"],
 )
 
+# Two buckets, both keyed on the caller's address because none of these
+# endpoints has an account to key on yet.
+#
+# AUTH covers presenting a credential: a password at /login, a refresh
+# token at /refresh. Both are worth guessing at, and neither is worth
+# guessing at ten times a minute.
+#
+# EMAIL covers the three endpoints that will send mail to an address the
+# caller chose. That is an unauthenticated way to make this service email
+# a stranger, so it is the tightest limit here by some distance.
+BY_ADDRESS = Depends(limit_by_client(RateLimited.AUTH))
+BY_ADDRESS_FOR_EMAIL = Depends(limit_by_client(RateLimited.EMAIL))
+
 
 def _who_is_asking(request: Request) -> tuple[str | None, str | None]:
     """The two labels a session list shows, taken from the request.
@@ -52,7 +68,8 @@ def _who_is_asking(request: Request) -> tuple[str | None, str | None]:
 @router.post(
     "/register",
     status_code=status.HTTP_201_CREATED,
-    responses=CONFLICT,
+    responses={**CONFLICT, **RATE_LIMITED},
+    dependencies=[BY_ADDRESS_FOR_EMAIL],
 )
 def register(
     payload: UserCreate,
@@ -82,7 +99,11 @@ def register(
     return UserRead.model_validate(user)
 
 
-@router.post("/login", responses={**UNAUTHORISED, **FORBIDDEN})
+@router.post(
+    "/login",
+    responses={**UNAUTHORISED, **FORBIDDEN, **RATE_LIMITED},
+    dependencies=[BY_ADDRESS],
+)
 def login(
     credentials: LoginRequest,
     request: Request,
@@ -97,7 +118,11 @@ def login(
     )
 
 
-@router.post("/refresh", responses={**REFRESH_UNAUTHORISED, **FORBIDDEN})
+@router.post(
+    "/refresh",
+    responses={**REFRESH_UNAUTHORISED, **FORBIDDEN, **RATE_LIMITED},
+    dependencies=[BY_ADDRESS],
+)
 def refresh(
     payload: RefreshTokenRequest,
     service: AuthServiceDep,
@@ -151,6 +176,8 @@ def read_current_user(user: CurrentUserDep) -> UserRead:
 @router.post(
     "/resend-verification",
     status_code=status.HTTP_202_ACCEPTED,
+    responses=RATE_LIMITED,
+    dependencies=[BY_ADDRESS_FOR_EMAIL],
 )
 def resend_verification(
     payload: EmailRequest,
@@ -192,6 +219,8 @@ def verify_email(
 @router.post(
     "/forgot-password",
     status_code=status.HTTP_202_ACCEPTED,
+    responses=RATE_LIMITED,
+    dependencies=[BY_ADDRESS_FOR_EMAIL],
 )
 def forgot_password(
     payload: EmailRequest,

@@ -1,15 +1,18 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.rate_limit import limit_by_workspace
 from app.api.dependencies.workspace import WorkspaceAgentDep, WorkspaceMemberDep
 from app.api.errors import (
     CONVERSATION_NOT_FOUND,
+    RATE_LIMITED,
     UNAUTHORISED,
     WORKSPACE_FORBIDDEN,
     WORKSPACE_NOT_FOUND,
 )
+from app.core.rate_limit import RateLimited
 from app.schemas.ai import (
     AiReplyRead,
     AiResponseLogPage,
@@ -33,7 +36,15 @@ NAMED = {
 }
 
 
-@router.post("/ai-reply", responses=NAMED)
+# Per workspace, and the same bucket the assistant spends from when it
+# answers a webhook by itself -- see ai_dispatch. A business's spend on a
+# language model is one number whether the reply was asked for from the
+# dashboard or triggered by a customer.
+@router.post(
+    "/ai-reply",
+    responses={**NAMED, **RATE_LIMITED},
+    dependencies=[Depends(limit_by_workspace(RateLimited.AI))],
+)
 def generate_ai_reply(
     conversation_id: uuid.UUID,
     access: WorkspaceAgentDep,

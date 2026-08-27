@@ -34,6 +34,10 @@ from app.repositories.conversation_event_repository import (
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.schemas.message import MessageCreate
+from app.services.commerce_context import (
+    CommerceContextService,
+    CommerceContextServiceDep,
+)
 from app.services.conversation_service import (
     ConversationEventRepositoryDep,
     ConversationRepositoryDep,
@@ -109,6 +113,7 @@ class AiResponseService:
         messages: MessageRepository,
         logs: AiResponseLogRepository,
         retrieval: RetrievalService,
+        commerce: CommerceContextService,
         writer: ReplyWriter,
         outbound: MessageService,
         events: ConversationEventRepository,
@@ -118,6 +123,7 @@ class AiResponseService:
         self._messages = messages
         self._logs = logs
         self._retrieval = retrieval
+        self._commerce = commerce
         self._writer = writer
         self._outbound = outbound
         self._events = events
@@ -218,10 +224,23 @@ class AiResponseService:
 
         retrieval = self._retrieval.retrieve(workspace.id, asked)
 
-        if retrieval.is_empty:
+        # Two kinds of evidence, gathered two different ways. The
+        # knowledge base is searched by similarity; the catalogue and this
+        # customer's orders are looked up. The plan insists on the second
+        # for exactly the facts customers act on -- a price, a stock
+        # level, where an order has got to -- because similarity search
+        # returns the passage that reads most like the question, and for
+        # two customers with similar orders that is a coin toss.
+        commerce = self._commerce.gather(
+            workspace.id,
+            conversation.contact_id,
+            asked,
+        )
+
+        if retrieval.is_empty and commerce.is_empty:
             # Nothing to ground an answer in. Handed over rather than
             # answered from the model's general knowledge, which is the
-            # plan's rule and the whole reason retrieval comes first.
+            # plan's rule and the whole reason evidence comes first.
             return self._record(
                 workspace,
                 conversation,
@@ -243,7 +262,7 @@ class AiResponseService:
                         offset=0,
                     )
                 ),
-                passages=_passages(retrieval),
+                passages=[*commerce.passages, *_passages(retrieval)],
             )
         except ReplyProviderError as exc:
             # The message is untouched and still in the thread. A model
@@ -554,6 +573,7 @@ def get_ai_response_service(
     messages: MessageRepositoryDep,
     logs: AiResponseLogRepositoryDep,
     retrieval: RetrievalServiceDep,
+    commerce: CommerceContextServiceDep,
     writer: ReplyWriterDep,
     outbound: MessageServiceDep,
     events: ConversationEventRepositoryDep,
@@ -564,6 +584,7 @@ def get_ai_response_service(
         messages=messages,
         logs=logs,
         retrieval=retrieval,
+        commerce=commerce,
         writer=writer,
         outbound=outbound,
         events=events,

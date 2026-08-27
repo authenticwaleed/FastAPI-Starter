@@ -1819,10 +1819,10 @@ Do not introduce Redis until needed.
 
 ## Acceptance criteria
 
-- [ ] login protected
-- [ ] AI usage bounded
-- [ ] rate-limit response documented
-- [ ] tests cover limits
+- [x] login protected
+- [x] AI usage bounded
+- [x] rate-limit response documented
+- [x] tests cover limits
 
 ---
 
@@ -1885,10 +1885,10 @@ DELETE /api/v1/workspaces/{workspace_id}/products/{product_id}
 
 ## Acceptance criteria
 
-- [ ] products workspace-scoped
-- [ ] variants supported
-- [ ] structured product search works
-- [ ] AI can use product lookup tool/service rather than hallucinating inventory
+- [x] products workspace-scoped
+- [x] variants supported
+- [x] structured product search works
+- [x] AI can use product lookup tool/service rather than hallucinating inventory
 
 ---
 
@@ -1935,9 +1935,9 @@ Do not put order status only into a vector knowledge base.
 
 ## Acceptance criteria
 
-- [ ] order lookup by customer works
-- [ ] AI can answer order-status questions
-- [ ] incorrect customer cannot access another customer's order
+- [x] order lookup by customer works
+- [x] AI can answer order-status questions
+- [x] incorrect customer cannot access another customer's order
 
 ---
 
@@ -1972,11 +1972,11 @@ Keep product services independent from Shopify-specific code.
 
 ## Acceptance criteria
 
-- [ ] connection established
-- [ ] initial sync
-- [ ] webhook sync
-- [ ] duplicate webhook handling
-- [ ] disconnect handled
+- [x] connection established
+- [x] initial sync
+- [x] webhook sync
+- [x] duplicate webhook handling
+- [x] disconnect handled
 
 ---
 

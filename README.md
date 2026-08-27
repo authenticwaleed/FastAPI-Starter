@@ -124,14 +124,30 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `…/knowledge/documents/{document_id}` | Read one |
 | DELETE | `…/knowledge/documents/{document_id}` | Delete it and its chunks |
 | POST | `…/{workspace_id}/knowledge/search` | Ask the knowledge base directly |
+| POST | `…/{workspace_id}/products` | Add a product and its variants |
+| GET | `…/{workspace_id}/products` | The catalogue, searched and filtered |
+| GET | `…/products/{product_id}` | Read one |
+| PATCH | `…/products/{product_id}` | Update it, and optionally its variants |
+| DELETE | `…/products/{product_id}` | Delete it and its variants |
+| POST | `…/{workspace_id}/orders` | Record an order taken by hand |
+| GET | `…/{workspace_id}/orders` | Orders, by customer, status or number |
+| GET | `…/orders/{order_id}` | Read one |
+| PATCH | `…/orders/{order_id}` | Record what has happened to it |
+| POST | `…/orders/{order_id}/confirm` | Confirm a pending order |
 | GET | `…/{workspace_id}/analytics/overview` | The dashboard's headline row |
 | GET | `…/{workspace_id}/analytics/conversations` | Volume and responsiveness |
 | GET | `…/{workspace_id}/analytics/ai` | What the assistant did, and cost |
 | POST | `…/{workspace_id}/integrations/whatsapp/connect` | Connect a number |
 | GET | `…/{workspace_id}/integrations/whatsapp` | What is connected |
 | DELETE | `…/{workspace_id}/integrations/whatsapp` | Disconnect it |
+| POST | `…/integrations/shopify/install` | Start a storefront installation |
+| GET | `…/integrations/shopify` | What is connected |
+| POST | `…/integrations/shopify/sync` | Read the whole shop again |
+| DELETE | `…/integrations/shopify` | Disconnect it |
+| GET | `/api/v1/integrations/shopify/callback` | Shopify's OAuth callback |
 | GET | `/api/v1/webhooks/whatsapp` | Meta's subscription handshake |
 | POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
+| POST | `/api/v1/webhooks/shopify` | Shopify's deliveries |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -463,6 +479,130 @@ shape:
 
 Branch on `code`, which is stable; `detail` is prose and may be reworded.
 
+### Rate limits
+
+Counted **per worker, in this process's memory** — there is no Redis, on
+the plan's instruction not to introduce it before it is needed. What that
+costs is stated rather than hidden: four workers allow four times each
+limit. That is the right trade while these exist to stop abuse and runaway
+loops, and the day they exist to sell quota is the day this grows a shared
+store. Nothing above `app/core/rate_limit.py` would change.
+
+Token buckets, not fixed windows. A fixed window lets twice the limit
+through in the two seconds either side of a boundary and gives a client no
+useful answer to "when may I try again?". A bucket refills continuously, so
+the answer is exactly how long one token takes — which is what
+`Retry-After` carries.
+
+Every refusal is `429` with the same body shape as every other error
+(`{"detail": ..., "code": "rate_limit_exceeded"}`) and a `Retry-After`
+header in seconds.
+
+| Scope | Keyed on | Endpoints |
+| --- | --- | --- |
+| `auth` | client address | `/auth/login`, `/auth/refresh` |
+| `email` | client address | `/auth/register`, `/auth/forgot-password`, `/auth/resend-verification` |
+| `invitations` | workspace | `POST …/invitations` |
+| `ai` | workspace | `POST …/ai-reply`, and the assistant's own webhook runs |
+| `search` | workspace | `POST …/knowledge/search` |
+| `uploads` | workspace | `POST …/knowledge/documents/upload` |
+| `webhook_rejections` | client address | the two webhooks — see below |
+
+Unauthenticated endpoints are keyed on the caller's address, never on the
+email they submitted: keying on somebody else's address is how a limiter
+becomes a way to lock one person out of their own account. Authenticated
+ones are keyed on the workspace, because what they cost is a tenant's money
+rather than a stranger's patience — and membership is checked before
+anything is counted, so a stranger cannot spend a business's allowance by
+guessing its id.
+
+The webhooks are limited on **deliveries that fail**, not on deliveries.
+Meta and Shopify send real traffic in volume from a handful of addresses,
+so counting every delivery would mean either a limit high enough to be no
+limit or one that throttles the provider itself. An honest sender is never
+charged for arriving; a sender of forgeries stops being answered.
+
+The `ai` bucket is the only limit here that can stop a customer being
+answered. It is set high enough that reaching it means something is wrong
+rather than busy — two bots talking to each other is the case it exists for
+— and when it trips the message is already stored and shows up unanswered
+in the inbox, which is what a person is for.
+
+Behind a proxy, run uvicorn with `--proxy-headers` or every caller shares
+one bucket.
+
+### Catalogue and orders
+
+A **product** has variants; a variant has a SKU, a price and a stock level.
+Money is `Numeric`, never a float, all the way through: a price stored as
+`4499.999999999999` is a total that is wrong once it is multiplied by three.
+Stock has **three** states, not two — `null` is "this business does not
+count stock", `0` is "out of stock", and collapsing them would have the
+assistant telling customers something is unavailable when the truth is that
+nobody counted.
+
+Variants are nested in the product's own request rather than given
+endpoints of their own. Supplying `variants` on a `PATCH` replaces the set;
+omitting it leaves them alone.
+
+An **order** belongs to a contact, through a composite foreign key, so the
+database itself refuses an order attached to another workspace's customer.
+The contact cannot be changed through the API: moving an order to a
+different customer is not an edit, it is a correction of who it was ever
+for, and doing it through a `PATCH` nobody notices is how one person ends
+up able to ask about another person's order.
+
+Both tables exist for the assistant. Before it drafts a reply it runs a
+**structured lookup** — the catalogue searched by keyword, this contact's
+recent orders fetched by contact id — and those facts go into the prompt
+alongside the knowledge base, tagged `product:` and `order:` so the model
+knows which are exact. That is the plan's rule in both phases: a price, a
+stock level or an order's status comes from a `WHERE` clause, never from
+whichever passage read most like the question. Two customers with similar
+orders would be a coin toss, and the wrong side of that coin is one
+customer being told another's tracking number.
+
+Editing the catalogue is an admin's; recording a shipment is an agent's. A
+price list is what the business charges, and an agent answering messages
+should not change it mid-conversation — but marking an order shipped is
+the work they do all day.
+
+### Connecting a storefront
+
+Shopify, over OAuth. `POST …/integrations/shopify/install` returns a URL on
+the shop's own domain; the owner approves it there, and Shopify calls
+`GET /api/v1/integrations/shopify/callback`. Which workspace an
+installation belongs to travels in a signed `state` — an app is configured
+with one redirect URI, so the callback cannot say otherwise. The shop
+domain is signed into that state as well, and checked against the callback:
+without it, somebody who could get one shop owner to approve an
+installation could attach a different shop to their own workspace.
+
+The access token is encrypted at rest with the same key provider tokens
+already use. It grants read access to a business's whole catalogue and
+every order it has taken, which is one more reason production refuses to
+start without `ENCRYPTION_KEY`.
+
+Everything the storefront sends is an **upsert keyed on the storefront's
+own id**, which is what makes a repeated delivery harmless — a provider
+retries anything it did not get a prompt 200 for, and Shopify sends
+`orders/updated` for changes this application does not care about. A
+payload carrying an `updated_at` older than what is already stored is
+skipped rather than written backwards, so a retry that arrives after a
+newer change cannot undo it. Topics nothing handles are acknowledged, not
+refused: a subscription is easy to widen by accident, and a delivery that
+can never be acted on would otherwise be retried for a day.
+
+Disconnecting, and `app/uninstalled`, destroy the token and keep
+everything already synced. A business that uninstalls has stopped granting
+access; it has not asked to lose its own catalogue.
+
+`app/integrations/ecommerce/base.py` is the wall the plan asks for: a
+Shopify payload becomes `RemoteProduct` and `RemoteOrder` there, and
+nothing downstream has heard of a `variants` array or an
+`inventory_management` flag. WooCommerce is the next phase and the same
+shape.
+
 ## Configuration
 
 All configuration is read from the environment, with `.env` as a convenience
@@ -493,6 +633,18 @@ production.
 | `SMTP_PASSWORD` | unset | |
 | `SMTP_USE_TLS` | `true` | STARTTLS. Off is for a local mail trap only |
 | `EMAIL_FROM` | unset | The From address. Required in production |
+| `RATE_LIMIT_ENABLED` | `true` | Off makes every limit below a no-op |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Per address. Login and refresh share it |
+| `RATE_LIMIT_EMAIL_PER_HOUR` | `5` | Per address. The endpoints that send mail |
+| `RATE_LIMIT_INVITATIONS_PER_HOUR` | `60` | Per workspace |
+| `RATE_LIMIT_AI_PER_MINUTE` | `60` | Per workspace, webhook replies included |
+| `RATE_LIMIT_SEARCH_PER_MINUTE` | `60` | Per workspace |
+| `RATE_LIMIT_UPLOADS_PER_HOUR` | `120` | Per workspace |
+| `RATE_LIMIT_WEBHOOK_REJECTIONS_PER_MINUTE` | `30` | Per address, failures only |
+| `API_BASE_URL` | unset | Where this API answers. Needed for OAuth |
+| `SHOPIFY_API_KEY` | unset | Without it, no storefront can be installed |
+| `SHOPIFY_API_SECRET` | unset | Signs the OAuth callback and every webhook |
+| `SHOPIFY_SCOPES` | read-only | Products, orders and customers |
 | `WHATSAPP_VERIFY_TOKEN` | unset | Echoed back during Meta's webhook setup |
 | `WHATSAPP_APP_SECRET` | unset | Signs every delivery. Without it, none authenticate |
 | `VOYAGE_API_KEY` | unset | Embeddings. Without it, ingestion refuses clearly |
@@ -679,8 +831,19 @@ Worth knowing before this is used for something real:
   `Ada@example.com` and `ada@example.com` can both register. Invitation
   matching is case-insensitive and works either way, but the accounts
   themselves should probably not be two.
-- **No rate limiting**, on login, on the endpoints that send email, or
-  anywhere else.
+- **Rate limits are per worker.** Four workers allow four times each
+  number. Documented above rather than hidden, and the fix is a shared
+  store the day the limits are selling quota rather than stopping abuse.
+- **Orders have no line items.** The plan's `orders` is totals, status and
+  tracking — enough to answer "where is it", not "what did I order". Line
+  items are a table, not a column, and adding them is a phase of its own.
+- **Money is `Numeric(12, 2)`.** That covers PKR, AED, SAR, USD and EUR.
+  The three-decimal currencies — KWD, BHD, OMR — need a migration.
+- **A full storefront sync is synchronous.** Honest for a few hundred
+  products and not for a few hundred thousand; moving it to a background
+  job is the background-jobs phase, and nothing above it changes.
+- **One storefront per workspace**, and one workspace per shop. More is a
+  plan feature and a migration.
 
 ## Layout
 

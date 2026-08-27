@@ -91,6 +91,23 @@ class Settings(BaseSettings):
     whatsapp_verify_token: SecretStr | None = None
     whatsapp_app_secret: SecretStr | None = None
 
+    # Where this API answers, as the outside world reaches it. Needed
+    # because an OAuth redirect has to be an absolute URL the provider
+    # will send a shop owner back to, and this application cannot work
+    # that out from a request it has not received yet.
+    api_base_url: str | None = None
+
+    # Installing a Shopify storefront. Optional like every other
+    # integration credential and checked where it is used: a business
+    # with no online shop is most of the plan's first customers, and the
+    # inbox works perfectly well without one.
+    shopify_api_key: SecretStr | None = None
+    shopify_api_secret: SecretStr | None = None
+    # Read-only, and deliberately: this product answers questions about a
+    # catalogue, it does not edit one. Asking for write access would be
+    # asking a shop owner to trust it with something it never uses.
+    shopify_scopes: str = "read_products,read_orders,read_customers"
+
     # Turns a business's knowledge into vectors, and a customer's question
     # into one to compare against them. Optional, like the WhatsApp
     # credentials: everything that is not the knowledge base works without
@@ -114,6 +131,42 @@ class Settings(BaseSettings):
     # runaway response rather than a target, and it is well under what the
     # channel itself allows.
     anthropic_max_tokens: int = 1024
+
+    # --- rate limiting -------------------------------------------------
+    #
+    # Counted per worker, in memory. See app/core/rate_limit.py for what
+    # that costs and when it stops being the right trade.
+    #
+    # Every number is an allowance and a burst at once: ten a minute
+    # means ten straight away and then one every six seconds.
+    rate_limit_enabled: bool = True
+
+    # Per client address. Generous enough for somebody mistyping a
+    # password and small enough that guessing at one is hopeless.
+    # Refreshing shares this bucket, because a refresh token is a
+    # credential and the same argument applies to guessing at one.
+    rate_limit_auth_per_minute: int = 10
+
+    # Per client address, and the tightest limit here, because these are
+    # the endpoints that send mail to an address of the caller's choosing
+    # -- an unauthenticated way to have this service email a stranger.
+    rate_limit_email_per_hour: int = 5
+
+    # Per workspace, not per address: these are all authenticated, and
+    # what they cost is a tenant's money rather than a stranger's
+    # patience. Invitations because each is an email; the AI and search
+    # because each is a paid API call; uploads because each is a file to
+    # read, chunk and embed.
+    rate_limit_invitations_per_hour: int = 60
+    rate_limit_ai_per_minute: int = 60
+    rate_limit_search_per_minute: int = 60
+    rate_limit_uploads_per_hour: int = 120
+
+    # Per client address, and counted only against deliveries that fail
+    # to authenticate. A provider sending real traffic from a handful of
+    # addresses is never charged; somebody hammering the endpoint with
+    # forgeries stops being answered.
+    rate_limit_webhook_rejections_per_minute: int = 30
 
     log_level: str = "INFO"
     # "text" reads better in a terminal; "json" is what a log aggregator can
@@ -160,6 +213,9 @@ class Settings(BaseSettings):
         "whatsapp_app_secret",
         "voyage_api_key",
         "anthropic_api_key",
+        "api_base_url",
+        "shopify_api_key",
+        "shopify_api_secret",
         "frontend_base_url",
         "smtp_host",
         "smtp_username",

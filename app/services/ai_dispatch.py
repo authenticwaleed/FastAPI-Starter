@@ -23,6 +23,8 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import RateLimitExceededError
+from app.core.rate_limit import RateLimited, RateLimiter
 from app.db.session import get_session_factory
 from app.integrations.embeddings.base import EmbeddingProvider
 from app.integrations.llm.base import ReplyWriter
@@ -35,11 +37,14 @@ from app.repositories.conversation_event_repository import (
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.order_repository import OrderRepository
+from app.repositories.product_repository import ProductRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_response_service import AiResponseService
+from app.services.commerce_context import CommerceContextService
 from app.services.message_service import MessageService
 from app.services.retrieval_service import RetrievalService
 from app.services.whatsapp_service import WhatsAppService
@@ -90,6 +95,10 @@ def build_ai_response_service(
         messages=messages,
         logs=AiResponseLogRepository(session),
         retrieval=RetrievalService(knowledge=knowledge, embeddings=embeddings),
+        commerce=CommerceContextService(
+            products=ProductRepository(session),
+            orders=OrderRepository(session),
+        ),
         writer=writer,
         events=ConversationEventRepository(session),
         outbound=MessageService(
@@ -116,6 +125,7 @@ def answer_inbound(
     writer: ReplyWriter,
     messaging: MessagingProvider,
     session_source: SessionSource = open_session,
+    limiter: RateLimiter | None = None,
 ) -> None:
     """Have the assistant look at one customer message.
 
@@ -125,8 +135,19 @@ def answer_inbound(
     that succeeded, and would tell the provider nothing either way. The
     customer's message is safely recorded whatever happens in here, which
     is the property that makes swallowing acceptable rather than lazy.
+
+    `limiter` bounds what a workspace can spend on a language model, from
+    the same counters the dashboard's AI endpoint spends from. It is the
+    only limit in this application that stops a customer being answered,
+    and it is set high enough that reaching it means something is wrong
+    rather than busy -- two bots talking to each other is the case it
+    exists for. When it trips, the message is already stored and shows up
+    unanswered in the inbox, which is what a person is for.
     """
     try:
+        if limiter is not None:
+            limiter.spend(RateLimited.AI, str(workspace_id))
+
         with session_source() as session:
             workspace = WorkspaceRepository(session).get(workspace_id)
 
@@ -151,6 +172,13 @@ def answer_inbound(
                 reply.decision.value,
                 conversation_id,
             )
+    except RateLimitExceededError:
+        logger.warning(
+            "Workspace %s is over its assistant limit; conversation %s is "
+            "left for a person",
+            workspace_id,
+            conversation_id,
+        )
     except Exception:
         logger.exception(
             "A background reply failed for conversation %s",

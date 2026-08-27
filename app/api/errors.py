@@ -17,6 +17,7 @@ from app.core.exceptions import (
     ConversationClosedError,
     ConversationNotFoundError,
     DocumentAlreadyIngestedError,
+    EcommerceProviderError,
     EmailAlreadyExistsError,
     EmailDeliveryError,
     EmbeddingProviderError,
@@ -38,11 +39,19 @@ from app.core.exceptions import (
     LastOwnerError,
     MembershipNotFoundError,
     MessagingProviderError,
+    OrderAlreadyExistsError,
+    OrderNotConfirmableError,
+    OrderNotFoundError,
     PendingInvitationExistsError,
+    ProductConflictError,
+    ProductNotFoundError,
+    RateLimitExceededError,
     RefreshTokenReusedError,
     ReplyProviderError,
     SessionNotFoundError,
     SlugAlreadyExistsError,
+    StorefrontAlreadyConnectedError,
+    StorefrontNotConnectedError,
     UnknownTimezoneError,
     UnreadableDocumentError,
     UnsupportedDocumentTypeError,
@@ -118,6 +127,12 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         status.HTTP_502_BAD_GATEWAY,
         "email_delivery_error",
     ),
+    # Retry-After is not declared here because it is not the same for
+    # every instance -- the error carries its own, through `headers()`.
+    RateLimitExceededError: _Answer(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "rate_limit_exceeded",
+    ),
     WorkspaceNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
         "workspace_not_found",
@@ -156,6 +171,33 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     ),
     AlreadyAMemberError: _Answer(status.HTTP_409_CONFLICT, "already_a_member"),
     ContactNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "contact_not_found"),
+    ProductNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "product_not_found"),
+    ProductConflictError: _Answer(status.HTTP_409_CONFLICT, "product_conflict"),
+    OrderNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "order_not_found"),
+    OrderAlreadyExistsError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "order_already_exists",
+    ),
+    OrderNotConfirmableError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "order_not_confirmable",
+    ),
+    StorefrontNotConnectedError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "storefront_not_connected",
+    ),
+    StorefrontAlreadyConnectedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "storefront_already_connected",
+    ),
+    # 502 for the reason the other outbound failures get one: this
+    # application worked and the shop it depends on did not. A callback
+    # that fails to verify lands here too, which is deliberate -- the
+    # alternative is telling whoever forged it exactly what was wrong.
+    EcommerceProviderError: _Answer(
+        status.HTTP_502_BAD_GATEWAY,
+        "ecommerce_provider_error",
+    ),
     ContactAlreadyExistsError: _Answer(
         status.HTTP_409_CONFLICT,
         "contact_already_exists",
@@ -299,10 +341,15 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         exc,
     )
 
+    # The answer's headers are the ones every instance of this error
+    # carries; the exception's are the ones only this one knows, such as
+    # how long a refused caller should wait.
+    headers = {**(answer.headers or {}), **(exc.headers() or {})}
+
     return JSONResponse(
         status_code=answer.status_code,
         content=_body(answer.code, exc.detail),
-        headers=answer.headers,
+        headers=headers or None,
     )
 
 
@@ -393,6 +440,10 @@ BAD_LINK = _documented(
     status.HTTP_400_BAD_REQUEST,
     "This link is unknown, already used, or has expired",
 )
+RATE_LIMITED = _documented(
+    status.HTTP_429_TOO_MANY_REQUESTS,
+    "Too many requests. `Retry-After` says how many seconds to wait",
+)
 FORBIDDEN = _documented(status.HTTP_403_FORBIDDEN, "Inactive user")
 
 # A route documents one description per status code, so where two errors
@@ -441,6 +492,30 @@ CONTACT_NOT_FOUND = _documented(
 CONTACT_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "A contact with that phone number already exists",
+)
+PRODUCT_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace or product, or you are not a member",
+)
+PRODUCT_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That external id or SKU is already used in this workspace",
+)
+ORDER_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, order or contact, or you are not a member",
+)
+ORDER_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That external id is taken, or the order is not pending",
+)
+STOREFRONT_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or no storefront is connected to it",
+)
+STOREFRONT_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "A storefront is already connected",
 )
 CONVERSATION_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,

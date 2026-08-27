@@ -1,19 +1,22 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
 from app.api.dependencies.auth import CurrentUserDep
+from app.api.dependencies.rate_limit import limit_by_workspace
 from app.api.dependencies.workspace import WorkspaceAdminDep
 from app.api.errors import (
     INVITATION_CONFLICT,
     INVITATION_FORBIDDEN,
     INVITATION_GONE,
     INVITATION_NOT_FOUND,
+    RATE_LIMITED,
     UNAUTHORISED,
     WORKSPACE_FORBIDDEN,
     WORKSPACE_NOT_FOUND,
 )
+from app.core.rate_limit import RateLimited
 from app.models.workspace_invitation import WorkspaceInvitation
 from app.schemas.workspace import WorkspaceRead
 from app.schemas.workspace_invitation import (
@@ -39,6 +42,12 @@ token_router = APIRouter(
 
 SCOPED = {**UNAUTHORISED, **WORKSPACE_FORBIDDEN, **WORKSPACE_NOT_FOUND}
 
+# Per workspace rather than per address, because this one is
+# authenticated: what an admin sending five hundred invitations costs is
+# five hundred emails charged to their own business, and the address they
+# happen to be sitting at is beside the point.
+BY_WORKSPACE = Depends(limit_by_workspace(RateLimited.INVITATIONS))
+
 
 def _read(invitation: WorkspaceInvitation) -> InvitationRead:
     return InvitationRead(
@@ -55,7 +64,8 @@ def _read(invitation: WorkspaceInvitation) -> InvitationRead:
 @workspace_router.post(
     "",
     status_code=status.HTTP_201_CREATED,
-    responses={**SCOPED, **INVITATION_CONFLICT},
+    responses={**SCOPED, **INVITATION_CONFLICT, **RATE_LIMITED},
+    dependencies=[BY_WORKSPACE],
 )
 def invite_member(
     payload: InvitationCreate,

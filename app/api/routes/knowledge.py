@@ -1,8 +1,9 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
+from app.api.dependencies.rate_limit import limit_by_workspace
 from app.api.dependencies.workspace import (
     WorkspaceAdminDep,
     WorkspaceAgentDep,
@@ -14,10 +15,12 @@ from app.api.errors import (
     EMBEDDING_UNAVAILABLE,
     KNOWLEDGE_CONFLICT,
     KNOWLEDGE_NOT_FOUND,
+    RATE_LIMITED,
     UNAUTHORISED,
     WORKSPACE_FORBIDDEN,
     WORKSPACE_NOT_FOUND,
 )
+from app.core.rate_limit import RateLimited
 from app.models.knowledge import DocumentStatus, KnowledgeDocument
 from app.schemas.knowledge import (
     DocumentCreate,
@@ -175,10 +178,15 @@ def add_faq(
     return _document(service, access, service.add_faq(access, payload))
 
 
+# Uploading and searching are limited per workspace, and neither is
+# limited because it is slow. Each upload is a file to read, chunk and
+# embed, and each search is an embedding of its own: both are a paid API
+# call per request, charged to the business making it.
 @router.post(
     "/documents/upload",
     status_code=status.HTTP_201_CREATED,
-    responses={**INGESTING, **DOCUMENT_UNSUPPORTED},
+    responses={**INGESTING, **DOCUMENT_UNSUPPORTED, **RATE_LIMITED},
+    dependencies=[Depends(limit_by_workspace(RateLimited.UPLOADS))],
 )
 async def upload_document(
     access: WorkspaceAdminDep,
@@ -255,7 +263,11 @@ def delete_document(
     service.delete_document(access, document_id)
 
 
-@router.post("/search", responses=SCOPED)
+@router.post(
+    "/search",
+    responses={**SCOPED, **RATE_LIMITED},
+    dependencies=[Depends(limit_by_workspace(RateLimited.SEARCH))],
+)
 def search_knowledge(
     payload: SearchRequest,
     access: WorkspaceAgentDep,
