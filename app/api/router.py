@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     account,
     ai,
+    analytics,
     auth,
     contacts,
     conversations,
@@ -36,5 +37,6 @@ api_router.include_router(conversations.router)
 # be switchable off entirely.
 api_router.include_router(ai.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(analytics.router)
 api_router.include_router(whatsapp.router)
 api_router.include_router(webhooks.router)
