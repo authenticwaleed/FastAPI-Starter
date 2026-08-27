@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -73,6 +74,25 @@ class UserRepository:
         if hashed_password is not None:
             user.hashed_password = hashed_password
 
+        self._session.flush()
+
+        return user
+
+    def mark_email_verified(self, user: User, at: datetime) -> User:
+        """Record that somebody proved they read mail at this address."""
+        user.email_verified_at = at
+        self._session.flush()
+
+        return user
+
+    def clear_email_verification(self, user: User) -> User:
+        """Undo that, because the address it was about is no longer theirs.
+
+        Separate from `update` above rather than folded into it. There,
+        `None` means "leave this alone" for every field, so there is no
+        value it could be passed that means "set this back to null".
+        """
+        user.email_verified_at = None
         self._session.flush()
 
         return user

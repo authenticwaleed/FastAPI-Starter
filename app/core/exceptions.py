@@ -21,6 +21,16 @@ class AppError(Exception):
 
         super().__init__(message or self.detail)
 
+    def headers(self) -> dict[str, str] | None:
+        """Response headers this particular failure needs, if any.
+
+        Almost none do -- the ones that are the same for every instance
+        of an error are declared next to its status code in
+        `app/api/errors.py`. This is for a header whose value depends on
+        the instance, which so far means Retry-After.
+        """
+        return None
+
 
 class UserNotFoundError(AppError):
     """No user exists with the requested id."""
@@ -78,6 +88,96 @@ class IncorrectPasswordError(AppError):
     def __init__(self, user_id: int) -> None:
         super().__init__(f"Incorrect current password for user: {user_id}")
         self.user_id = user_id
+
+
+class RateLimitExceededError(AppError):
+    """Too many requests, too quickly, from whoever this was keyed on.
+
+    Carries how long to wait, because a 429 without Retry-After tells a
+    client to guess, and what clients guess is "immediately".
+    """
+
+    detail = "Too many requests. Try again shortly"
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(f"Rate limit exceeded, retry after {retry_after}s")
+        self.retry_after = retry_after
+
+    def headers(self) -> dict[str, str] | None:
+        return {"Retry-After": str(self.retry_after)}
+
+
+class InvalidVerificationTokenError(AppError):
+    """The link will not do anything.
+
+    Unknown, already used, expired, or issued for an address the account
+    no longer has -- one answer for all four, and it says "or expired"
+    without saying which. Whoever is holding it has proved nothing yet,
+    and separating the cases would turn the endpoint into a way of asking
+    whether a given link was ever real.
+
+    Deliberately unlike InvitationExpiredError, which does distinguish
+    expiry. An invitation arrives from a colleague and "ask them for
+    another" is different advice from "check the address"; here the only
+    advice either way is to request a fresh link, so there is nothing to
+    buy with the distinction.
+    """
+
+    detail = "This link is invalid or has expired"
+
+
+class EmailDeliveryError(AppError):
+    """The message could not be handed to the mail server.
+
+    Raised only where it is caught. Every send in this application runs
+    after its response has gone, so nobody is waiting to be told -- what
+    this is for is a log line that says delivery failed rather than one
+    that says an unhandled exception happened in a request that worked.
+    """
+
+    detail = "The email could not be sent right now"
+
+
+class InvalidRefreshTokenError(AppError):
+    """The presented refresh token will not do anything.
+
+    Unknown, already spent, or belonging to a session that has been
+    revoked or has gone idle for too long -- all the same answer, for the
+    reason InvalidCredentialsError collapses its cases: whoever is
+    holding it has proved nothing, and telling them which of the four it
+    was would tell them what to try next.
+    """
+
+    detail = "Invalid or expired refresh token"
+
+
+class RefreshTokenReusedError(InvalidRefreshTokenError):
+    """A refresh token came back after it had already been exchanged.
+
+    The session has been revoked by the time this is raised. Told apart
+    from an ordinary refusal on purpose, and this one leaks nothing: the
+    holder had a real token, and the mechanism is public. What it buys is
+    that the person who was signed out gets to know it was not a glitch.
+    """
+
+    detail = "That session was ended: a refresh token was used twice. Sign in again"
+
+
+class SessionNotFoundError(AppError):
+    """No live session with that id belongs to this account.
+
+    Safe to distinguish from every other refusal, like
+    MembershipNotFoundError: whoever is asking has already proved who
+    they are, so being told that one of their own sessions has already
+    ended reveals nothing.
+    """
+
+    detail = "Session not found"
+
+    def __init__(self, user_id: int, session_id: object) -> None:
+        super().__init__(f"Session {session_id} is not live for user {user_id}")
+        self.user_id = user_id
+        self.session_id = session_id
 
 
 class WorkspaceNotFoundError(AppError):
@@ -252,6 +352,39 @@ class PendingInvitationExistsError(AppError):
         self.email = email
 
 
+class ProductNotFoundError(AppError):
+    """No product with that id exists in this workspace.
+
+    The workspace is part of the question rather than a filter on the
+    answer, for the reason every other lookup here gives it: a product id
+    belonging to another business is not found, which as far as this
+    caller is concerned is the same as not existing.
+    """
+
+    detail = "Product not found"
+
+    def __init__(self, workspace_id: object, product_id: object) -> None:
+        super().__init__(f"Product {product_id} not found in workspace {workspace_id}")
+        self.workspace_id = workspace_id
+        self.product_id = product_id
+
+
+class ProductConflictError(AppError):
+    """Something in the catalogue is already using one of these values.
+
+    An external id or a SKU, both of which are unique per workspace so
+    that a storefront sync can re-run without doubling the catalogue.
+    Which of the two is not said, because both mean the same thing to
+    whoever is looking at the form: this identifier is taken.
+    """
+
+    detail = "That external id or SKU is already used in this workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Catalogue identifier already in use in {workspace_id}")
+        self.workspace_id = workspace_id
+
+
 class ContactNotFoundError(AppError):
     """No contact with that id exists in this workspace.
 
@@ -284,6 +417,50 @@ class ContactAlreadyExistsError(AppError):
         )
         self.workspace_id = workspace_id
         self.phone_number = phone_number
+
+
+class OrderNotFoundError(AppError):
+    """No order with that id exists in this workspace."""
+
+    detail = "Order not found"
+
+    def __init__(self, workspace_id: object, order_id: object) -> None:
+        super().__init__(f"Order {order_id} not found in workspace {workspace_id}")
+        self.workspace_id = workspace_id
+        self.order_id = order_id
+
+
+class OrderAlreadyExistsError(AppError):
+    """That external order id is already in this workspace.
+
+    Unique per workspace so a storefront sync can re-run without
+    duplicating somebody's order -- and so that two orders can never both
+    claim to be #1042.
+    """
+
+    detail = "An order with that external id already exists"
+
+    def __init__(self, workspace_id: object, external_id: object) -> None:
+        super().__init__(f"Order {external_id} already exists in {workspace_id}")
+        self.workspace_id = workspace_id
+        self.external_id = external_id
+
+
+class OrderNotConfirmableError(AppError):
+    """The order cannot be confirmed from where it is.
+
+    Confirming is a step forward from `pending`, not a way to undo a
+    cancellation or to re-confirm something already shipped. Said plainly
+    rather than accepted silently, because an agent pressing the button on
+    a cancelled order has misread the screen and should be told so.
+    """
+
+    detail = "Only a pending order can be confirmed"
+
+    def __init__(self, order_id: object, status: object) -> None:
+        super().__init__(f"Order {order_id} is {status} and cannot be confirmed")
+        self.order_id = order_id
+        self.status = status
 
 
 class ConversationNotFoundError(AppError):
@@ -327,6 +504,44 @@ class ConversationClosedError(AppError):
     def __init__(self, conversation_id: object) -> None:
         super().__init__(f"Conversation {conversation_id} is closed")
         self.conversation_id = conversation_id
+
+
+class EcommerceProviderError(AppError):
+    """The storefront refused, failed, or is not configured.
+
+    Whatever it said goes to the log. What reaches the client is that the
+    shop could not be reached -- a provider's error text is written for
+    whoever built the integration, not for the person who pressed
+    "connect".
+    """
+
+    detail = "The storefront could not be reached right now"
+
+
+class StorefrontNotConnectedError(AppError):
+    """This workspace has no storefront connected."""
+
+    detail = "No storefront is connected to this workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} has no storefront")
+        self.workspace_id = workspace_id
+
+
+class StorefrontAlreadyConnectedError(AppError):
+    """A storefront is already connected, here or somewhere else.
+
+    Also the answer when the shop belongs to a different workspace. The
+    two are not distinguished, for the reason the WhatsApp version gives:
+    saying which would confirm that a given shop uses this platform, to
+    somebody who only had to guess its domain.
+    """
+
+    detail = "A storefront is already connected"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Storefront already connected for workspace {workspace_id}")
+        self.workspace_id = workspace_id
 
 
 class EncryptionUnavailableError(AppError):

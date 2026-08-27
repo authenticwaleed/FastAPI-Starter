@@ -5,11 +5,13 @@ from fastapi import Depends
 from app.core.exceptions import IncorrectPasswordError, WorkspaceOwnershipError
 from app.core.security import verify_password
 from app.models.user import User
+from app.models.user_session import SessionEndReason, UserSession
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.schemas.account import AccountUpdate, PasswordChange
 from app.schemas.user import UserUpdate
+from app.services.session_service import SessionService, SessionServiceDep
 from app.services.user_service import UserService, UserServiceDep
 from app.services.workspace_service import WorkspaceMembershipRepositoryDep
 
@@ -32,9 +34,11 @@ class AccountService:
         self,
         users: UserService,
         memberships: WorkspaceMembershipRepository,
+        sessions: SessionService,
     ) -> None:
         self._users = users
         self._memberships = memberships
+        self._sessions = sessions
 
     def update(self, user: User, payload: AccountUpdate) -> User:
         return self._users.update_user(
@@ -42,7 +46,13 @@ class AccountService:
             UserUpdate(name=payload.name, email=payload.email),
         )
 
-    def change_password(self, user: User, payload: PasswordChange) -> None:
+    def change_password(
+        self,
+        user: User,
+        payload: PasswordChange,
+        *,
+        keep_session: UserSession | None = None,
+    ) -> None:
         # The bearer token proves who is asking; the current password proves
         # they are the one at the keyboard. Without this second step a
         # stolen token would be enough to lock the owner out of their own
@@ -50,10 +60,35 @@ class AccountService:
         if not verify_password(payload.current_password, user.hashed_password):
             raise IncorrectPasswordError(user.id)
 
-        # Tokens already issued stay valid until they expire: there is
-        # nothing to revoke them with yet, so a change here does not sign
-        # anyone out. Refresh tokens and a session list are what make "sign
-        # out everywhere" possible, and they are a later phase.
+        # Every other session goes. Somebody changing their password
+        # because they think it was learned is trying to end the access
+        # that knowing it gave -- and a refresh chain that survived the
+        # change would be exactly that access, still open, for another
+        # month.
+        #
+        # `keep_session` spares the caller's own. It is the session object
+        # the dependency resolved rather than an id off the request, which
+        # keeps the rule this service is built on intact: there is no
+        # argument here that a caller could substitute.
+        #
+        # Before the password, not after, and the order is the point.
+        # These are two commits -- each service owns its own -- so one of
+        # them can land without the other, and the two orders fail
+        # differently. Sign out first and a failure leaves the old
+        # password working with the sessions closed: an inconvenience,
+        # and the caller simply tries again. Change the password first
+        # and a failure leaves the new password set with the old
+        # sessions still open, which is the exact outcome this is here to
+        # prevent.
+        self._sessions.revoke_all(
+            user,
+            reason=SessionEndReason.PASSWORD_CHANGED,
+            keep=keep_session.id if keep_session is not None else None,
+        )
+
+        # Access tokens already issued for the sessions that just ended
+        # stay valid until they expire, which is the one gap short
+        # lifetimes are there to bound.
         self._users.update_user(
             user.id,
             UserUpdate(password=payload.new_password),
@@ -80,8 +115,9 @@ class AccountService:
 def get_account_service(
     users: UserServiceDep,
     memberships: WorkspaceMembershipRepositoryDep,
+    sessions: SessionServiceDep,
 ) -> AccountService:
-    return AccountService(users=users, memberships=memberships)
+    return AccountService(users=users, memberships=memberships, sessions=sessions)
 
 
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]

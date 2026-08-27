@@ -23,12 +23,54 @@ class Settings(BaseSettings):
     # SecretStr keeps the value out of reprs and stray log lines.
     jwt_secret_key: SecretStr
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+
+    # Short, because an access token cannot be taken back mid-flight the
+    # way a refresh token can: it is checked against its session on every
+    # request, but a request already in progress is already in progress.
+    # Fifteen minutes is the window a stolen one is worth anything for.
+    access_token_expire_minutes: int = 15
+
+    # How long a session survives being idle. Every refresh pushes it out
+    # again, so this is "sign me out if I disappear for a month" rather
+    # than a fixed date -- which is what a dashboard people use weekly
+    # wants, and short enough that a laptop left in a hotel does not stay
+    # signed in for a year.
+    refresh_token_expire_days: int = 30
 
     # How long an invitation link stays usable. A week is long enough to
     # survive somebody being on holiday and short enough that a link found
     # in an old mailbox is no longer a way into a workspace.
     invitation_expire_hours: int = 168
+
+    # Two days to confirm an address, because somebody signing up on
+    # Friday evening may not read their mail until Sunday.
+    email_verification_expire_hours: int = 48
+
+    # An hour to use a reset link, because it is a key to the account and
+    # the person holding it asked for it a moment ago. Deliberately much
+    # shorter than the verification window above: confirming an address
+    # and replacing a password are not worth the same to a thief.
+    password_reset_expire_minutes: int = 60
+
+    # Where the links in those emails point -- the dashboard, not this
+    # API. Unset, the email carries the bare token instead, which is
+    # enough to work with locally and obviously not a link to send anyone.
+    frontend_base_url: str | None = None
+
+    # Delivering those emails. Unset outside production, where the sender
+    # writes the whole message to the log instead: a laptop has no mail
+    # server and a developer needs to read the link. Required in
+    # production by the validator below -- a deployment that cannot send
+    # mail is one where forgotten passwords silently go nowhere, and
+    # where reset links would be written into a log file instead.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    # STARTTLS on the port above, which is what nearly every provider
+    # wants. Off is for a local catch-all mail trap and nothing else.
+    smtp_use_tls: bool = True
+    email_from: str | None = None
 
     # Encrypts provider access tokens before they are stored. Optional so
     # that everything not touching an integration works without it, and
@@ -48,6 +90,23 @@ class Settings(BaseSettings):
     # back during subscription; the app secret signs every delivery.
     whatsapp_verify_token: SecretStr | None = None
     whatsapp_app_secret: SecretStr | None = None
+
+    # Where this API answers, as the outside world reaches it. Needed
+    # because an OAuth redirect has to be an absolute URL the provider
+    # will send a shop owner back to, and this application cannot work
+    # that out from a request it has not received yet.
+    api_base_url: str | None = None
+
+    # Installing a Shopify storefront. Optional like every other
+    # integration credential and checked where it is used: a business
+    # with no online shop is most of the plan's first customers, and the
+    # inbox works perfectly well without one.
+    shopify_api_key: SecretStr | None = None
+    shopify_api_secret: SecretStr | None = None
+    # Read-only, and deliberately: this product answers questions about a
+    # catalogue, it does not edit one. Asking for write access would be
+    # asking a shop owner to trust it with something it never uses.
+    shopify_scopes: str = "read_products,read_orders,read_customers"
 
     # Turns a business's knowledge into vectors, and a customer's question
     # into one to compare against them. Optional, like the WhatsApp
@@ -72,6 +131,42 @@ class Settings(BaseSettings):
     # runaway response rather than a target, and it is well under what the
     # channel itself allows.
     anthropic_max_tokens: int = 1024
+
+    # --- rate limiting -------------------------------------------------
+    #
+    # Counted per worker, in memory. See app/core/rate_limit.py for what
+    # that costs and when it stops being the right trade.
+    #
+    # Every number is an allowance and a burst at once: ten a minute
+    # means ten straight away and then one every six seconds.
+    rate_limit_enabled: bool = True
+
+    # Per client address. Generous enough for somebody mistyping a
+    # password and small enough that guessing at one is hopeless.
+    # Refreshing shares this bucket, because a refresh token is a
+    # credential and the same argument applies to guessing at one.
+    rate_limit_auth_per_minute: int = 10
+
+    # Per client address, and the tightest limit here, because these are
+    # the endpoints that send mail to an address of the caller's choosing
+    # -- an unauthenticated way to have this service email a stranger.
+    rate_limit_email_per_hour: int = 5
+
+    # Per workspace, not per address: these are all authenticated, and
+    # what they cost is a tenant's money rather than a stranger's
+    # patience. Invitations because each is an email; the AI and search
+    # because each is a paid API call; uploads because each is a file to
+    # read, chunk and embed.
+    rate_limit_invitations_per_hour: int = 60
+    rate_limit_ai_per_minute: int = 60
+    rate_limit_search_per_minute: int = 60
+    rate_limit_uploads_per_hour: int = 120
+
+    # Per client address, and counted only against deliveries that fail
+    # to authenticate. A provider sending real traffic from a handful of
+    # addresses is never charged; somebody hammering the endpoint with
+    # forgeries stops being answered.
+    rate_limit_webhook_rejections_per_minute: int = 30
 
     log_level: str = "INFO"
     # "text" reads better in a terminal; "json" is what a log aggregator can
@@ -118,6 +213,14 @@ class Settings(BaseSettings):
         "whatsapp_app_secret",
         "voyage_api_key",
         "anthropic_api_key",
+        "api_base_url",
+        "shopify_api_key",
+        "shopify_api_secret",
+        "frontend_base_url",
+        "smtp_host",
+        "smtp_username",
+        "smtp_password",
+        "email_from",
         mode="before",
     )
     @classmethod
@@ -193,6 +296,21 @@ class Settings(BaseSettings):
         # mistake that is only discovered by somebody reading the table.
         if self.encryption_key is None:
             raise ValueError("encryption_key must be set in production")
+
+        # Without these, verification and password reset do not fail --
+        # they appear to work while the link goes to a log file. Refusing
+        # to start is the only outcome that cannot be mistaken for one.
+        if self.smtp_host is None or self.email_from is None:
+            raise ValueError(
+                "smtp_host and email_from must be set in production: "
+                "without them no verification or reset email is delivered"
+            )
+
+        if self.frontend_base_url is None:
+            raise ValueError(
+                "frontend_base_url must be set in production: "
+                "without it those emails carry a bare token and no link"
+            )
 
         return self
 

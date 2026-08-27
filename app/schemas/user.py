@@ -52,6 +52,10 @@ class UserRead(UserBase):
 
     id: int
     is_active: bool
+    # Null until somebody follows the link sent to this address, and null
+    # again if the address changes. Nothing is gated on it yet, so a
+    # client reads it to nudge rather than to lock anything.
+    email_verified_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

@@ -252,13 +252,17 @@ def _settings(**overrides: object) -> Settings:
     # _env_file=None so a value in the developer's .env cannot change what
     # these tests are asserting about.
     #
-    # Production refuses to start without an encryption key, so one is
-    # supplied by default -- as a default rather than a fixed value, so a
-    # test can still assert what happens without one.
+    # Production refuses to start without an encryption key, somewhere to
+    # send mail, and somewhere for the links in it to point, so all four
+    # are supplied by default -- as defaults rather than fixed values, so
+    # a test can still assert what happens without one.
     defaults: dict[str, object] = {
         "database_url": "postgresql+psycopg://u:p@localhost:5432/db",
         "jwt_secret_key": "a-signing-key-long-enough-to-be-plausible",
         "encryption_key": "8GkQ0DPTPzY3RtsDcRUv0YyBFqPLmPqXbYtdzwXQvbA=",
+        "smtp_host": "smtp.example.com",
+        "email_from": "no-reply@example.com",
+        "frontend_base_url": "https://app.example.com",
     }
 
     return Settings(_env_file=None, **(defaults | overrides))  # type: ignore[arg-type]

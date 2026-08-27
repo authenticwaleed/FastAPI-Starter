@@ -75,6 +75,24 @@ class ContactRepository:
             )
         )
 
+    def get_by_external_id(
+        self,
+        workspace_id: uuid.UUID,
+        external_id: str,
+    ) -> Contact | None:
+        """The business's own id for this person, in whatever system.
+
+        Unique per workspace, which is what lets a storefront sync re-run
+        without duplicating anybody -- and what makes it a usable
+        fallback when a customer record carries no phone number.
+        """
+        return self._session.scalar(
+            select(Contact).where(
+                Contact.workspace_id == workspace_id,
+                Contact.external_id == external_id,
+            )
+        )
+
     def list_for_workspace(
         self,
         workspace_id: uuid.UUID,

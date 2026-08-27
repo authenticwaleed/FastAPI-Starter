@@ -17,14 +17,21 @@ from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.rate_limit import get_rate_limiter, limits_from
 from app.core.config import get_settings
 from app.core.encryption import _cipher
+from app.core.rate_limit import RateLimiter
 from app.db.session import get_db_session, get_engine, get_session_factory
 from app.main import create_app
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.ecommerce_account_repository import (
+    EcommerceAccountRepository,
+)
 from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.user_session_repository import UserSessionRepository
+from app.repositories.user_token_repository import UserTokenRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
@@ -37,8 +44,12 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_dispatch import get_session_source
 from app.services.ai_response_service import get_reply_writer
+from app.services.ecommerce_service import get_ecommerce_provider
+from app.services.email_dispatch import get_email_sender
 from app.services.knowledge_service import get_embedding_provider
 from app.services.whatsapp_service import get_messaging_provider
+from tests.support.ecommerce import FakeEcommerceProvider
+from tests.support.email import FakeEmailSender
 from tests.support.knowledge import FakeEmbeddingProvider, FakeReplyWriter
 from tests.support.messaging import FakeMessagingProvider
 
@@ -86,6 +97,12 @@ os.environ.setdefault(
 )
 os.environ.setdefault("WHATSAPP_VERIFY_TOKEN", "a-verify-token-for-tests")
 os.environ.setdefault("WHATSAPP_APP_SECRET", "an-app-secret-for-tests")
+# The storefront's credentials, for the same reason and with the same
+# force: they sign an OAuth callback and every webhook, and the tests
+# that exercise those have to be able to produce a signature the adapter
+# will accept.
+os.environ.setdefault("SHOPIFY_API_KEY", "a-shopify-key-for-tests")
+os.environ.setdefault("SHOPIFY_API_SECRET", "a-shopify-secret-for-tests")
 
 os.environ["DATABASE_URL"] = TEST_DATABASE.render_as_string(hide_password=False)
 get_settings.cache_clear()
@@ -154,9 +171,11 @@ def engine() -> Iterator[Engine]:
                 "TRUNCATE conversation_events, ai_response_logs, "
                 "knowledge_chunks, "
                 "knowledge_documents, knowledge_sources, "
+                "product_variants, products, orders, "
                 "messages, conversations, contacts, "
-                "whatsapp_accounts, workspace_invitations, "
-                "workspace_memberships, workspaces, users "
+                "whatsapp_accounts, ecommerce_accounts, workspace_invitations, "
+                "workspace_memberships, workspaces, "
+                "refresh_tokens, user_sessions, user_tokens, users "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -197,6 +216,23 @@ def db_session(engine: Engine) -> Iterator[Session]:
 @pytest.fixture
 def user_repository(db_session: Session) -> UserRepository:
     return UserRepository(db_session)
+
+
+@pytest.fixture
+def user_session_repository(db_session: Session) -> UserSessionRepository:
+    return UserSessionRepository(db_session)
+
+
+@pytest.fixture
+def user_token_repository(db_session: Session) -> UserTokenRepository:
+    return UserTokenRepository(db_session)
+
+
+@pytest.fixture
+def ecommerce_account_repository(
+    db_session: Session,
+) -> EcommerceAccountRepository:
+    return EcommerceAccountRepository(db_session)
 
 
 @pytest.fixture
@@ -250,11 +286,37 @@ def reply_writer() -> FakeReplyWriter:
 
 
 @pytest.fixture
+def email_sender() -> FakeEmailSender:
+    return FakeEmailSender()
+
+
+@pytest.fixture
+def ecommerce_provider() -> FakeEcommerceProvider:
+    return FakeEcommerceProvider()
+
+
+@pytest.fixture
+def rate_limiter() -> RateLimiter:
+    """A limiter that counts nothing, which is what most tests want.
+
+    Limits are real state that outlives a request, so a suite running
+    against a live one would have tests interfering with each other --
+    and an unrelated test would start failing the day somebody added a
+    sixth login to it. The tests that are about limiting ask for this
+    fixture and turn it on, with numbers of their own.
+    """
+    return RateLimiter(limits=limits_from(get_settings()), enabled=False)
+
+
+@pytest.fixture
 def client(
     db_session: Session,
     messaging_provider: FakeMessagingProvider,
     embedding_provider: FakeEmbeddingProvider,
     reply_writer: FakeReplyWriter,
+    email_sender: FakeEmailSender,
+    ecommerce_provider: FakeEcommerceProvider,
+    rate_limiter: RateLimiter,
 ) -> Iterator[TestClient]:
     """A test client sharing the test's rolled-back session.
 
@@ -281,6 +343,9 @@ def client(
     app.dependency_overrides[get_messaging_provider] = lambda: messaging_provider
     app.dependency_overrides[get_embedding_provider] = lambda: embedding_provider
     app.dependency_overrides[get_reply_writer] = lambda: reply_writer
+    app.dependency_overrides[get_email_sender] = lambda: email_sender
+    app.dependency_overrides[get_ecommerce_provider] = lambda: ecommerce_provider
+    app.dependency_overrides[get_rate_limiter] = lambda: rate_limiter
 
     with TestClient(app) as test_client:
         yield test_client

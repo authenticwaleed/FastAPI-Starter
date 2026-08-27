@@ -14,6 +14,10 @@ from app.models.conversation import (
     ConversationStatus,
 )
 from app.models.conversation_event import ConversationEvent, EventType
+from app.models.ecommerce_account import (
+    EcommerceAccount,
+    EcommerceAccountStatus,
+)
 from app.models.knowledge import (
     DocumentStatus,
     KnowledgeChunk,
@@ -28,7 +32,15 @@ from app.models.message import (
     MessageStatus,
     SenderType,
 )
+from app.models.order import Order, OrderStatus
+from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.user import User
+from app.models.user_session import (
+    RefreshToken,
+    SessionEndReason,
+    UserSession,
+)
+from app.models.user_token import UserToken, UserTokenPurpose
 from app.models.whatsapp_account import (
     MessagingProviderName,
     WhatsAppAccount,
@@ -56,6 +68,8 @@ __all__ = [
     "ConversationStatus",
     "Direction",
     "DocumentStatus",
+    "EcommerceAccount",
+    "EcommerceAccountStatus",
     "EventType",
     "KnowledgeChunk",
     "KnowledgeDocument",
@@ -64,9 +78,19 @@ __all__ = [
     "Message",
     "MessageStatus",
     "MessagingProviderName",
+    "Order",
+    "OrderStatus",
+    "Product",
+    "ProductStatus",
+    "ProductVariant",
+    "RefreshToken",
     "SenderType",
+    "SessionEndReason",
     "SourceType",
     "User",
+    "UserSession",
+    "UserToken",
+    "UserTokenPurpose",
     "WhatsAppAccount",
     "WhatsAppAccountStatus",
     "Workspace",

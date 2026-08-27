@@ -7,10 +7,13 @@ from app.api.routes import (
     auth,
     contacts,
     conversations,
+    ecommerce,
     health,
     invitations,
     knowledge,
     memberships,
+    orders,
+    products,
     webhooks,
     whatsapp,
     workspaces,
@@ -37,6 +40,10 @@ api_router.include_router(conversations.router)
 # be switchable off entirely.
 api_router.include_router(ai.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(products.router)
+api_router.include_router(orders.router)
+api_router.include_router(ecommerce.router)
+api_router.include_router(ecommerce.callback_router)
 api_router.include_router(analytics.router)
 api_router.include_router(whatsapp.router)
 api_router.include_router(webhooks.router)

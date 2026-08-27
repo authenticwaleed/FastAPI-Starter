@@ -1,11 +1,15 @@
-"""Phase 8 acceptance: register, log in, and reach a protected endpoint."""
+"""Phase 8 acceptance: register, log in, and reach a protected endpoint.
+
+The sessions half of Phase 15 -- refreshing, logging out, and the list of
+where an account is signed in -- is in test_sessions.py.
+"""
 
 from datetime import timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_access_token
 from app.repositories.user_repository import UserRepository
 
 EMAIL = "ada@example.com"
@@ -223,8 +227,12 @@ def test_a_token_that_is_not_one_is_rejected(client: TestClient) -> None:
 
 def test_an_expired_token_is_rejected(client: TestClient) -> None:
     created = _register(client)
+    live = _login(client).json()["access_token"]
     expired = create_access_token(
         str(created["id"]),
+        # The same session the live token names, so what is being tested
+        # is the expiry and not a session that was never opened.
+        session_id=decode_access_token(live).session_id,
         expires_in=timedelta(seconds=-1),
     )
 

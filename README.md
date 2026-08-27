@@ -66,12 +66,21 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `/api/v1/health/live` | Liveness probe |
 | GET | `/api/v1/health/ready` | Readiness probe, checks the database |
 | POST | `/api/v1/auth/register` | Create an account |
-| POST | `/api/v1/auth/login` | Exchange credentials for a token |
+| POST | `/api/v1/auth/login` | Exchange credentials for a token pair |
+| POST | `/api/v1/auth/refresh` | Exchange the refresh token for a new pair |
+| POST | `/api/v1/auth/logout` | End the session that token belongs to |
+| POST | `/api/v1/auth/resend-verification` | Send another confirmation link |
+| POST | `/api/v1/auth/verify-email` | Confirm an address |
+| POST | `/api/v1/auth/forgot-password` | Send a password reset link |
+| POST | `/api/v1/auth/reset-password` | Set a new password from that link |
 | GET | `/api/v1/auth/me` | The current user, requires a token |
 | GET | `/api/v1/account` | Read your own account |
 | PATCH | `/api/v1/account` | Change your own name or email |
 | POST | `/api/v1/account/change-password` | Replace your password |
 | DELETE | `/api/v1/account` | Delete your own account |
+| GET | `/api/v1/account/sessions` | Where you are signed in |
+| DELETE | `/api/v1/account/sessions/{session_id}` | Sign one device out |
+| DELETE | `/api/v1/account/sessions` | Sign out everywhere |
 | POST | `/api/v1/workspaces` | Create a workspace; you become its owner |
 | GET | `/api/v1/workspaces` | List the workspaces you belong to |
 | GET | `/api/v1/workspaces/{workspace_id}` | Read one workspace |
@@ -115,21 +124,133 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `…/knowledge/documents/{document_id}` | Read one |
 | DELETE | `…/knowledge/documents/{document_id}` | Delete it and its chunks |
 | POST | `…/{workspace_id}/knowledge/search` | Ask the knowledge base directly |
+| POST | `…/{workspace_id}/products` | Add a product and its variants |
+| GET | `…/{workspace_id}/products` | The catalogue, searched and filtered |
+| GET | `…/products/{product_id}` | Read one |
+| PATCH | `…/products/{product_id}` | Update it, and optionally its variants |
+| DELETE | `…/products/{product_id}` | Delete it and its variants |
+| POST | `…/{workspace_id}/orders` | Record an order taken by hand |
+| GET | `…/{workspace_id}/orders` | Orders, by customer, status or number |
+| GET | `…/orders/{order_id}` | Read one |
+| PATCH | `…/orders/{order_id}` | Record what has happened to it |
+| POST | `…/orders/{order_id}/confirm` | Confirm a pending order |
 | GET | `…/{workspace_id}/analytics/overview` | The dashboard's headline row |
 | GET | `…/{workspace_id}/analytics/conversations` | Volume and responsiveness |
 | GET | `…/{workspace_id}/analytics/ai` | What the assistant did, and cost |
 | POST | `…/{workspace_id}/integrations/whatsapp/connect` | Connect a number |
 | GET | `…/{workspace_id}/integrations/whatsapp` | What is connected |
 | DELETE | `…/{workspace_id}/integrations/whatsapp` | Disconnect it |
+| POST | `…/integrations/shopify/install` | Start a storefront installation |
+| GET | `…/integrations/shopify` | What is connected |
+| POST | `…/integrations/shopify/sync` | Read the whole shop again |
+| DELETE | `…/integrations/shopify` | Disconnect it |
+| GET | `/api/v1/integrations/shopify/callback` | Shopify's OAuth callback |
 | GET | `/api/v1/webhooks/whatsapp` | Meta's subscription handshake |
 | POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
+| POST | `/api/v1/webhooks/shopify` | Shopify's deliveries |
 
-Protected endpoints take `Authorization: Bearer <token>`. The two webhook
-routes are not: their caller is Meta, which has no account here.
+Protected endpoints take `Authorization: Bearer <access_token>`. The two
+webhook routes are not: their caller is Meta, which has no account here.
+`/auth/refresh` and `/auth/logout` are not either — the refresh token in
+the body is the credential, and requiring a live access token would make
+both useless at the only moment they are needed.
 
 Everything under `/account` acts on the account the token belongs to. None
 of those paths takes a user id, which is deliberate: there is no id for a
 caller to substitute, and so no ownership check for anyone to forget.
+
+### Sessions
+
+Logging in opens a **session** and returns two tokens. The access token is
+short-lived and goes in the header of every request. The refresh token
+buys the next access token, is good for exactly one use, and is what a
+client should keep out of reach of a script.
+
+```text
+POST /auth/login    ->  access_token (15 min)  +  refresh_token
+POST /auth/refresh  ->  a new one of each; the one you sent is now spent
+```
+
+Every refresh replaces both halves and pushes the session's deadline out
+again, so `REFRESH_TOKEN_EXPIRE_DAYS` is an idle timeout: a session dies
+when nobody has used it for that long, not on a fixed date.
+
+A session is a **chain** of refresh tokens rather than one long-lived key,
+and each spent link is kept while the session lives. That is what makes a
+copied token detectable. If a spent token is presented again, the rightful
+client has already moved on to the next link, so whoever sent this one
+either copied it or is working from a copy that was taken — and the two
+cannot be told apart. The whole session is revoked, both parties are
+signed out, and the response is `401 refresh_token_reused`.
+
+The access token names its session (`sid`), and that session is checked on
+every request. Signing a device out therefore lands on its next call
+rather than whenever its token happened to expire. That costs nothing
+extra: authenticating already meant one query to load the user, and it is
+now that same query with a join and two more conditions. Requests already
+in flight are the only gap, which is what the short access-token lifetime
+bounds.
+
+`GET /account/sessions` lists the live ones, marking the one that asked;
+`DELETE /account/sessions/{id}` ends one, and `DELETE /account/sessions`
+ends all of them, this device included. Changing your password ends every
+session **except** the one changing it — the point is to close the access
+that knowing the old password gave, not to throw you out of the screen you
+are standing in front of.
+
+Refresh tokens are stored as SHA-256 digests, never as tokens, and a
+session's chain is deleted the moment it is revoked. Rate limiting on
+login and refresh is Phase 17 and is not here yet.
+
+### Confirming an address, and forgetting a password
+
+Registering emails a confirmation link. Following it stamps
+`email_verified_at` on the account, which the API reports and **nothing is
+gated on** — an unconfirmed account can do everything a confirmed one can.
+Changing your address clears it, because what was confirmed was the old
+one; `/auth/resend-verification` is how you confirm the new one.
+
+`/auth/forgot-password` emails a reset link. Using it replaces the
+password, signs out **every** session, and marks the address confirmed —
+the person just read mail at it, which is the same thing a confirmation
+link proves.
+
+Both links are 32 bytes of CSPRNG output stored as a SHA-256 digest, good
+for one use, and dead once used. Asking for another retires the previous
+one, so a mailbox holds one working key rather than a drawerful. A link is
+tied to the address it was sent to as well as to the account, so one
+mailed to an old address stops working the moment the account moves. A
+confirmation link cannot be spent as a password reset: it is the cheap one
+that lives for days, and if it bought a password it would be worth what a
+password is.
+
+Neither `/auth/forgot-password` nor `/auth/resend-verification` will say
+whether an address belongs to anybody. Both answer `202` with an empty
+body for every address, and both do all their work — the lookup, the
+token, the send — in a background task, so the response takes the same
+time whether or not there was anything to send. Doing it inline could not:
+the real case reaches a mail server and the unknown one returns after one
+indexed `SELECT`.
+
+The token travels in the request body, not the URL path — unlike an
+invitation token, which has to be in a link. That is deliberate: a path is
+what a proxy's access log records, and these do not need to be there.
+
+Every failure of `/auth/verify-email` and `/auth/reset-password` is one
+`400 invalid_verification_token`: unknown, used, expired, wrong kind, or
+sent to an address the account no longer has. The holder has proved
+nothing yet, and each distinction would be a fact about somebody's
+account. `400` rather than `401` because nobody was authenticating — a
+`401` would send a client holding a good session back to the login screen.
+
+Mail goes out over SMTP, configured with `SMTP_HOST` and friends. With no
+host set the sender writes the whole message to the log instead, link
+included, which is what a laptop wants and exactly why production
+**refuses to start** without `SMTP_HOST`, `EMAIL_FROM` and
+`FRONTEND_BASE_URL`: a deployment that cannot send mail is one where
+forgotten passwords silently go nowhere and reset links end up in a log
+file. Rate limiting these — an unauthenticated endpoint that sends email
+is worth limiting more than most — is Phase 17.
 
 A **workspace** is the tenant boundary: one customer business, with the
 users who work in it attached through memberships. Four roles exist,
@@ -358,6 +479,130 @@ shape:
 
 Branch on `code`, which is stable; `detail` is prose and may be reworded.
 
+### Rate limits
+
+Counted **per worker, in this process's memory** — there is no Redis, on
+the plan's instruction not to introduce it before it is needed. What that
+costs is stated rather than hidden: four workers allow four times each
+limit. That is the right trade while these exist to stop abuse and runaway
+loops, and the day they exist to sell quota is the day this grows a shared
+store. Nothing above `app/core/rate_limit.py` would change.
+
+Token buckets, not fixed windows. A fixed window lets twice the limit
+through in the two seconds either side of a boundary and gives a client no
+useful answer to "when may I try again?". A bucket refills continuously, so
+the answer is exactly how long one token takes — which is what
+`Retry-After` carries.
+
+Every refusal is `429` with the same body shape as every other error
+(`{"detail": ..., "code": "rate_limit_exceeded"}`) and a `Retry-After`
+header in seconds.
+
+| Scope | Keyed on | Endpoints |
+| --- | --- | --- |
+| `auth` | client address | `/auth/login`, `/auth/refresh` |
+| `email` | client address | `/auth/register`, `/auth/forgot-password`, `/auth/resend-verification` |
+| `invitations` | workspace | `POST …/invitations` |
+| `ai` | workspace | `POST …/ai-reply`, and the assistant's own webhook runs |
+| `search` | workspace | `POST …/knowledge/search` |
+| `uploads` | workspace | `POST …/knowledge/documents/upload` |
+| `webhook_rejections` | client address | the two webhooks — see below |
+
+Unauthenticated endpoints are keyed on the caller's address, never on the
+email they submitted: keying on somebody else's address is how a limiter
+becomes a way to lock one person out of their own account. Authenticated
+ones are keyed on the workspace, because what they cost is a tenant's money
+rather than a stranger's patience — and membership is checked before
+anything is counted, so a stranger cannot spend a business's allowance by
+guessing its id.
+
+The webhooks are limited on **deliveries that fail**, not on deliveries.
+Meta and Shopify send real traffic in volume from a handful of addresses,
+so counting every delivery would mean either a limit high enough to be no
+limit or one that throttles the provider itself. An honest sender is never
+charged for arriving; a sender of forgeries stops being answered.
+
+The `ai` bucket is the only limit here that can stop a customer being
+answered. It is set high enough that reaching it means something is wrong
+rather than busy — two bots talking to each other is the case it exists for
+— and when it trips the message is already stored and shows up unanswered
+in the inbox, which is what a person is for.
+
+Behind a proxy, run uvicorn with `--proxy-headers` or every caller shares
+one bucket.
+
+### Catalogue and orders
+
+A **product** has variants; a variant has a SKU, a price and a stock level.
+Money is `Numeric`, never a float, all the way through: a price stored as
+`4499.999999999999` is a total that is wrong once it is multiplied by three.
+Stock has **three** states, not two — `null` is "this business does not
+count stock", `0` is "out of stock", and collapsing them would have the
+assistant telling customers something is unavailable when the truth is that
+nobody counted.
+
+Variants are nested in the product's own request rather than given
+endpoints of their own. Supplying `variants` on a `PATCH` replaces the set;
+omitting it leaves them alone.
+
+An **order** belongs to a contact, through a composite foreign key, so the
+database itself refuses an order attached to another workspace's customer.
+The contact cannot be changed through the API: moving an order to a
+different customer is not an edit, it is a correction of who it was ever
+for, and doing it through a `PATCH` nobody notices is how one person ends
+up able to ask about another person's order.
+
+Both tables exist for the assistant. Before it drafts a reply it runs a
+**structured lookup** — the catalogue searched by keyword, this contact's
+recent orders fetched by contact id — and those facts go into the prompt
+alongside the knowledge base, tagged `product:` and `order:` so the model
+knows which are exact. That is the plan's rule in both phases: a price, a
+stock level or an order's status comes from a `WHERE` clause, never from
+whichever passage read most like the question. Two customers with similar
+orders would be a coin toss, and the wrong side of that coin is one
+customer being told another's tracking number.
+
+Editing the catalogue is an admin's; recording a shipment is an agent's. A
+price list is what the business charges, and an agent answering messages
+should not change it mid-conversation — but marking an order shipped is
+the work they do all day.
+
+### Connecting a storefront
+
+Shopify, over OAuth. `POST …/integrations/shopify/install` returns a URL on
+the shop's own domain; the owner approves it there, and Shopify calls
+`GET /api/v1/integrations/shopify/callback`. Which workspace an
+installation belongs to travels in a signed `state` — an app is configured
+with one redirect URI, so the callback cannot say otherwise. The shop
+domain is signed into that state as well, and checked against the callback:
+without it, somebody who could get one shop owner to approve an
+installation could attach a different shop to their own workspace.
+
+The access token is encrypted at rest with the same key provider tokens
+already use. It grants read access to a business's whole catalogue and
+every order it has taken, which is one more reason production refuses to
+start without `ENCRYPTION_KEY`.
+
+Everything the storefront sends is an **upsert keyed on the storefront's
+own id**, which is what makes a repeated delivery harmless — a provider
+retries anything it did not get a prompt 200 for, and Shopify sends
+`orders/updated` for changes this application does not care about. A
+payload carrying an `updated_at` older than what is already stored is
+skipped rather than written backwards, so a retry that arrives after a
+newer change cannot undo it. Topics nothing handles are acknowledged, not
+refused: a subscription is easy to widen by accident, and a delivery that
+can never be acted on would otherwise be retried for a day.
+
+Disconnecting, and `app/uninstalled`, destroy the token and keep
+everything already synced. A business that uninstalls has stopped granting
+access; it has not asked to lose its own catalogue.
+
+`app/integrations/ecommerce/base.py` is the wall the plan asks for: a
+Shopify payload becomes `RemoteProduct` and `RemoteOrder` there, and
+nothing downstream has heard of a `variants` array or an
+`inventory_management` flag. WooCommerce is the next phase and the same
+shape.
+
 ## Configuration
 
 All configuration is read from the environment, with `.env` as a convenience
@@ -373,11 +618,33 @@ production.
 | `LOG_LEVEL` | `INFO` | Standard Python level names |
 | `LOG_FORMAT` | per environment | `text` in development, `json` elsewhere |
 | `JWT_ALGORITHM` | `HS256` | |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Short: it is sent with every request |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Idle timeout. Every refresh pushes it out |
 | `CORS_ORIGINS` | empty | Comma separated. Empty means no cross-origin access |
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |
 | `ENCRYPTION_KEY` | unset | Encrypts provider tokens. Required in production |
+| `EMAIL_VERIFICATION_EXPIRE_HOURS` | `48` | How long a confirmation link lasts |
+| `PASSWORD_RESET_EXPIRE_MINUTES` | `60` | Shorter: it is a key to the account |
+| `FRONTEND_BASE_URL` | unset | Where the links point. Required in production |
+| `SMTP_HOST` | unset | Unset logs the mail. Required in production |
+| `SMTP_PORT` | `587` | |
+| `SMTP_USERNAME` | unset | No login is attempted without one |
+| `SMTP_PASSWORD` | unset | |
+| `SMTP_USE_TLS` | `true` | STARTTLS. Off is for a local mail trap only |
+| `EMAIL_FROM` | unset | The From address. Required in production |
+| `RATE_LIMIT_ENABLED` | `true` | Off makes every limit below a no-op |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Per address. Login and refresh share it |
+| `RATE_LIMIT_EMAIL_PER_HOUR` | `5` | Per address. The endpoints that send mail |
+| `RATE_LIMIT_INVITATIONS_PER_HOUR` | `60` | Per workspace |
+| `RATE_LIMIT_AI_PER_MINUTE` | `60` | Per workspace, webhook replies included |
+| `RATE_LIMIT_SEARCH_PER_MINUTE` | `60` | Per workspace |
+| `RATE_LIMIT_UPLOADS_PER_HOUR` | `120` | Per workspace |
+| `RATE_LIMIT_WEBHOOK_REJECTIONS_PER_MINUTE` | `30` | Per address, failures only |
+| `API_BASE_URL` | unset | Where this API answers. Needed for OAuth |
+| `SHOPIFY_API_KEY` | unset | Without it, no storefront can be installed |
+| `SHOPIFY_API_SECRET` | unset | Signs the OAuth callback and every webhook |
+| `SHOPIFY_SCOPES` | read-only | Products, orders and customers |
 | `WHATSAPP_VERIFY_TOKEN` | unset | Echoed back during Meta's webhook setup |
 | `WHATSAPP_APP_SECRET` | unset | Signs every delivery. Without it, none authenticate |
 | `VOYAGE_API_KEY` | unset | Embeddings. Without it, ingestion refuses clearly |
@@ -396,7 +663,10 @@ starts a deployment with a key that cannot do anything.
 Settings are validated at startup, and production is held to a stricter
 standard than a laptop: `DEBUG`, a wildcard origin and a wildcard host are
 all refused when `ENVIRONMENT=production`, so a misconfiguration fails
-immediately instead of quietly widening the service's exposure.
+immediately instead of quietly widening the service's exposure. So are a
+missing `ENCRYPTION_KEY`, and a missing `SMTP_HOST`, `EMAIL_FROM` or
+`FRONTEND_BASE_URL` — those three because without them password reset does
+not fail, it appears to work while the link goes to a log file.
 
 ## Docker
 
@@ -518,9 +788,15 @@ database you have already created if that is not available.
 
 Worth knowing before this is used for something real:
 
-- **No refresh tokens or revocation.** A token is valid until it expires;
-  logging out is the client discarding it, and changing a password does not
-  sign anyone out.
+- **Nothing prunes ended sessions.** A revoked session's refresh tokens are
+  deleted with it, but the session row itself stays, and one that simply
+  lapsed keeps its chain. Neither can authorise anything — every lookup is
+  filtered on the clock — so this is table growth rather than exposure. A
+  sweep belongs with the background jobs phase.
+- **A session's device and address are labels, not evidence.** `User-Agent`
+  is whatever the client sent, and the address is the peer's, which is the
+  proxy's unless uvicorn runs with `--proxy-headers`. Nothing decides
+  anything from either.
 - **No administration API.** A user can manage their own account and nothing
   else.
 - **Nothing drains the queued messages.** A reply sent while no number is
@@ -528,9 +804,19 @@ Worth knowing before this is used for something real:
 - **Only text.** Images, audio, documents and interactive templates are
   parsed out of webhooks and skipped rather than stored empty.
 - **`ai_mode`** is stored on every conversation and read by nothing.
-- **No email is sent.** An invitation's link has to be handed over by
-  whoever created it, because the API returns the token once for exactly
-  that reason. Delivering it is a later phase.
+- **Confirming an address gates nothing.** `email_verified_at` is recorded
+  and reported, and an unconfirmed account can still do everything. Making
+  it a requirement is a product decision, not a missing implementation.
+- **Workspace invitations are still not emailed.** The link has to be
+  handed over by whoever created it, because the API returns the token
+  once for exactly that reason. There is a sender to do it with now, so
+  this is a wiring job rather than a phase.
+- **Changing your address does not email the new one.** It clears the
+  confirmation, and the client is expected to call
+  `/auth/resend-verification` afterwards.
+- **Nothing prunes spent or expired links.** `user_tokens` grows. None of
+  those rows can do anything, so this is table growth rather than
+  exposure, and it belongs with the same sweep the ended sessions need.
 - **Invitation tokens travel in the URL path**, which is what makes a link
   a link. This application redacts them from its own log lines, but an
   access log written by uvicorn, a proxy or a CDN sits outside that and
@@ -545,7 +831,19 @@ Worth knowing before this is used for something real:
   `Ada@example.com` and `ada@example.com` can both register. Invitation
   matching is case-insensitive and works either way, but the accounts
   themselves should probably not be two.
-- **No rate limiting**, on login or anywhere else.
+- **Rate limits are per worker.** Four workers allow four times each
+  number. Documented above rather than hidden, and the fix is a shared
+  store the day the limits are selling quota rather than stopping abuse.
+- **Orders have no line items.** The plan's `orders` is totals, status and
+  tracking — enough to answer "where is it", not "what did I order". Line
+  items are a table, not a column, and adding them is a phase of its own.
+- **Money is `Numeric(12, 2)`.** That covers PKR, AED, SAR, USD and EUR.
+  The three-decimal currencies — KWD, BHD, OMR — need a migration.
+- **A full storefront sync is synchronous.** Honest for a few hundred
+  products and not for a few hundred thousand; moving it to a background
+  job is the background-jobs phase, and nothing above it changes.
+- **One storefront per workspace**, and one workspace per shop. More is a
+  plan feature and a migration.
 
 ## Layout
 
