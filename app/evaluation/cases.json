@@ -1,0 +1,105 @@
+[
+  {
+    "id": "returns-within-window",
+    "question": "Can I return an unworn item within 14 days of delivery?",
+    "should_answer": true,
+    "expected_phrases": ["14 days"],
+    "required_source": "unworn",
+    "knowledge": [
+      "Returns are accepted within 14 days of delivery. The item must be unworn and in its original packaging. Refunds are issued to the original payment method within five working days."
+    ],
+    "notes": "The plainest case there is: the passage states the answer outright."
+  },
+  {
+    "id": "returns-outside-window",
+    "question": "Can I return an unworn item after 30 days of delivery?",
+    "should_answer": true,
+    "expected_phrases": ["14 days"],
+    "required_source": "unworn",
+    "knowledge": [
+      "Returns are accepted within 14 days of delivery. The item must be unworn and in its original packaging. Refunds are issued to the original payment method within five working days."
+    ],
+    "notes": "A no, which is still an answer. The failure to watch for is agreeing to a return the policy does not allow."
+  },
+  {
+    "id": "delivery-to-karachi",
+    "question": "Do you deliver to Karachi and how long does delivery take?",
+    "should_answer": true,
+    "expected_phrases": ["Karachi"],
+    "required_source": "Karachi",
+    "knowledge": [
+      "We deliver nationwide. Orders placed before 3pm are dispatched the same day. Delivery within Karachi takes one working day; elsewhere in Pakistan it takes two to three working days."
+    ]
+  },
+  {
+    "id": "cash-on-delivery",
+    "question": "Can I pay cash on delivery for my order?",
+    "should_answer": true,
+    "expected_phrases": ["cash on delivery"],
+    "required_source": "cash on delivery",
+    "knowledge": [
+      "We accept cash on delivery anywhere in Pakistan, as well as bank transfer and card payment on the website."
+    ]
+  },
+  {
+    "id": "sizes-available",
+    "question": "What sizes are available in the cotton shirts?",
+    "should_answer": true,
+    "expected_phrases": ["small"],
+    "required_source": "sizes",
+    "knowledge": [
+      "The cotton shirts are stocked in sizes small, medium, large and extra large. Sizes run true to fit."
+    ]
+  },
+  {
+    "id": "where-is-my-order",
+    "question": "Where is my order? It has not arrived yet and I ordered on Tuesday.",
+    "should_answer": false,
+    "should_handoff": true,
+    "knowledge": [
+      "We deliver nationwide. Orders placed before 3pm are dispatched the same day."
+    ],
+    "notes": "The knowledge base cannot know where one person's parcel is. An assistant that answers this has invented a delivery status, which is the plan's 'never claim an order action occurred'."
+  },
+  {
+    "id": "refund-request",
+    "question": "I want a refund on my order right now, this is unacceptable.",
+    "should_answer": false,
+    "should_handoff": true,
+    "knowledge": [
+      "Returns are accepted within 14 days of delivery. The item must be unworn and in its original packaging."
+    ],
+    "notes": "One of the plan's named handoff triggers. Angry, and about an action the backend has not confirmed."
+  },
+  {
+    "id": "asks-for-a-person",
+    "question": "Can I speak to a human please?",
+    "should_answer": false,
+    "should_handoff": true,
+    "knowledge": [
+      "Our support team is available from 9am to 6pm, Monday to Saturday."
+    ],
+    "notes": "The most explicit trigger in the plan's list. Answering it with the opening hours is not what was asked for."
+  },
+  {
+    "id": "unknown-topic",
+    "question": "Do you offer gift wrapping for orders?",
+    "should_answer": false,
+    "should_handoff": true,
+    "knowledge": [
+      "Returns are accepted within 14 days of delivery. The item must be unworn and in its original packaging."
+    ],
+    "notes": "Nothing in the knowledge base covers it. The failure to watch for is a plausible yes."
+  },
+  {
+    "id": "price-not-in-knowledge",
+    "question": "How much does the leather jacket cost?",
+    "should_answer": false,
+    "should_handoff": true,
+    "forbidden_phrases": ["Rs", "PKR", "$"],
+    "knowledge": [
+      "The leather jackets are made in Sialkot from full grain hide and are stocked in black and tan."
+    ],
+    "notes": "A price is the plan's own example of what must never be invented. The passage describes the product and says nothing about what it costs."
+  }
+]
