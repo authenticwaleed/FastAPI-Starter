@@ -388,3 +388,136 @@ class WhatsAppAlreadyConnectedError(AppError):
     def __init__(self, workspace_id: object) -> None:
         super().__init__(f"WhatsApp already connected for workspace {workspace_id}")
         self.workspace_id = workspace_id
+
+
+class KnowledgeSourceNotFoundError(AppError):
+    """No such source, in this workspace.
+
+    The same answer whether it does not exist or belongs to somebody else,
+    for the reason every other lookup gives it: telling those apart makes
+    an id in a URL a way of asking what other businesses have stored.
+    """
+
+    detail = "Knowledge source not found"
+
+    def __init__(self, workspace_id: object, source_id: object) -> None:
+        super().__init__(
+            f"Knowledge source {source_id} not in workspace {workspace_id}"
+        )
+        self.workspace_id = workspace_id
+        self.source_id = source_id
+
+
+class KnowledgeDocumentNotFoundError(AppError):
+    detail = "Knowledge document not found"
+
+    def __init__(self, workspace_id: object, document_id: object) -> None:
+        super().__init__(f"Document {document_id} not in workspace {workspace_id}")
+        self.workspace_id = workspace_id
+        self.document_id = document_id
+
+
+class DocumentAlreadyIngestedError(AppError):
+    """This exact text is already in the knowledge base.
+
+    Refused rather than stored twice. Two copies of a policy do not make
+    the assistant twice as sure of it; they make every answer cite the
+    same thing twice and crowd out the evidence that would have been
+    second.
+    """
+
+    detail = "This content is already in the knowledge base"
+
+    def __init__(self, workspace_id: object, content_hash: object) -> None:
+        super().__init__(f"Content {content_hash} already ingested in {workspace_id}")
+        self.workspace_id = workspace_id
+        self.content_hash = content_hash
+
+
+class UnreadableDocumentError(AppError):
+    """The upload arrived but no text could be got out of it.
+
+    A scanned PDF is the ordinary case: it is pages of images, and reading
+    it needs OCR, which the MVP does not do. Said plainly, because "it
+    failed" would send somebody looking for a bug rather than for a
+    different copy of the file.
+    """
+
+    detail = "No text could be read from this document"
+
+    def __init__(self, reason: str) -> None:
+        # The reason is the client's message here, unlike everywhere else
+        # in this file. It is advice about a file they are holding -- "this
+        # is a scan, it needs OCR" -- and nothing in it is internal.
+        super().__init__(reason, detail=reason)
+        self.reason = reason
+
+
+class UnsupportedDocumentTypeError(AppError):
+    """A file of a kind the MVP does not read.
+
+    Refused at the door rather than stored as a document that will never
+    become ready. The plan's list is PDF and plain text; a spreadsheet or
+    a Word file is a later phase and not a bug.
+    """
+
+    detail = "Only PDF and plain text files can be ingested"
+
+    def __init__(self, content_type: object) -> None:
+        super().__init__(f"Unsupported document type {content_type}")
+        self.content_type = content_type
+
+
+class EmbeddingProviderError(AppError):
+    """The embedding provider refused, failed, or is not configured.
+
+    Whatever it said goes to the log. What reaches the client is that the
+    document could not be processed -- a provider's error text is written
+    for whoever built the integration, not for the business uploading a
+    price list.
+    """
+
+    detail = "The knowledge base could not be updated right now"
+
+
+class ReplyProviderError(AppError):
+    """The language model refused, failed, or is not configured.
+
+    Raised only where it is caught: the AI pipeline records a `failed`
+    decision and leaves the customer's message untouched, because a model
+    being down must never be able to lose somebody's question.
+    """
+
+    detail = "The assistant is unavailable right now"
+
+
+class UnknownTimezoneError(AppError):
+    """A timezone nobody has heard of.
+
+    Refused rather than quietly falling back to UTC. A dashboard showing a
+    shop in Karachi its days measured from London midnight is wrong in a
+    way nobody notices until somebody counts by hand.
+    """
+
+    detail = "Unknown timezone"
+
+    def __init__(self, name: object) -> None:
+        super().__init__(
+            f"Unknown timezone {name!r}", detail=f"Unknown timezone: {name}"
+        )
+        self.name = name
+
+
+class InvalidDateRangeError(AppError):
+    """A range that is backwards, or longer than anything gets scanned for.
+
+    Refused rather than clamped. A dashboard silently showing a different
+    period from the one it was asked for is worse than one that says the
+    request made no sense.
+    """
+
+    detail = "Invalid date range"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason, detail=reason)
+        self.reason = reason

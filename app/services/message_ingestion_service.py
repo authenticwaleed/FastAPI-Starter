@@ -1,4 +1,6 @@
 import logging
+import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -32,6 +34,21 @@ from app.services.whatsapp_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """One customer message that this delivery actually wrote.
+
+    Returned so the caller can act on a new message without having to work
+    out for itself which of the payload's messages were new -- and without
+    reaching back into the database to find out.
+    """
+
+    workspace_id: uuid.UUID
+    conversation_id: uuid.UUID
+    message_id: uuid.UUID
+
 
 # How far along a message is. A provider's notifications are not ordered:
 # `sent` can arrive after `read` if one delivery was retried. Statuses only
@@ -78,19 +95,25 @@ class MessageIngestionService:
         ):
             raise InvalidWebhookError
 
-    def ingest(self, payload: dict[str, Any]) -> None:
+    def ingest(self, payload: dict[str, Any]) -> list[Recorded]:
         """Handle one delivery, whatever it turns out to contain.
 
         Nothing here raises for a delivery that cannot be used. A webhook
         answering anything but 200 is a webhook the provider sends again,
         and the same unreadable payload retried for a day is worse than a
         line in the log saying it was skipped.
+
+        Returns what was actually written -- which is not the same as what
+        arrived, because a retried delivery writes nothing. That
+        distinction is what the caller needs: it is the difference between
+        answering a customer once and answering them every time the
+        provider repeats itself.
         """
         events = self._provider.parse_webhook(payload)
 
         if events.external_phone_number_id is None:
             logger.info("A webhook delivery named no phone number id; skipping")
-            return
+            return []
 
         account = self._accounts.get_by_phone_number_id(events.external_phone_number_id)
 
@@ -98,19 +121,25 @@ class MessageIngestionService:
             # A delivery for a number this installation does not have
             # connected. Ordinary during setup and after a disconnect.
             logger.info("A webhook arrived for a phone number id nobody has connected")
-            return
+            return []
 
-        for message in events.messages:
-            self._record_inbound(account, message)
+        recorded = [
+            written
+            for message in events.messages
+            if (written := self._record_inbound(account, message)) is not None
+        ]
 
         for update in events.statuses:
             self._record_status(account, update)
+
+        return recorded
 
     def _record_inbound(
         self,
         account: WhatsAppAccount,
         inbound: InboundMessage,
-    ) -> None:
+    ) -> Recorded | None:
+        """Write one customer message, or say it was already written."""
         workspace_id = account.workspace_id
 
         if (
@@ -122,7 +151,7 @@ class MessageIngestionService:
         ):
             # The retry case, and the reason the unique index exists.
             logger.info("A webhook message was already recorded; skipping")
-            return
+            return None
 
         contact = self._contact_for(account, inbound)
         conversation = self._conversation_for(account, contact)
@@ -139,7 +168,16 @@ class MessageIngestionService:
                 external_message_id=inbound.external_message_id,
                 received_at=inbound.sent_at,
             )
-            self._conversations.record_activity(conversation, inbound.sent_at)
+            self._conversations.record_activity(
+                conversation,
+                inbound.sent_at,
+                # The only place anything becomes unread. Unread means the
+                # customer has said something nobody has answered or
+                # acknowledged, so the team's own messages do not raise it
+                # -- an inbox where replying to somebody makes their thread
+                # look unattended is one whose badge nobody trusts.
+                unread=True,
+            )
             self._session.commit()
         except IntegrityError:
             # Two deliveries of the same message can arrive at once, and
@@ -147,11 +185,17 @@ class MessageIngestionService:
             # provider's id is what actually settles it.
             self._session.rollback()
             logger.info("A webhook message was recorded concurrently; skipping")
-            return
+            return None
 
         logger.info(
             "Recorded an inbound message on conversation %s",
             message.conversation_id,
+        )
+
+        return Recorded(
+            workspace_id=workspace_id,
+            conversation_id=conversation.id,
+            message_id=message.id,
         )
 
     def _contact_for(

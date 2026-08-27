@@ -4,6 +4,10 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.19.1",
+    # Writes the assistant's replies. The official SDK rather than raw
+    # HTTP: the request shape for thinking, effort and structured output
+    # is the part most worth not hand-rolling.
+    "anthropic>=1.0.0",
     # Encrypts provider access tokens at rest. Fernet, from this package,
     # is authenticated symmetric encryption with a key format that is safe
     # to keep in an environment variable.
@@ -18,6 +22,10 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "pydantic[email]>=2.13.4",
     "pyjwt>=2.13.0",
+    # Pulls the text out of an uploaded PDF. Pure Python, so it adds a
+    # dependency and not a system package to every image and every
+    # developer's machine.
+    "pypdf>=5.0.0",
     "sqlalchemy>=2.0.52",
 ]
 

@@ -3,11 +3,23 @@ import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Header,
+    Query,
+    Request,
+    Response,
+    status,
+)
 
 from app.core.config import get_settings
 from app.core.exceptions import InvalidWebhookError
+from app.services.ai_dispatch import SessionSourceDep, answer_inbound
+from app.services.ai_response_service import ReplyWriterDep
+from app.services.knowledge_service import EmbeddingProviderDep
 from app.services.message_ingestion_service import MessageIngestionServiceDep
+from app.services.whatsapp_service import MessagingProviderDep
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +66,12 @@ def verify_whatsapp_subscription(
 @router.post("/whatsapp", status_code=status.HTTP_200_OK)
 async def receive_whatsapp_webhook(
     request: Request,
+    background: BackgroundTasks,
     service: MessageIngestionServiceDep,
+    embeddings: EmbeddingProviderDep,
+    writer: ReplyWriterDep,
+    messaging: MessagingProviderDep,
+    session_source: SessionSourceDep,
     signature: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
 ) -> dict[str, str]:
     """Take delivery of whatever WhatsApp is telling us.
@@ -68,6 +85,12 @@ async def receive_whatsapp_webhook(
     cannot use. A webhook that answers anything else is one the provider
     sends again, and a delivery that can never be handled would then be
     retried for a day.
+
+    The assistant runs after that 200 rather than before it. Drafting a
+    reply is a retrieval and a language model -- seconds -- and Meta reads
+    a slow response as a failed delivery and sends the whole envelope
+    again. Only messages this delivery actually wrote are followed up, so
+    a repeated delivery does not produce a repeated answer.
     """
     body = await request.body()
 
@@ -85,6 +108,19 @@ async def receive_whatsapp_webhook(
 
         return {"status": "ignored"}
 
-    service.ingest(payload)
+    for recorded in service.ingest(payload):
+        background.add_task(
+            answer_inbound,
+            workspace_id=recorded.workspace_id,
+            conversation_id=recorded.conversation_id,
+            message_id=recorded.message_id,
+            # The provider objects are handed over rather than rebuilt.
+            # They hold no session, and passing them is what keeps a
+            # test's fakes in force for work that outlives the request.
+            embeddings=embeddings,
+            writer=writer,
+            messaging=messaging,
+            session_source=session_source,
+        )
 
     return {"status": "received"}

@@ -129,8 +129,11 @@ def test_opening_a_conversation_returns_201(
     assert body["status"] == "open"
     assert body["channel"] == "whatsapp"
     assert body["ai_mode"] == "suggest_only"
-    assert body["assigned_user_id"] is None
+    assert body["assigned_user"] is None
+    assert body["last_message"] is None
     assert body["last_message_at"] is None
+    assert body["unread_count"] == 0
+    assert body["contact"]["phone_number"] == NUMBER
 
 
 def test_a_second_live_conversation_with_one_contact_is_a_409(
@@ -227,14 +230,18 @@ def test_a_conversation_can_be_assigned_and_unassigned(
         headers=acme.owner_headers,
     )
     assert assigned.status_code == 200
-    assert assigned.json()["assigned_user_id"] == agent_id
+    assert assigned.json()["assigned_user"] == {
+        "id": agent_id,
+        "name": "Someone",
+        "email": "agent@example.com",
+    }
 
     cleared = client.post(
         acme.path(created["id"], "/assign"),
         json={"user_id": None},
         headers=acme.owner_headers,
     )
-    assert cleared.json()["assigned_user_id"] is None
+    assert cleared.json()["assigned_user"] is None
 
 
 def test_a_conversation_cannot_be_assigned_outside_the_workspace(

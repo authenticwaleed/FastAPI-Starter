@@ -10,6 +10,9 @@ from app.core.exceptions import (
 from app.models.message import Direction, MessageStatus, SenderType
 from app.models.user import User
 from app.repositories.contact_repository import ContactRepository
+from app.repositories.conversation_event_repository import (
+    ConversationEventRepository,
+)
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.whatsapp_account_repository import (
@@ -58,6 +61,7 @@ def conversations(
         conversations=conversation_repository,
         contacts=contact_repository,
         memberships=membership_repository,
+        events=ConversationEventRepository(db_session),
     )
 
 
@@ -92,7 +96,6 @@ def service(
         conversations=conversation_repository,
         contacts=contact_repository,
         accounts=whatsapp_accounts,
-        conversation_service=conversations,
         whatsapp=WhatsAppService(
             session=db_session,
             accounts=whatsapp_accounts,
@@ -129,7 +132,7 @@ class Business:
         self.conversation = conversations.create(
             self.access,
             ConversationCreate(contact_id=contact.id),
-        )
+        ).conversation
 
 
 @pytest.fixture
@@ -158,7 +161,7 @@ def rival(
 
 def _send(service: MessageService, business: Business, text: str):
     return service.send(
-        business.access,
+        business.workspace,
         business.conversation.id,
         MessageCreate(text=text),
     )
@@ -208,7 +211,7 @@ def test_a_thread_reads_back_newest_first(
     for index in range(3):
         _send(service, acme, f"line {index}")
 
-    messages, total = service.list_for(acme.access, acme.conversation.id)
+    messages, total = service.list_for(acme.workspace, acme.conversation.id)
 
     assert total == 3
     assert [message.text_body for message in messages] == ["line 2", "line 1", "line 0"]
@@ -221,8 +224,8 @@ def test_the_order_is_the_same_every_time_it_is_read(
     for index in range(6):
         _send(service, acme, f"line {index}")
 
-    first = [m.id for m in service.list_for(acme.access, acme.conversation.id)[0]]
-    again = [m.id for m in service.list_for(acme.access, acme.conversation.id)[0]]
+    first = [m.id for m in service.list_for(acme.workspace, acme.conversation.id)[0]]
+    again = [m.id for m in service.list_for(acme.workspace, acme.conversation.id)[0]]
 
     assert first == again
 
@@ -232,10 +235,10 @@ def test_a_thread_is_paginated(service: MessageService, acme: Business) -> None:
         _send(service, acme, f"line {index}")
 
     page_one, total = service.list_for(
-        acme.access, acme.conversation.id, page=1, page_size=2
+        acme.workspace, acme.conversation.id, page=1, page_size=2
     )
     page_two, _ = service.list_for(
-        acme.access, acme.conversation.id, page=2, page_size=2
+        acme.workspace, acme.conversation.id, page=2, page_size=2
     )
 
     assert total == 5
@@ -275,7 +278,7 @@ def test_another_business_cannot_read_your_thread(
     _send(service, acme, "private")
 
     with pytest.raises(ConversationNotFoundError):
-        service.list_for(rival.access, acme.conversation.id)
+        service.list_for(rival.workspace, acme.conversation.id)
 
 
 def test_another_business_cannot_write_into_your_thread(
@@ -285,7 +288,7 @@ def test_another_business_cannot_write_into_your_thread(
 ) -> None:
     with pytest.raises(ConversationNotFoundError):
         service.send(
-            rival.access,
+            rival.workspace,
             acme.conversation.id,
             MessageCreate(text="who are you"),
         )
@@ -299,7 +302,7 @@ def test_one_thread_does_not_show_another_ones_messages(
     _send(service, acme, "mine")
     _send(service, rival, "theirs")
 
-    messages, total = service.list_for(acme.access, acme.conversation.id)
+    messages, total = service.list_for(acme.workspace, acme.conversation.id)
 
     assert total == 1
     assert [m.text_body for m in messages] == ["mine"]
