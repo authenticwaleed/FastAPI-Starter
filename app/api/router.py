@@ -2,11 +2,14 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     account,
+    ai,
+    analytics,
     auth,
     contacts,
     conversations,
     health,
     invitations,
+    knowledge,
     memberships,
     webhooks,
     whatsapp,
@@ -29,5 +32,11 @@ api_router.include_router(invitations.workspace_router)
 api_router.include_router(invitations.token_router)
 api_router.include_router(contacts.router)
 api_router.include_router(conversations.router)
+# After conversations, whose prefix it extends. Its own module because the
+# assistant is a different concern from the inbox, and one that is meant to
+# be switchable off entirely.
+api_router.include_router(ai.router)
+api_router.include_router(knowledge.router)
+api_router.include_router(analytics.router)
 api_router.include_router(whatsapp.router)
 api_router.include_router(webhooks.router)

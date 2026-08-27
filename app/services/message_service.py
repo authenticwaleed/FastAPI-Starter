@@ -10,11 +10,13 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import (
     ContactNotFoundError,
     ConversationClosedError,
+    ConversationNotFoundError,
     MessagingProviderError,
 )
 from app.db.session import SessionDep
 from app.models.conversation import Conversation
 from app.models.message import Direction, Message, MessageStatus, SenderType
+from app.models.workspace import Workspace
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
@@ -23,17 +25,12 @@ from app.repositories.whatsapp_account_repository import (
 )
 from app.schemas.message import MessageCreate
 from app.services.contact_service import ContactRepositoryDep
-from app.services.conversation_service import (
-    ConversationRepositoryDep,
-    ConversationService,
-    ConversationServiceDep,
-)
+from app.services.conversation_service import ConversationRepositoryDep
 from app.services.whatsapp_service import (
     WhatsAppAccountRepositoryDep,
     WhatsAppService,
     WhatsAppServiceDep,
 )
-from app.services.workspace_service import WorkspaceAccess
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +38,13 @@ logger = logging.getLogger(__name__)
 class MessageService:
     """What is in a thread, and adding to it.
 
-    Reaching a conversation goes through ConversationService, so a
-    message can only ever be written to a thread whose workspace has
-    already been established -- and the composite foreign key underneath
-    means the database would refuse it even if that were skipped.
+    Scoped to a workspace rather than to a caller's membership. Everything
+    here needs to know which business a message belongs to and nothing
+    here needs to know who asked -- and the difference matters, because
+    the assistant answering a webhook is not a member of anything. The
+    route proves the caller may act before handing the workspace over;
+    the composite foreign key underneath means the database would refuse a
+    cross-tenant write even if that were skipped.
     """
 
     def __init__(
@@ -54,7 +54,6 @@ class MessageService:
         conversations: ConversationRepository,
         contacts: ContactRepository,
         accounts: WhatsAppAccountRepository,
-        conversation_service: ConversationService,
         whatsapp: WhatsAppService,
     ) -> None:
         self._session = session
@@ -62,19 +61,18 @@ class MessageService:
         self._conversations = conversations
         self._contacts = contacts
         self._accounts = accounts
-        self._conversation_service = conversation_service
         self._whatsapp = whatsapp
 
     def list_for(
         self,
-        access: WorkspaceAccess,
+        workspace: Workspace,
         conversation_id: uuid.UUID,
         *,
         page: int = 1,
         page_size: int = 30,
     ) -> tuple[Sequence[Message], int]:
-        conversation = self._conversation_service.get(access, conversation_id)
-        workspace_id = access.workspace.id
+        workspace_id = workspace.id
+        conversation = self._conversation(workspace_id, conversation_id)
 
         messages = self._messages.list_for_conversation(
             workspace_id,
@@ -88,11 +86,20 @@ class MessageService:
 
     def send(
         self,
-        access: WorkspaceAccess,
+        workspace: Workspace,
         conversation_id: uuid.UUID,
         payload: MessageCreate,
+        *,
+        sender_type: SenderType = SenderType.AGENT,
     ) -> Message:
-        """Record an agent's reply, then try to deliver it.
+        """Record a reply, then try to deliver it.
+
+        `sender_type` is the one thing that differs between a person
+        typing and the assistant answering: everything else -- written
+        first, committed, delivered, marked -- has to be identical, or the
+        two would be two delivery paths with two sets of bugs. It defaults
+        to the agent, so the only caller that can produce an `ai` message
+        is the one that means to.
 
         Written and committed before the provider is called, and
         deliberately in that order. A crash, a timeout or a restart
@@ -106,17 +113,16 @@ class MessageService:
         refusal at this point would make the inbox unusable for a business
         that is still being set up.
         """
-        conversation = self._conversation_service.get(access, conversation_id)
+        workspace_id = workspace.id
+        conversation = self._conversation(workspace_id, conversation_id)
 
         if conversation.is_closed:
             raise ConversationClosedError(conversation.id)
 
-        workspace_id = access.workspace.id
-
         message = self._messages.create(
             workspace_id=workspace_id,
             conversation_id=conversation.id,
-            sender_type=SenderType.AGENT,
+            sender_type=sender_type,
             direction=Direction.OUTBOUND,
             channel=conversation.channel,
             status=MessageStatus.QUEUED,
@@ -160,16 +166,42 @@ class MessageService:
 
         return message
 
+    def _conversation(
+        self,
+        workspace_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+    ) -> Conversation:
+        """The thread, if it belongs to this workspace.
+
+        Read through the repository rather than through ConversationService
+        so that adding a message needs the conversation table and nothing
+        else -- the two services were otherwise coupled by one lookup, and
+        that coupling is what would drag a caller's membership into a
+        background job that has none.
+        """
+        conversation = self._conversations.get(workspace_id, conversation_id)
+
+        if conversation is None:
+            raise ConversationNotFoundError(workspace_id, conversation_id)
+
+        return conversation
+
     def _touch(self, conversation: Conversation, message: Message) -> None:
-        """Keep the inbox ordering honest.
+        """Keep the inbox ordering honest, and clear the unread badge.
 
         Written in the same transaction as the message, so a thread cannot
         exist with a reply in it and a last_message_at that predates it.
+
+        Replying marks the thread read because it is the strongest
+        statement there is that somebody has read it, and a shared inbox
+        still showing a badge on a conversation a colleague has just
+        answered is one that gets answered twice. A client that opens a
+        thread without replying says so with the read endpoint.
         """
-        self._conversations.record_activity(
-            conversation,
-            message.created_at or datetime.now(UTC),
-        )
+        at = message.created_at or datetime.now(UTC)
+
+        self._conversations.record_activity(conversation, at)
+        self._conversations.mark_read(conversation, at)
 
 
 def get_message_repository(session: SessionDep) -> MessageRepository:
@@ -185,7 +217,6 @@ def get_message_service(
     conversations: ConversationRepositoryDep,
     contacts: ContactRepositoryDep,
     accounts: WhatsAppAccountRepositoryDep,
-    conversation_service: ConversationServiceDep,
     whatsapp: WhatsAppServiceDep,
 ) -> MessageService:
     return MessageService(
@@ -194,7 +225,6 @@ def get_message_service(
         conversations=conversations,
         contacts=contacts,
         accounts=accounts,
-        conversation_service=conversation_service,
         whatsapp=whatsapp,
     )
 

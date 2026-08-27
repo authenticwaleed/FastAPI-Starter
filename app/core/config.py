@@ -49,6 +49,30 @@ class Settings(BaseSettings):
     whatsapp_verify_token: SecretStr | None = None
     whatsapp_app_secret: SecretStr | None = None
 
+    # Turns a business's knowledge into vectors, and a customer's question
+    # into one to compare against them. Optional, like the WhatsApp
+    # credentials: everything that is not the knowledge base works without
+    # it, and ingesting a document without it fails with a clear answer
+    # rather than storing chunks nothing can ever retrieve.
+    voyage_api_key: SecretStr | None = None
+    embedding_model: str = "voyage-3.5-lite"
+    # 1024 is the model's own default. Smaller is cheaper to store and
+    # faster to scan, at some cost in accuracy; changing it invalidates
+    # every vector already stored, because two vectors of different
+    # lengths cannot be compared.
+    embedding_dimensions: int = 1024
+
+    # Writes the replies. Optional for the same reason, and checked at the
+    # point of use: an inbox works perfectly well with no assistant.
+    anthropic_api_key: SecretStr | None = None
+    # The model the plan's pilots run on. Named here rather than in the
+    # code that calls it, so changing it is a deployment decision.
+    anthropic_model: str = "claude-opus-5"
+    # A reply on WhatsApp is a few sentences. The cap is a guard against a
+    # runaway response rather than a target, and it is well under what the
+    # channel itself allows.
+    anthropic_max_tokens: int = 1024
+
     log_level: str = "INFO"
     # "text" reads better in a terminal; "json" is what a log aggregator can
     # actually query. Left unset it follows the environment, which is the
@@ -92,6 +116,8 @@ class Settings(BaseSettings):
         "encryption_key",
         "whatsapp_verify_token",
         "whatsapp_app_secret",
+        "voyage_api_key",
+        "anthropic_api_key",
         mode="before",
     )
     @classmethod

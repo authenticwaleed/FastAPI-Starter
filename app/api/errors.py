@@ -16,22 +16,31 @@ from app.core.exceptions import (
     ConversationAlreadyOpenError,
     ConversationClosedError,
     ConversationNotFoundError,
+    DocumentAlreadyIngestedError,
     EmailAlreadyExistsError,
+    EmbeddingProviderError,
     EncryptionUnavailableError,
     InactiveUserError,
     IncorrectPasswordError,
     InsufficientWorkspaceRoleError,
     InvalidCredentialsError,
+    InvalidDateRangeError,
     InvalidWebhookError,
     InvitationAlreadyAcceptedError,
     InvitationExpiredError,
     InvitationNotFoundError,
     InvitationNotYoursError,
+    KnowledgeDocumentNotFoundError,
+    KnowledgeSourceNotFoundError,
     LastOwnerError,
     MembershipNotFoundError,
     MessagingProviderError,
     PendingInvitationExistsError,
+    ReplyProviderError,
     SlugAlreadyExistsError,
+    UnknownTimezoneError,
+    UnreadableDocumentError,
+    UnsupportedDocumentTypeError,
     UserNotFoundError,
     WhatsAppAlreadyConnectedError,
     WhatsAppNotConnectedError,
@@ -151,6 +160,47 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     PendingInvitationExistsError: _Answer(
         status.HTTP_409_CONFLICT,
         "invitation_already_pending",
+    ),
+    KnowledgeSourceNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "knowledge_source_not_found",
+    ),
+    KnowledgeDocumentNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "knowledge_document_not_found",
+    ),
+    DocumentAlreadyIngestedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "document_already_ingested",
+    ),
+    # 422 rather than 400: the request was well formed and the file inside
+    # it was not usable, which is the distinction a client needs to decide
+    # whether to fix the call or fix the file.
+    UnreadableDocumentError: _Answer(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "unreadable_document",
+    ),
+    UnsupportedDocumentTypeError: _Answer(
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        "unsupported_document_type",
+    ),
+    # 502 for the same reason the messaging provider gets one: this
+    # application worked and the thing it depends on did not.
+    EmbeddingProviderError: _Answer(
+        status.HTTP_502_BAD_GATEWAY,
+        "embedding_provider_error",
+    ),
+    ReplyProviderError: _Answer(
+        status.HTTP_502_BAD_GATEWAY,
+        "reply_provider_error",
+    ),
+    UnknownTimezoneError: _Answer(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "unknown_timezone",
+    ),
+    InvalidDateRangeError: _Answer(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "invalid_date_range",
     ),
 }
 
@@ -357,4 +407,28 @@ WHATSAPP_NOT_FOUND = _documented(
 WHATSAPP_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "A WhatsApp account is already connected",
+)
+KNOWLEDGE_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, source or document, or you are not a member",
+)
+KNOWLEDGE_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "This content is already in the knowledge base",
+)
+DOCUMENT_UNREADABLE = _documented(
+    status.HTTP_422_UNPROCESSABLE_CONTENT,
+    "No text could be read from this document",
+)
+DOCUMENT_UNSUPPORTED = _documented(
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    "Only PDF and plain text files can be ingested",
+)
+EMBEDDING_UNAVAILABLE = _documented(
+    status.HTTP_502_BAD_GATEWAY,
+    "The embedding provider refused or could not be reached",
+)
+BAD_RANGE = _documented(
+    status.HTTP_422_UNPROCESSABLE_CONTENT,
+    "The date range is backwards, too long, or names an unknown timezone",
 )

@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends
 from sqlalchemy.exc import IntegrityError
@@ -14,10 +14,17 @@ from app.core.exceptions import (
     MembershipNotFoundError,
 )
 from app.db.session import SessionDep
-from app.models.conversation import Conversation, ConversationStatus
+from app.models.conversation import AiMode, Conversation, ConversationStatus
+from app.models.conversation_event import ConversationEvent, EventType
 from app.models.workspace_membership import MembershipStatus
 from app.repositories.contact_repository import ContactRepository
-from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.conversation_event_repository import (
+    ConversationEventRepository,
+)
+from app.repositories.conversation_repository import (
+    ConversationRepository,
+    InboxRow,
+)
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
@@ -43,17 +50,19 @@ class ConversationService:
         conversations: ConversationRepository,
         contacts: ContactRepository,
         memberships: WorkspaceMembershipRepository,
+        events: ConversationEventRepository,
     ) -> None:
         self._session = session
         self._conversations = conversations
         self._contacts = contacts
         self._memberships = memberships
+        self._events = events
 
     def create(
         self,
         access: WorkspaceAccess,
         payload: ConversationCreate,
-    ) -> Conversation:
+    ) -> InboxRow:
         workspace_id = access.workspace.id
 
         # Checked here so the answer is "no such contact" rather than a
@@ -85,7 +94,7 @@ class ConversationService:
             self._session.rollback()
             raise ConversationAlreadyOpenError(payload.contact_id) from exc
 
-        return conversation
+        return self._row(access, conversation)
 
     def get(
         self,
@@ -99,44 +108,61 @@ class ConversationService:
 
         return conversation
 
+    def detail(
+        self,
+        access: WorkspaceAccess,
+        conversation_id: uuid.UUID,
+    ) -> InboxRow:
+        """One conversation with its contact, assignee and last message."""
+        row = self._conversations.get_row(access.workspace.id, conversation_id)
+
+        if row is None:
+            raise ConversationNotFoundError(access.workspace.id, conversation_id)
+
+        return row
+
     def list_for(
         self,
         access: WorkspaceAccess,
         *,
         page: int = 1,
         page_size: int = 20,
-        status: ConversationStatus | None = None,
+        statuses: Sequence[ConversationStatus] | None = None,
         assigned_user_id: int | None = None,
         contact_id: uuid.UUID | None = None,
         unassigned: bool = False,
-    ) -> tuple[Sequence[Conversation], int]:
+        search: str | None = None,
+    ) -> tuple[Sequence[InboxRow], int]:
+        """The inbox: one page, and the total behind it.
+
+        Two queries whatever the page holds -- the rows and their count --
+        because everything a row displays is fetched with the row.
+        """
         workspace_id = access.workspace.id
-        filters = {
-            "status": status,
+        filters: dict[str, Any] = {
+            "statuses": statuses,
             "assigned_user_id": assigned_user_id,
             "contact_id": contact_id,
             "unassigned": unassigned,
+            "search": search,
         }
 
-        conversations = self._conversations.list_for_workspace(
+        rows = self._conversations.list_for_workspace(
             workspace_id,
             limit=page_size,
             offset=(page - 1) * page_size,
-            **filters,  # type: ignore[arg-type]
+            **filters,
         )
-        total = self._conversations.count_for_workspace(
-            workspace_id,
-            **filters,  # type: ignore[arg-type]
-        )
+        total = self._conversations.count_for_workspace(workspace_id, **filters)
 
-        return conversations, total
+        return rows, total
 
     def update(
         self,
         access: WorkspaceAccess,
         conversation_id: uuid.UUID,
         payload: ConversationUpdate,
-    ) -> Conversation:
+    ) -> InboxRow:
         """Apply a partial update, routing a status change through the
         same code the close and reopen endpoints use."""
         conversation = self.get(access, conversation_id)
@@ -149,14 +175,14 @@ class ConversationService:
 
         self._session.commit()
 
-        return conversation
+        return self._row(access, conversation)
 
     def assign(
         self,
         access: WorkspaceAccess,
         conversation_id: uuid.UUID,
         user_id: int | None,
-    ) -> Conversation:
+    ) -> InboxRow:
         """Hand a thread to a colleague, or to nobody.
 
         The assignee has to be an active member of this workspace. A
@@ -175,33 +201,146 @@ class ConversationService:
         self._conversations.set_assignee(conversation, user_id)
         self._session.commit()
 
-        return conversation
+        return self._row(access, conversation)
 
     def close(
         self,
         access: WorkspaceAccess,
         conversation_id: uuid.UUID,
-    ) -> Conversation:
+    ) -> InboxRow:
         conversation = self.get(access, conversation_id)
 
         if not conversation.is_closed:
             self._apply_status(conversation, ConversationStatus.CLOSED)
             self._session.commit()
 
-        return conversation
+        return self._row(access, conversation)
 
     def reopen(
         self,
         access: WorkspaceAccess,
         conversation_id: uuid.UUID,
-    ) -> Conversation:
+    ) -> InboxRow:
         conversation = self.get(access, conversation_id)
 
         if conversation.is_closed:
             self._apply_status(conversation, ConversationStatus.OPEN)
             self._session.commit()
 
-        return conversation
+        return self._row(access, conversation)
+
+    def take_over(
+        self,
+        access: WorkspaceAccess,
+        conversation_id: uuid.UUID,
+        reason: str | None = None,
+    ) -> InboxRow:
+        """Put a thread in the caller's hands and stop the assistant.
+
+        The plan's business rule, and the reason it is a rule: once a
+        person is talking to a customer, an assistant continuing to answer
+        alongside them is two voices contradicting each other in one
+        thread. Nothing releases it but somebody deciding to.
+
+        Assigning to the caller as well, because taking over without
+        picking it up is how a thread ends up with the assistant switched
+        off and nobody looking at it -- worse for the customer than either
+        alternative.
+        """
+        conversation = self.get(access, conversation_id)
+        actor = access.membership.user_id
+
+        self._conversations.take_over(
+            conversation,
+            at=datetime.now(UTC),
+            reason=reason,
+            user_id=actor,
+        )
+        self._conversations.set_assignee(conversation, actor)
+        self._events.record(
+            workspace_id=access.workspace.id,
+            conversation_id=conversation.id,
+            event_type=EventType.HUMAN_TAKEOVER,
+            actor_user_id=actor,
+            reason=reason,
+        )
+        self._session.commit()
+
+        return self._row(access, conversation)
+
+    def release_to_ai(
+        self,
+        access: WorkspaceAccess,
+        conversation_id: uuid.UUID,
+        mode: AiMode = AiMode.SUGGEST_ONLY,
+    ) -> InboxRow:
+        """Hand a thread back to the assistant.
+
+        Back to drafting rather than to answering unless the caller says
+        otherwise: a thread a person had to take over is not the one to
+        return to full automation without somebody choosing to.
+
+        The assignment is left alone. Releasing the assistant and dropping
+        the thread are two decisions, and the agent who did the first is
+        usually still the right person to see the customer's reply.
+        """
+        conversation = self.get(access, conversation_id)
+
+        self._conversations.release(conversation, mode)
+        self._events.record(
+            workspace_id=access.workspace.id,
+            conversation_id=conversation.id,
+            event_type=EventType.AI_RELEASED,
+            actor_user_id=access.membership.user_id,
+        )
+        self._session.commit()
+
+        return self._row(access, conversation)
+
+    def history(
+        self,
+        access: WorkspaceAccess,
+        conversation_id: uuid.UUID,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[Sequence[ConversationEvent], int]:
+        """Who has had this thread, and why."""
+        self.get(access, conversation_id)
+        workspace_id = access.workspace.id
+
+        return (
+            self._events.list_for_conversation(
+                workspace_id,
+                conversation_id,
+                limit=page_size,
+                offset=(page - 1) * page_size,
+            ),
+            self._events.count_for_conversation(workspace_id, conversation_id),
+        )
+
+    def mark_read(
+        self,
+        access: WorkspaceAccess,
+        conversation_id: uuid.UUID,
+    ) -> InboxRow:
+        """Clear the thread's unread count for the whole team.
+
+        For the whole team because the count is the team's: this is a
+        shared inbox, and a badge that stays lit on four other screens
+        after somebody has dealt with a customer is a queue that gets
+        worked four times.
+
+        Idempotent, and reachable when there was nothing unread, so a
+        client can call it whenever a thread is opened without first
+        checking whether it needs to.
+        """
+        conversation = self.get(access, conversation_id)
+
+        self._conversations.mark_read(conversation, datetime.now(UTC))
+        self._session.commit()
+
+        return self._row(access, conversation)
 
     def _apply_status(
         self,
@@ -235,6 +374,17 @@ class ConversationService:
             self._session.rollback()
             raise ConversationAlreadyOpenError(conversation.contact_id) from exc
 
+    def _row(self, access: WorkspaceAccess, conversation: Conversation) -> InboxRow:
+        """Read back what was just written, in the shape the API answers in.
+
+        One more query after a change that has already been committed.
+        Worth it: the alternative is that a client which has just assigned
+        a thread cannot redraw the row from the response, and has to ask
+        for the conversation again anyway -- the same query, one round
+        trip further away.
+        """
+        return self.detail(access, conversation.id)
+
 
 def get_conversation_repository(session: SessionDep) -> ConversationRepository:
     return ConversationRepository(session)
@@ -246,17 +396,31 @@ ConversationRepositoryDep = Annotated[
 ]
 
 
+def get_conversation_event_repository(
+    session: SessionDep,
+) -> ConversationEventRepository:
+    return ConversationEventRepository(session)
+
+
+ConversationEventRepositoryDep = Annotated[
+    ConversationEventRepository,
+    Depends(get_conversation_event_repository),
+]
+
+
 def get_conversation_service(
     session: SessionDep,
     conversations: ConversationRepositoryDep,
     contacts: ContactRepositoryDep,
     memberships: WorkspaceMembershipRepositoryDep,
+    events: ConversationEventRepositoryDep,
 ) -> ConversationService:
     return ConversationService(
         session=session,
         conversations=conversations,
         contacts=contacts,
         memberships=memberships,
+        events=events,
     )
 
 

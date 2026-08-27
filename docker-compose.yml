@@ -10,6 +10,11 @@ x-api-environment: &api-environment
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
   WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
   WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+  # Both optional, and blank means missing rather than empty -- see the
+  # validator in app/core/config.py. Without them the knowledge base and
+  # the assistant refuse clearly; the inbox is unaffected.
+  VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   ENVIRONMENT: ${ENVIRONMENT:-development}
   DEBUG: ${DEBUG:-false}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}

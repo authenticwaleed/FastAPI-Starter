@@ -8,6 +8,7 @@ time a fixture runs, application code may already have resolved them.
 
 import os
 from collections.abc import Iterator
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,12 @@ from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.repositories.workspace_repository import WorkspaceRepository
+from app.services.ai_dispatch import get_session_source
+from app.services.ai_response_service import get_reply_writer
+from app.services.knowledge_service import get_embedding_provider
+from app.services.whatsapp_service import get_messaging_provider
+from tests.support.knowledge import FakeEmbeddingProvider, FakeReplyWriter
+from tests.support.messaging import FakeMessagingProvider
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -144,7 +151,10 @@ def engine() -> Iterator[Engine]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE messages, conversations, contacts, "
+                "TRUNCATE conversation_events, ai_response_logs, "
+                "knowledge_chunks, "
+                "knowledge_documents, knowledge_sources, "
+                "messages, conversations, contacts, "
                 "whatsapp_accounts, workspace_invitations, "
                 "workspace_memberships, workspaces, users "
                 "RESTART IDENTITY CASCADE"
@@ -225,10 +235,52 @@ def whatsapp_account_repository(db_session: Session) -> WhatsAppAccountRepositor
 
 
 @pytest.fixture
-def client(db_session: Session) -> Iterator[TestClient]:
-    """A test client sharing the test's rolled-back session."""
+def messaging_provider() -> FakeMessagingProvider:
+    return FakeMessagingProvider()
+
+
+@pytest.fixture
+def embedding_provider() -> FakeEmbeddingProvider:
+    return FakeEmbeddingProvider()
+
+
+@pytest.fixture
+def reply_writer() -> FakeReplyWriter:
+    return FakeReplyWriter()
+
+
+@pytest.fixture
+def client(
+    db_session: Session,
+    messaging_provider: FakeMessagingProvider,
+    embedding_provider: FakeEmbeddingProvider,
+    reply_writer: FakeReplyWriter,
+) -> Iterator[TestClient]:
+    """A test client sharing the test's rolled-back session.
+
+    Every outbound provider is replaced here rather than in the tests that
+    happen to think about it. The suite's rule is that nothing in it
+    reaches the network, and a rule kept by each test remembering to keep
+    it is a rule that a test added next month breaks -- quietly, because a
+    real call fails in a way that looks like the feature failing.
+
+    A test that cares what was sent asks for the same fixture and reads
+    the fake; a test that does not care gets the guarantee for free.
+    """
     app = create_app()
     app.dependency_overrides[get_db_session] = lambda: db_session
+    # Work scheduled by a request runs on a session of its own, which in
+    # production is right and here would be a second connection that
+    # cannot see this test's uncommitted transaction -- and whose own
+    # writes would outlive it. Handing over the test's session, without
+    # closing it, puts background work inside the same rollback as
+    # everything else.
+    app.dependency_overrides[get_session_source] = lambda: (
+        lambda: nullcontext(db_session)
+    )
+    app.dependency_overrides[get_messaging_provider] = lambda: messaging_provider
+    app.dependency_overrides[get_embedding_provider] = lambda: embedding_provider
+    app.dependency_overrides[get_reply_writer] = lambda: reply_writer
 
     with TestClient(app) as test_client:
         yield test_client

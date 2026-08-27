@@ -8,6 +8,9 @@ from app.core.exceptions import MessagingProviderError
 from app.models.message import MessageStatus
 from app.models.user import User
 from app.repositories.contact_repository import ContactRepository
+from app.repositories.conversation_event_repository import (
+    ConversationEventRepository,
+)
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.whatsapp_account_repository import (
@@ -71,6 +74,7 @@ class Setup:
         )
         self.access = workspaces.access(workspace.id, user)
         self.accounts = accounts
+        self.workspace = workspace
         self.workspace_id = workspace.id
 
         contacts = ContactService(session=db_session, contacts=contact_repository)
@@ -81,11 +85,12 @@ class Setup:
             conversations=conversation_repository,
             contacts=contact_repository,
             memberships=membership_repository,
+            events=ConversationEventRepository(db_session),
         )
         self.conversation = self.conversations.create(
             self.access,
             ConversationCreate(contact_id=contact.id),
-        )
+        ).conversation
 
         self.service = MessageService(
             session=db_session,
@@ -93,7 +98,6 @@ class Setup:
             conversations=conversation_repository,
             contacts=contact_repository,
             accounts=accounts,
-            conversation_service=self.conversations,
             whatsapp=WhatsAppService(
                 session=db_session,
                 accounts=accounts,
@@ -113,7 +117,7 @@ class Setup:
 
     def send(self, text: str = "We do, in black."):
         return self.service.send(
-            self.access,
+            self.workspace,
             self.conversation.id,
             MessageCreate(text=text),
         )
