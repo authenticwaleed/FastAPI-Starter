@@ -17,12 +17,16 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.encryption import _cipher
 from app.db.session import get_db_session, get_engine, get_session_factory
 from app.main import create_app
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.whatsapp_account_repository import (
+    WhatsAppAccountRepository,
+)
 from app.repositories.workspace_invitation_repository import (
     WorkspaceInvitationRepository,
 )
@@ -64,8 +68,21 @@ if TEST_DATABASE.database == APPLICATION_DATABASE.database:
 # engine the application builds for itself points at the test database too.
 # Without this a test that reached the session factory directly, rather than
 # through the dependency override below, would write to real data.
+# Provider tokens are encrypted before they are stored, so the suite needs
+# a key. Set here rather than in a fixture, for the same reason the
+# database URL is: settings are cached, and by the time a fixture runs
+# something may already have read them. A fixed value, because it protects
+# nothing -- every row it ever touches is rolled back.
+os.environ.setdefault(
+    "ENCRYPTION_KEY",
+    "8GkQ0DPTPzY3RtsDcRUv0YyBFqPLmPqXbYtdzwXQvbA=",
+)
+os.environ.setdefault("WHATSAPP_VERIFY_TOKEN", "a-verify-token-for-tests")
+os.environ.setdefault("WHATSAPP_APP_SECRET", "an-app-secret-for-tests")
+
 os.environ["DATABASE_URL"] = TEST_DATABASE.render_as_string(hide_password=False)
 get_settings.cache_clear()
+_cipher.cache_clear()
 get_engine.cache_clear()
 get_session_factory.cache_clear()
 
@@ -128,8 +145,9 @@ def engine() -> Iterator[Engine]:
         connection.execute(
             text(
                 "TRUNCATE messages, conversations, contacts, "
-                "workspace_invitations, workspace_memberships, "
-                "workspaces, users RESTART IDENTITY CASCADE"
+                "whatsapp_accounts, workspace_invitations, "
+                "workspace_memberships, workspaces, users "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
@@ -199,6 +217,11 @@ def conversation_repository(db_session: Session) -> ConversationRepository:
 @pytest.fixture
 def message_repository(db_session: Session) -> MessageRepository:
     return MessageRepository(db_session)
+
+
+@pytest.fixture
+def whatsapp_account_repository(db_session: Session) -> WhatsAppAccountRepository:
+    return WhatsAppAccountRepository(db_session)
 
 
 @pytest.fixture

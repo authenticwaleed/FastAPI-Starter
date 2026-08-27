@@ -19,6 +19,11 @@ from app.models.message import (
     SenderType,
 )
 from app.models.user import User
+from app.models.whatsapp_account import (
+    MessagingProviderName,
+    WhatsAppAccount,
+    WhatsAppAccountStatus,
+)
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.workspace_membership import (
@@ -39,8 +44,11 @@ __all__ = [
     "MembershipStatus",
     "Message",
     "MessageStatus",
+    "MessagingProviderName",
     "SenderType",
     "User",
+    "WhatsAppAccount",
+    "WhatsAppAccountStatus",
     "Workspace",
     "WorkspaceInvitation",
     "WorkspaceMembership",

@@ -1230,12 +1230,12 @@ Do not implement voice, video and every interactive template yet.
 
 ## Acceptance criteria
 
-- [ ] WhatsApp account can be connected
-- [ ] Incoming message creates/updates contact
-- [ ] Incoming message creates conversation if needed
-- [ ] Incoming message saved once
-- [ ] Agent can reply from API
-- [ ] Status webhooks update message state
+- [x] WhatsApp account can be connected
+- [x] Incoming message creates/updates contact
+- [x] Incoming message creates conversation if needed
+- [x] Incoming message saved once
+- [x] Agent can reply from API
+- [x] Status webhooks update message state
 
 ---
 

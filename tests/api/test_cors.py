@@ -15,12 +15,17 @@ OTHER = "http://somewhere-else.example"
 def _settings(**overrides: object) -> Settings:
     # _env_file=None so a value in the developer's .env cannot change what
     # these tests are asserting about.
-    return Settings(
-        _env_file=None,
-        database_url="postgresql+psycopg://u:p@localhost:5432/db",
-        jwt_secret_key="a-signing-key-long-enough-to-be-plausible",
-        **overrides,
-    )
+    #
+    # Production refuses to start without an encryption key, so one is
+    # supplied by default -- as a default rather than a fixed value, so a
+    # test can still assert what happens without one.
+    defaults: dict[str, object] = {
+        "database_url": "postgresql+psycopg://u:p@localhost:5432/db",
+        "jwt_secret_key": "a-signing-key-long-enough-to-be-plausible",
+        "encryption_key": "8GkQ0DPTPzY3RtsDcRUv0YyBFqPLmPqXbYtdzwXQvbA=",
+    }
+
+    return Settings(_env_file=None, **(defaults | overrides))  # type: ignore[arg-type]
 
 
 def _client(**overrides: object) -> TestClient:
@@ -208,3 +213,38 @@ def test_origins_parse_the_same_way_from_the_environment(
 def test_a_malformed_json_list_is_a_validation_error() -> None:
     with pytest.raises(ValidationError):
         _settings(cors_origins='["unclosed')
+
+
+def test_a_blank_secret_counts_as_missing() -> None:
+    # A compose file writing `KEY: ${KEY:-}` produces an empty string, not
+    # an absent variable. Without this it would arrive as SecretStr("") --
+    # not None, so the production check would pass and the deployment
+    # would start with a key that cannot encrypt anything.
+    assert _settings(encryption_key="").encryption_key is None
+    assert _settings(whatsapp_app_secret="   ").whatsapp_app_secret is None
+
+
+def test_production_refuses_a_blank_encryption_key() -> None:
+    with pytest.raises(ValidationError):
+        _settings(
+            environment="production",
+            cors_origins=["https://app.example.com"],
+            allowed_hosts=["app.example.com"],
+            encryption_key="",
+        )
+
+
+def test_production_refuses_a_missing_encryption_key() -> None:
+    # Storing a provider's access token in plain text is the kind of
+    # mistake only found by somebody reading the table.
+    #
+    # Passed as None rather than left out: the suite sets ENCRYPTION_KEY
+    # in the environment, and pydantic-settings reads that whatever
+    # _env_file says, so omitting it here would not mean missing.
+    with pytest.raises(ValidationError):
+        _settings(
+            environment="production",
+            cors_origins=["https://app.example.com"],
+            allowed_hosts=["app.example.com"],
+            encryption_key=None,
+        )

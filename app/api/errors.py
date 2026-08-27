@@ -17,19 +17,24 @@ from app.core.exceptions import (
     ConversationClosedError,
     ConversationNotFoundError,
     EmailAlreadyExistsError,
+    EncryptionUnavailableError,
     InactiveUserError,
     IncorrectPasswordError,
     InsufficientWorkspaceRoleError,
     InvalidCredentialsError,
+    InvalidWebhookError,
     InvitationAlreadyAcceptedError,
     InvitationExpiredError,
     InvitationNotFoundError,
     InvitationNotYoursError,
     LastOwnerError,
     MembershipNotFoundError,
+    MessagingProviderError,
     PendingInvitationExistsError,
     SlugAlreadyExistsError,
     UserNotFoundError,
+    WhatsAppAlreadyConnectedError,
+    WhatsAppNotConnectedError,
     WorkspaceNotFoundError,
     WorkspaceOwnershipError,
 )
@@ -119,6 +124,29 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     ConversationClosedError: _Answer(
         status.HTTP_409_CONFLICT,
         "conversation_closed",
+    ),
+    WhatsAppNotConnectedError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "whatsapp_not_connected",
+    ),
+    WhatsAppAlreadyConnectedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "whatsapp_already_connected",
+    ),
+    InvalidWebhookError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "invalid_webhook_signature",
+    ),
+    # 502 rather than 500: this application worked, and the thing it
+    # depends on did not. The distinction is what stops a provider outage
+    # reading as a bug in here.
+    MessagingProviderError: _Answer(
+        status.HTTP_502_BAD_GATEWAY,
+        "messaging_provider_error",
+    ),
+    EncryptionUnavailableError: _Answer(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "integration_unavailable",
     ),
     PendingInvitationExistsError: _Answer(
         status.HTTP_409_CONFLICT,
@@ -321,4 +349,12 @@ CONVERSATION_NOT_FOUND = _documented(
 CONVERSATION_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "That contact already has an open conversation, or this one is closed",
+)
+WHATSAPP_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or no WhatsApp account is connected to it",
+)
+WHATSAPP_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "A WhatsApp account is already connected",
 )

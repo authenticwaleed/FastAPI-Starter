@@ -4,7 +4,15 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.19.1",
+    # Encrypts provider access tokens at rest. Fernet, from this package,
+    # is authenticated symmetric encryption with a key format that is safe
+    # to keep in an environment variable.
+    "cryptography>=44.0.0",
     "fastapi[standard]>=0.141.1",
+    # Already arrives with fastapi[standard], and named here because
+    # application code calls the WhatsApp API with it: depending on a
+    # transitive dependency by accident is how it disappears in an upgrade.
+    "httpx>=0.28.1",
     "psycopg[binary]>=3.3.4",
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
@@ -15,7 +23,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "mypy>=2.3.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",

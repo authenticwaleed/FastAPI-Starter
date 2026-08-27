@@ -8,6 +8,8 @@ from app.api.routes import (
     health,
     invitations,
     memberships,
+    webhooks,
+    whatsapp,
     workspaces,
 )
 
@@ -27,3 +29,5 @@ api_router.include_router(invitations.workspace_router)
 api_router.include_router(invitations.token_router)
 api_router.include_router(contacts.router)
 api_router.include_router(conversations.router)
+api_router.include_router(whatsapp.router)
+api_router.include_router(webhooks.router)

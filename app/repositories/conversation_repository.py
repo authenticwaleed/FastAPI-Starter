@@ -77,6 +77,31 @@ class ConversationRepository:
             )
         )
 
+    def get_latest_closed_for_contact(
+        self,
+        workspace_id: uuid.UUID,
+        contact_id: uuid.UUID,
+        channel: Channel,
+    ) -> Conversation | None:
+        """The contact's most recently closed thread, if they have one.
+
+        Reached when a customer messages again after a conversation was
+        resolved. Reopening the last one keeps their history in one place;
+        the alternative is a new thread beside an old one that reads like
+        two different customers.
+        """
+        return self._session.scalar(
+            select(Conversation)
+            .where(
+                Conversation.workspace_id == workspace_id,
+                Conversation.contact_id == contact_id,
+                Conversation.channel == channel,
+                Conversation.status == ConversationStatus.CLOSED,
+            )
+            .order_by(Conversation.closed_at.desc(), Conversation.id)
+            .limit(1)
+        )
+
     def list_for_workspace(
         self,
         workspace_id: uuid.UUID,

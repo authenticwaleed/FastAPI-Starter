@@ -327,3 +327,64 @@ class ConversationClosedError(AppError):
     def __init__(self, conversation_id: object) -> None:
         super().__init__(f"Conversation {conversation_id} is closed")
         self.conversation_id = conversation_id
+
+
+class EncryptionUnavailableError(AppError):
+    """A secret cannot be encrypted or decrypted right now.
+
+    Configuration rather than a request: no key is set, the key is
+    malformed, or a stored value does not authenticate against it. The
+    client is told the integration is unavailable, because none of the
+    three is anything they can do something about, and the detail belongs
+    in the log.
+    """
+
+    detail = "This integration is not available right now"
+
+
+class MessagingProviderError(AppError):
+    """The messaging provider refused, failed, or could not be reached.
+
+    Whatever it said goes to the log. What reaches the client is that the
+    message could not be delivered, because a provider's own error text is
+    written for whoever built the integration rather than for the agent
+    who pressed send.
+    """
+
+    detail = "The message could not be delivered right now"
+
+
+class WhatsAppNotConnectedError(AppError):
+    """This workspace has no WhatsApp number connected."""
+
+    detail = "No WhatsApp account is connected to this workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} has no WhatsApp account")
+        self.workspace_id = workspace_id
+
+
+class InvalidWebhookError(AppError):
+    """A webhook delivery did not authenticate.
+
+    A forged delivery and a misconfigured secret look the same from here,
+    and both are refused. Nothing about which it was reaches the caller.
+    """
+
+    detail = "Invalid webhook signature"
+
+
+class WhatsAppAlreadyConnectedError(AppError):
+    """A WhatsApp number is already connected to this workspace.
+
+    Also the answer when the number belongs to a different workspace. The
+    two are not distinguished on purpose: saying which would confirm that
+    a given business number is in use on this platform, to somebody who
+    only had to guess it.
+    """
+
+    detail = "A WhatsApp account is already connected"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"WhatsApp already connected for workspace {workspace_id}")
+        self.workspace_id = workspace_id

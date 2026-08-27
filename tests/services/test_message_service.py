@@ -12,6 +12,9 @@ from app.models.user import User
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.whatsapp_account_repository import (
+    WhatsAppAccountRepository,
+)
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
@@ -23,7 +26,9 @@ from app.schemas.workspace import WorkspaceCreate
 from app.services.contact_service import ContactService
 from app.services.conversation_service import ConversationService
 from app.services.message_service import MessageService
+from app.services.whatsapp_service import WhatsAppService
 from app.services.workspace_service import WorkspaceService
+from tests.support.messaging import FakeMessagingProvider
 
 NUMBER = "+923001234567"
 
@@ -57,17 +62,42 @@ def conversations(
 
 
 @pytest.fixture
+def provider() -> FakeMessagingProvider:
+    return FakeMessagingProvider()
+
+
+@pytest.fixture
+def whatsapp_accounts(db_session: Session) -> WhatsAppAccountRepository:
+    return WhatsAppAccountRepository(db_session)
+
+
+@pytest.fixture
 def service(
     db_session: Session,
     message_repository: MessageRepository,
     conversation_repository: ConversationRepository,
+    contact_repository: ContactRepository,
+    whatsapp_accounts: WhatsAppAccountRepository,
     conversations: ConversationService,
+    provider: FakeMessagingProvider,
 ) -> MessageService:
+    """A message service with no WhatsApp number connected.
+
+    Which is the state these tests are about: what happens to a reply
+    before there is anywhere for it to go. Delivery has its own file.
+    """
     return MessageService(
         session=db_session,
         messages=message_repository,
         conversations=conversation_repository,
+        contacts=contact_repository,
+        accounts=whatsapp_accounts,
         conversation_service=conversations,
+        whatsapp=WhatsAppService(
+            session=db_session,
+            accounts=whatsapp_accounts,
+            provider=provider,
+        ),
     )
 
 
@@ -147,12 +177,13 @@ def test_a_reply_is_persisted_as_an_outbound_agent_message(
     assert message.workspace_id == acme.workspace.id
 
 
-def test_a_reply_is_queued_and_not_pretended_to_be_sent(
+def test_a_reply_is_queued_when_there_is_nowhere_to_send_it(
     service: MessageService,
     acme: Business,
 ) -> None:
-    # Nothing delivers it. A message marked sent that never left the
-    # building tells an agent their customer was answered.
+    # No number connected, so nothing delivers it. A message marked sent
+    # that never left the building tells an agent their customer was
+    # answered.
     assert _send(service, acme, "hello").status == MessageStatus.QUEUED
 
 

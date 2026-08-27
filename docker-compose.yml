@@ -5,6 +5,11 @@
 x-api-environment: &api-environment
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-fastapi_starter}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY before starting}
+  # No default, like the signing key: an empty value is refused outright
+  # in production, and connecting WhatsApp fails clearly without it.
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+  WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+  WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
   ENVIRONMENT: ${ENVIRONMENT:-development}
   DEBUG: ${DEBUG:-false}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}

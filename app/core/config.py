@@ -30,6 +30,25 @@ class Settings(BaseSettings):
     # in an old mailbox is no longer a way into a workspace.
     invitation_expire_hours: int = 168
 
+    # Encrypts provider access tokens before they are stored. Optional so
+    # that everything not touching an integration works without it, and
+    # required in production by the validator below -- a deployment that
+    # can connect WhatsApp must not be able to do so in plain text.
+    # Generate one per environment with app.core.encryption.generate_key,
+    # or from a shell:
+    #   uv run python -c \
+    #     "from app.core.encryption import generate_key as k; import sys; \
+    #      sys.stdout.write(k())"
+    # Changing it makes every token already stored undecryptable.
+    encryption_key: SecretStr | None = None
+
+    # Meta sends every workspace's webhooks to one callback URL, because
+    # one Meta app serves all of them, so both of these are app-wide
+    # rather than per workspace. The verify token is the string echoed
+    # back during subscription; the app secret signs every delivery.
+    whatsapp_verify_token: SecretStr | None = None
+    whatsapp_app_secret: SecretStr | None = None
+
     log_level: str = "INFO"
     # "text" reads better in a terminal; "json" is what a log aggregator can
     # actually query. Left unset it follows the environment, which is the
@@ -68,6 +87,27 @@ class Settings(BaseSettings):
             raise ValueError(f"log_level must be one of {sorted(_LOG_LEVELS)}")
 
         return level
+
+    @field_validator(
+        "encryption_key",
+        "whatsapp_verify_token",
+        "whatsapp_app_secret",
+        mode="before",
+    )
+    @classmethod
+    def _an_empty_secret_is_no_secret(cls, value: Any) -> Any:
+        """Treat an empty value as unset.
+
+        A compose file writing `KEY: ${KEY:-}` produces an empty string
+        rather than an absent variable, and without this that arrives as
+        SecretStr("") -- which is not None, so the production check below
+        would pass and the deployment would start with a key that cannot
+        encrypt anything. Blank means missing, from every source.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+
+        return value
 
     @field_validator("cors_origins", "allowed_hosts", mode="before")
     @classmethod
@@ -122,6 +162,11 @@ class Settings(BaseSettings):
 
         if "*" in self.allowed_hosts:
             raise ValueError("allowed_hosts must be set explicitly in production")
+
+        # Storing a provider's access token in plain text is the kind of
+        # mistake that is only discovered by somebody reading the table.
+        if self.encryption_key is None:
+            raise ValueError("encryption_key must be set in production")
 
         return self
 

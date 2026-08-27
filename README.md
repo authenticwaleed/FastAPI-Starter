@@ -91,8 +91,14 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `…/conversations/{conversation_id}/reopen` | Reopen it |
 | GET | `…/conversations/{conversation_id}/messages` | Read the thread |
 | POST | `…/conversations/{conversation_id}/messages` | Reply |
+| POST | `…/{workspace_id}/integrations/whatsapp/connect` | Connect a number |
+| GET | `…/{workspace_id}/integrations/whatsapp` | What is connected |
+| DELETE | `…/{workspace_id}/integrations/whatsapp` | Disconnect it |
+| GET | `/api/v1/webhooks/whatsapp` | Meta's subscription handshake |
+| POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
 
-Protected endpoints take `Authorization: Bearer <token>`.
+Protected endpoints take `Authorization: Bearer <token>`. The two webhook
+routes are not: their caller is Meta, which has no account here.
 
 Everything under `/account` acts on the account the token belongs to. None
 of those paths takes a user id, which is deliberate: there is no id for a
@@ -169,9 +175,34 @@ because ordering by id would be random (UUIDs) and `created_at` alone is
 not enough: Postgres fixes `now()` for a transaction, so a webhook writing
 three messages from one payload gives all three the same timestamp.
 
-A reply is stored `queued` and stays there. Nothing delivers it yet;
-marking it `sent` would tell an agent their customer was answered when
-nothing left the building.
+A reply is written and committed *before* the provider is called. A crash
+between the two loses a delivery, which retries and a human can recover
+from; the other order loses the message, and nobody can tell it existed.
+With no number connected it stays `queued` — nothing drains that queue
+yet.
+
+**WhatsApp** is reached through `MessagingProvider`, a Protocol with three
+methods. Everything Meta-shaped — the Graph URL, the webhook envelope, the
+signature header — lives in `app/integrations/messaging/whatsapp.py` and
+nothing above it knows any of that.
+
+Access tokens are encrypted with Fernet before they are stored, decrypted
+for the length of one call, and appear in no response and no log line.
+`ENCRYPTION_KEY` is optional in development and refused-if-missing in
+production.
+
+Every delivery is verified by HMAC-SHA256 over the **raw request body** —
+which is why that one route is `async` and reads `await request.body()`.
+Re-serialising the parsed JSON would change the bytes and fail every
+honest delivery.
+
+Ingestion is idempotent per message, not per delivery: a provider retries
+whenever it does not get a prompt 200, including when it did and the
+response was lost. Anything that authenticates gets a 200, even payloads
+that cannot be used — a webhook answering anything else is one the
+provider sends again all day. Status notifications only move a message
+forward, since `sent` can arrive after `read` when a delivery was
+retried.
 
 A workspace nobody has a membership of answers `404`, not `403`, whether or
 not it exists. Telling those apart would turn the id in the URL into a way
@@ -343,10 +374,11 @@ Worth knowing before this is used for something real:
   sign anyone out.
 - **No administration API.** A user can manage their own account and nothing
   else.
-- **Nothing sends or receives a message.** Replies are persisted as
-  `queued`, and inbound messages have no way in at all — connecting a
-  provider is the next phase. `ai_mode` is stored on every conversation
-  and read by nothing.
+- **Nothing drains the queued messages.** A reply sent while no number is
+  connected stays `queued` forever; a retry worker is a later phase.
+- **Only text.** Images, audio, documents and interactive templates are
+  parsed out of webhooks and skipped rather than stored empty.
+- **`ai_mode`** is stored on every conversation and read by nothing.
 - **No email is sent.** An invitation's link has to be handed over by
   whoever created it, because the API returns the token once for exactly
   that reason. Delivering it is a later phase.
