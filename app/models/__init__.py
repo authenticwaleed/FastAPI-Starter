@@ -34,6 +34,7 @@ from app.models.user_session import (
     SessionEndReason,
     UserSession,
 )
+from app.models.user_token import UserToken, UserTokenPurpose
 from app.models.whatsapp_account import (
     MessagingProviderName,
     WhatsAppAccount,
@@ -75,6 +76,8 @@ __all__ = [
     "SourceType",
     "User",
     "UserSession",
+    "UserToken",
+    "UserTokenPurpose",
     "WhatsAppAccount",
     "WhatsAppAccountStatus",
     "Workspace",

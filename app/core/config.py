@@ -42,6 +42,36 @@ class Settings(BaseSettings):
     # in an old mailbox is no longer a way into a workspace.
     invitation_expire_hours: int = 168
 
+    # Two days to confirm an address, because somebody signing up on
+    # Friday evening may not read their mail until Sunday.
+    email_verification_expire_hours: int = 48
+
+    # An hour to use a reset link, because it is a key to the account and
+    # the person holding it asked for it a moment ago. Deliberately much
+    # shorter than the verification window above: confirming an address
+    # and replacing a password are not worth the same to a thief.
+    password_reset_expire_minutes: int = 60
+
+    # Where the links in those emails point -- the dashboard, not this
+    # API. Unset, the email carries the bare token instead, which is
+    # enough to work with locally and obviously not a link to send anyone.
+    frontend_base_url: str | None = None
+
+    # Delivering those emails. Unset outside production, where the sender
+    # writes the whole message to the log instead: a laptop has no mail
+    # server and a developer needs to read the link. Required in
+    # production by the validator below -- a deployment that cannot send
+    # mail is one where forgotten passwords silently go nowhere, and
+    # where reset links would be written into a log file instead.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    # STARTTLS on the port above, which is what nearly every provider
+    # wants. Off is for a local catch-all mail trap and nothing else.
+    smtp_use_tls: bool = True
+    email_from: str | None = None
+
     # Encrypts provider access tokens before they are stored. Optional so
     # that everything not touching an integration works without it, and
     # required in production by the validator below -- a deployment that
@@ -130,6 +160,11 @@ class Settings(BaseSettings):
         "whatsapp_app_secret",
         "voyage_api_key",
         "anthropic_api_key",
+        "frontend_base_url",
+        "smtp_host",
+        "smtp_username",
+        "smtp_password",
+        "email_from",
         mode="before",
     )
     @classmethod
@@ -205,6 +240,21 @@ class Settings(BaseSettings):
         # mistake that is only discovered by somebody reading the table.
         if self.encryption_key is None:
             raise ValueError("encryption_key must be set in production")
+
+        # Without these, verification and password reset do not fail --
+        # they appear to work while the link goes to a log file. Refusing
+        # to start is the only outcome that cannot be mistaken for one.
+        if self.smtp_host is None or self.email_from is None:
+            raise ValueError(
+                "smtp_host and email_from must be set in production: "
+                "without them no verification or reset email is delivered"
+            )
+
+        if self.frontend_base_url is None:
+            raise ValueError(
+                "frontend_base_url must be set in production: "
+                "without it those emails carry a bare token and no link"
+            )
 
         return self
 

@@ -26,6 +26,7 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.user_session_repository import UserSessionRepository
+from app.repositories.user_token_repository import UserTokenRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
@@ -38,8 +39,10 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_dispatch import get_session_source
 from app.services.ai_response_service import get_reply_writer
+from app.services.email_dispatch import get_email_sender
 from app.services.knowledge_service import get_embedding_provider
 from app.services.whatsapp_service import get_messaging_provider
+from tests.support.email import FakeEmailSender
 from tests.support.knowledge import FakeEmbeddingProvider, FakeReplyWriter
 from tests.support.messaging import FakeMessagingProvider
 
@@ -158,7 +161,7 @@ def engine() -> Iterator[Engine]:
                 "messages, conversations, contacts, "
                 "whatsapp_accounts, workspace_invitations, "
                 "workspace_memberships, workspaces, "
-                "refresh_tokens, user_sessions, users "
+                "refresh_tokens, user_sessions, user_tokens, users "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -204,6 +207,11 @@ def user_repository(db_session: Session) -> UserRepository:
 @pytest.fixture
 def user_session_repository(db_session: Session) -> UserSessionRepository:
     return UserSessionRepository(db_session)
+
+
+@pytest.fixture
+def user_token_repository(db_session: Session) -> UserTokenRepository:
+    return UserTokenRepository(db_session)
 
 
 @pytest.fixture
@@ -257,11 +265,17 @@ def reply_writer() -> FakeReplyWriter:
 
 
 @pytest.fixture
+def email_sender() -> FakeEmailSender:
+    return FakeEmailSender()
+
+
+@pytest.fixture
 def client(
     db_session: Session,
     messaging_provider: FakeMessagingProvider,
     embedding_provider: FakeEmbeddingProvider,
     reply_writer: FakeReplyWriter,
+    email_sender: FakeEmailSender,
 ) -> Iterator[TestClient]:
     """A test client sharing the test's rolled-back session.
 
@@ -288,6 +302,7 @@ def client(
     app.dependency_overrides[get_messaging_provider] = lambda: messaging_provider
     app.dependency_overrides[get_embedding_provider] = lambda: embedding_provider
     app.dependency_overrides[get_reply_writer] = lambda: reply_writer
+    app.dependency_overrides[get_email_sender] = lambda: email_sender
 
     with TestClient(app) as test_client:
         yield test_client

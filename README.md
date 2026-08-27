@@ -69,6 +69,10 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `/api/v1/auth/login` | Exchange credentials for a token pair |
 | POST | `/api/v1/auth/refresh` | Exchange the refresh token for a new pair |
 | POST | `/api/v1/auth/logout` | End the session that token belongs to |
+| POST | `/api/v1/auth/resend-verification` | Send another confirmation link |
+| POST | `/api/v1/auth/verify-email` | Confirm an address |
+| POST | `/api/v1/auth/forgot-password` | Send a password reset link |
+| POST | `/api/v1/auth/reset-password` | Set a new password from that link |
 | GET | `/api/v1/auth/me` | The current user, requires a token |
 | GET | `/api/v1/account` | Read your own account |
 | PATCH | `/api/v1/account` | Change your own name or email |
@@ -181,6 +185,56 @@ are standing in front of.
 Refresh tokens are stored as SHA-256 digests, never as tokens, and a
 session's chain is deleted the moment it is revoked. Rate limiting on
 login and refresh is Phase 17 and is not here yet.
+
+### Confirming an address, and forgetting a password
+
+Registering emails a confirmation link. Following it stamps
+`email_verified_at` on the account, which the API reports and **nothing is
+gated on** — an unconfirmed account can do everything a confirmed one can.
+Changing your address clears it, because what was confirmed was the old
+one; `/auth/resend-verification` is how you confirm the new one.
+
+`/auth/forgot-password` emails a reset link. Using it replaces the
+password, signs out **every** session, and marks the address confirmed —
+the person just read mail at it, which is the same thing a confirmation
+link proves.
+
+Both links are 32 bytes of CSPRNG output stored as a SHA-256 digest, good
+for one use, and dead once used. Asking for another retires the previous
+one, so a mailbox holds one working key rather than a drawerful. A link is
+tied to the address it was sent to as well as to the account, so one
+mailed to an old address stops working the moment the account moves. A
+confirmation link cannot be spent as a password reset: it is the cheap one
+that lives for days, and if it bought a password it would be worth what a
+password is.
+
+Neither `/auth/forgot-password` nor `/auth/resend-verification` will say
+whether an address belongs to anybody. Both answer `202` with an empty
+body for every address, and both do all their work — the lookup, the
+token, the send — in a background task, so the response takes the same
+time whether or not there was anything to send. Doing it inline could not:
+the real case reaches a mail server and the unknown one returns after one
+indexed `SELECT`.
+
+The token travels in the request body, not the URL path — unlike an
+invitation token, which has to be in a link. That is deliberate: a path is
+what a proxy's access log records, and these do not need to be there.
+
+Every failure of `/auth/verify-email` and `/auth/reset-password` is one
+`400 invalid_verification_token`: unknown, used, expired, wrong kind, or
+sent to an address the account no longer has. The holder has proved
+nothing yet, and each distinction would be a fact about somebody's
+account. `400` rather than `401` because nobody was authenticating — a
+`401` would send a client holding a good session back to the login screen.
+
+Mail goes out over SMTP, configured with `SMTP_HOST` and friends. With no
+host set the sender writes the whole message to the log instead, link
+included, which is what a laptop wants and exactly why production
+**refuses to start** without `SMTP_HOST`, `EMAIL_FROM` and
+`FRONTEND_BASE_URL`: a deployment that cannot send mail is one where
+forgotten passwords silently go nowhere and reset links end up in a log
+file. Rate limiting these — an unauthenticated endpoint that sends email
+is worth limiting more than most — is Phase 17.
 
 A **workspace** is the tenant boundary: one customer business, with the
 users who work in it attached through memberships. Four roles exist,
@@ -430,6 +484,15 @@ production.
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |
 | `ENCRYPTION_KEY` | unset | Encrypts provider tokens. Required in production |
+| `EMAIL_VERIFICATION_EXPIRE_HOURS` | `48` | How long a confirmation link lasts |
+| `PASSWORD_RESET_EXPIRE_MINUTES` | `60` | Shorter: it is a key to the account |
+| `FRONTEND_BASE_URL` | unset | Where the links point. Required in production |
+| `SMTP_HOST` | unset | Unset logs the mail. Required in production |
+| `SMTP_PORT` | `587` | |
+| `SMTP_USERNAME` | unset | No login is attempted without one |
+| `SMTP_PASSWORD` | unset | |
+| `SMTP_USE_TLS` | `true` | STARTTLS. Off is for a local mail trap only |
+| `EMAIL_FROM` | unset | The From address. Required in production |
 | `WHATSAPP_VERIFY_TOKEN` | unset | Echoed back during Meta's webhook setup |
 | `WHATSAPP_APP_SECRET` | unset | Signs every delivery. Without it, none authenticate |
 | `VOYAGE_API_KEY` | unset | Embeddings. Without it, ingestion refuses clearly |
@@ -448,7 +511,10 @@ starts a deployment with a key that cannot do anything.
 Settings are validated at startup, and production is held to a stricter
 standard than a laptop: `DEBUG`, a wildcard origin and a wildcard host are
 all refused when `ENVIRONMENT=production`, so a misconfiguration fails
-immediately instead of quietly widening the service's exposure.
+immediately instead of quietly widening the service's exposure. So are a
+missing `ENCRYPTION_KEY`, and a missing `SMTP_HOST`, `EMAIL_FROM` or
+`FRONTEND_BASE_URL` — those three because without them password reset does
+not fail, it appears to work while the link goes to a log file.
 
 ## Docker
 
@@ -586,9 +652,19 @@ Worth knowing before this is used for something real:
 - **Only text.** Images, audio, documents and interactive templates are
   parsed out of webhooks and skipped rather than stored empty.
 - **`ai_mode`** is stored on every conversation and read by nothing.
-- **No email is sent.** An invitation's link has to be handed over by
-  whoever created it, because the API returns the token once for exactly
-  that reason. Delivering it is a later phase.
+- **Confirming an address gates nothing.** `email_verified_at` is recorded
+  and reported, and an unconfirmed account can still do everything. Making
+  it a requirement is a product decision, not a missing implementation.
+- **Workspace invitations are still not emailed.** The link has to be
+  handed over by whoever created it, because the API returns the token
+  once for exactly that reason. There is a sender to do it with now, so
+  this is a wiring job rather than a phase.
+- **Changing your address does not email the new one.** It clears the
+  confirmation, and the client is expected to call
+  `/auth/resend-verification` afterwards.
+- **Nothing prunes spent or expired links.** `user_tokens` grows. None of
+  those rows can do anything, so this is table growth rather than
+  exposure, and it belongs with the same sweep the ended sessions need.
 - **Invitation tokens travel in the URL path**, which is what makes a link
   a link. This application redacts them from its own log lines, but an
   access log written by uvicorn, a proxy or a CDN sits outside that and
@@ -603,7 +679,8 @@ Worth knowing before this is used for something real:
   `Ada@example.com` and `ada@example.com` can both register. Invitation
   matching is case-insensitive and works either way, but the accounts
   themselves should probably not be two.
-- **No rate limiting**, on login or anywhere else.
+- **No rate limiting**, on login, on the endpoints that send email, or
+  anywhere else.
 
 ## Layout
 

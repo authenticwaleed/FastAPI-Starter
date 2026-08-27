@@ -80,6 +80,37 @@ class IncorrectPasswordError(AppError):
         self.user_id = user_id
 
 
+class InvalidVerificationTokenError(AppError):
+    """The link will not do anything.
+
+    Unknown, already used, expired, or issued for an address the account
+    no longer has -- one answer for all four, and it says "or expired"
+    without saying which. Whoever is holding it has proved nothing yet,
+    and separating the cases would turn the endpoint into a way of asking
+    whether a given link was ever real.
+
+    Deliberately unlike InvitationExpiredError, which does distinguish
+    expiry. An invitation arrives from a colleague and "ask them for
+    another" is different advice from "check the address"; here the only
+    advice either way is to request a fresh link, so there is nothing to
+    buy with the distinction.
+    """
+
+    detail = "This link is invalid or has expired"
+
+
+class EmailDeliveryError(AppError):
+    """The message could not be handed to the mail server.
+
+    Raised only where it is caught. Every send in this application runs
+    after its response has gone, so nobody is waiting to be told -- what
+    this is for is a log line that says delivery failed rather than one
+    that says an unhandled exception happened in a request that worked.
+    """
+
+    detail = "The email could not be sent right now"
+
+
 class InvalidRefreshTokenError(AppError):
     """The presented refresh token will not do anything.
 

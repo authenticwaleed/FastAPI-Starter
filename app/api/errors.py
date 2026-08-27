@@ -18,6 +18,7 @@ from app.core.exceptions import (
     ConversationNotFoundError,
     DocumentAlreadyIngestedError,
     EmailAlreadyExistsError,
+    EmailDeliveryError,
     EmbeddingProviderError,
     EncryptionUnavailableError,
     InactiveUserError,
@@ -26,6 +27,7 @@ from app.core.exceptions import (
     InvalidCredentialsError,
     InvalidDateRangeError,
     InvalidRefreshTokenError,
+    InvalidVerificationTokenError,
     InvalidWebhookError,
     InvitationAlreadyAcceptedError,
     InvitationExpiredError,
@@ -99,6 +101,22 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     SessionNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
         "session_not_found",
+    ),
+    # 400 rather than 401: nobody was authenticating. A link that has
+    # been used or has aged out is a bad argument to this endpoint, and
+    # answering 401 would send a client that is holding a perfectly good
+    # session back to the login screen.
+    InvalidVerificationTokenError: _Answer(
+        status.HTTP_400_BAD_REQUEST,
+        "invalid_verification_token",
+    ),
+    # 502 for the reason the other outbound failures get one: this
+    # application worked and the thing it depends on did not. No route
+    # returns it today -- every send happens after its response -- and it
+    # is mapped so that the day one does, it is not a 500.
+    EmailDeliveryError: _Answer(
+        status.HTTP_502_BAD_GATEWAY,
+        "email_delivery_error",
     ),
     WorkspaceNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
@@ -370,6 +388,10 @@ REFRESH_UNAUTHORISED = _documented(
 SESSION_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,
     "No live session of yours has that id",
+)
+BAD_LINK = _documented(
+    status.HTTP_400_BAD_REQUEST,
+    "This link is unknown, already used, or has expired",
 )
 FORBIDDEN = _documented(status.HTTP_403_FORBIDDEN, "Inactive user")
 

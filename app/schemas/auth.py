@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -53,3 +55,37 @@ class TokenPair(BaseModel):
     # moves every time it is used and so is not a number that can be
     # given out in advance.
     expires_in: int = Field(description="Seconds until the access token expires")
+
+
+class EmailRequest(BaseModel):
+    """The body of `/auth/forgot-password` and `/auth/resend-verification`.
+
+    One field, and one schema for both, because both ask the same thing:
+    send whatever is appropriate to this address. Neither endpoint says
+    whether anything was.
+    """
+
+    email: EmailStr
+
+
+class VerifyEmailRequest(BaseModel):
+    """The body of `/auth/verify-email`."""
+
+    # In the body rather than the path, unlike an invitation token. A
+    # path is what makes an invitation a link somebody can click, and it
+    # is also what puts the token in every access log a proxy writes.
+    # These links are followed by the dashboard, which can perfectly well
+    # put the token in a request body, so there is no reason to pay that.
+    token: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """The body of `/auth/reset-password`."""
+
+    token: str
+
+    # The new password is request input the same way `UserCreate.password`
+    # is, so it carries the same policy. Unlike a login attempt, a 422
+    # here leaks nothing: whoever is holding this link is entitled to
+    # know what the rules for the password they are setting are.
+    new_password: Annotated[str, Field(min_length=8, max_length=128)]

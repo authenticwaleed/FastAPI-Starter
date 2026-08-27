@@ -1784,10 +1784,10 @@ POST /api/v1/auth/reset-password
 
 ## Acceptance criteria
 
-- [ ] verification works
-- [ ] reset works
-- [ ] enumeration not exposed
-- [ ] expiration tested
+- [x] verification works
+- [x] reset works
+- [x] enumeration not exposed
+- [x] expiration tested
 
 ---
 

@@ -89,6 +89,16 @@ class UserService:
                     else None
                 ),
             )
+
+            if payload.email is not None and payload.email != current_email:
+                # A new address is an unconfirmed one. What was proved was
+                # that somebody read mail at the old address, and carrying
+                # that over would make the flag mean nothing at all --
+                # anybody could become "verified" at any address by
+                # changing to it. Confirming the new one starts again at
+                # /auth/resend-verification.
+                self._repository.clear_email_verification(user)
+
             self._session.commit()
         except IntegrityError as exc:
             # Same race as in create_user: the unique email index is the only
