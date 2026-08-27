@@ -66,11 +66,14 @@ class EcommerceAccount(Base):
     # fail to match a live connection.
     shop_domain: Mapped[str] = mapped_column(String(255))
 
-    # Encrypted at rest with the same key provider tokens already use.
-    # This one grants read access to a business's entire catalogue and
-    # every order it has ever taken, which is why the settings refuse to
-    # start production without a key.
-    access_token_encrypted: Mapped[str] = mapped_column(Text)
+    # Whatever the provider handed over, encrypted at rest with the same
+    # key provider tokens already use. Opaque here on purpose: Shopify's
+    # is one access token and WooCommerce's is a key and a secret
+    # together, and only the adapter that produced it ever takes it
+    # apart. Whichever it is, it grants read access to a business's
+    # entire catalogue and every order it has ever taken -- which is one
+    # more reason the settings refuse to start production without a key.
+    credentials_encrypted: Mapped[str] = mapped_column(Text)
 
     status: Mapped[EcommerceAccountStatus] = mapped_column(
         enum_column(EcommerceAccountStatus, name="ecommerce_account_status"),

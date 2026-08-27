@@ -19,8 +19,13 @@ from app.core.exceptions import (
     StorefrontNotConnectedError,
 )
 from app.db.session import SessionDep
-from app.integrations.ecommerce.base import EcommerceProvider
-from app.integrations.ecommerce.shopify import ShopifyProvider, normalise_shop
+from app.integrations.ecommerce.base import (
+    EcommerceProvider,
+    EcommerceProviderName,
+    InstallCallback,
+)
+from app.integrations.ecommerce.shopify import ShopifyProvider
+from app.integrations.ecommerce.woocommerce import WooCommerceProvider
 from app.models.ecommerce_account import (
     EcommerceAccount,
     EcommerceAccountStatus,
@@ -43,31 +48,40 @@ logger = logging.getLogger(__name__)
 # shop to a workspace tomorrow.
 INSTALL_WINDOW = timedelta(minutes=15)
 
-# Where the provider sends the shop owner back to. App-wide rather than
-# per workspace, because a provider is configured with one redirect URI --
-# which is why the workspace has to travel in `state`.
-CALLBACK_PATH = "/api/v1/integrations/shopify/callback"
+# Where a provider sends the shop owner back to. Named per provider and
+# app-wide within one, because a provider is configured with a single
+# callback URL -- which is why the workspace has to travel in `state`.
+CALLBACK_PATH = "/api/v1/integrations/{provider}/callback"
+
+# And where the browser lands afterwards. Only WooCommerce uses it:
+# Shopify's flow puts the grant on the redirect itself, so there is no
+# second place to go.
+RETURN_PATH = "/integrations/{provider}/connected"
 
 
 @lru_cache
-def get_ecommerce_provider() -> EcommerceProvider:
-    """The storefront this application talks to.
+def get_ecommerce_providers() -> dict[EcommerceProviderName, EcommerceProvider]:
+    """Every storefront this application can talk to, by name.
 
-    A dependency rather than an import, so a test substitutes a fake by
-    overriding it. Cached because the adapter holds no state -- only the
-    workspace's own credentials, which arrive per call.
+    A registry rather than one provider, because the route names which
+    one it is for. A dependency rather than an import, so a test can
+    substitute fakes by overriding it; cached because the adapters hold
+    no state -- only a workspace's own credentials, which arrive per call.
     """
-    return ShopifyProvider()
+    return {
+        EcommerceProviderName.SHOPIFY: ShopifyProvider(),
+        EcommerceProviderName.WOOCOMMERCE: WooCommerceProvider(),
+    }
 
 
-EcommerceProviderDep = Annotated[
-    EcommerceProvider,
-    Depends(get_ecommerce_provider),
+EcommerceProvidersDep = Annotated[
+    dict[EcommerceProviderName, EcommerceProvider],
+    Depends(get_ecommerce_providers),
 ]
 
 
 @dataclass(frozen=True)
-class Installation:
+class Started:
     """Where to send a shop owner, and which shop they are approving."""
 
     authorize_url: str
@@ -88,73 +102,89 @@ class EcommerceService:
         self,
         session: Session,
         accounts: EcommerceAccountRepository,
-        provider: EcommerceProvider,
+        providers: dict[EcommerceProviderName, EcommerceProvider],
         sync: EcommerceSyncService,
     ) -> None:
         self._session = session
         self._accounts = accounts
-        self._provider = provider
+        self._providers = providers
         self._sync = sync
+
+    def provider(self, name: EcommerceProviderName) -> EcommerceProvider:
+        """The adapter for one storefront.
+
+        A KeyError here would be a route naming something the registry
+        does not hold, which the enum in the path makes impossible: an
+        unknown provider is a 422 before any of this runs.
+        """
+        return self._providers[name]
 
     # --- installing --------------------------------------------------------
 
-    def begin_install(self, access: WorkspaceAccess, shop: str) -> Installation:
+    def begin_install(
+        self,
+        access: WorkspaceAccess,
+        name: EcommerceProviderName,
+        shop: str,
+    ) -> Started:
         """Where to send the shop owner to approve this.
 
         Refused if something is already connected here, so that
         connecting a second shop is a deliberate disconnect first rather
         than a silent replacement of the one the assistant has been
-        answering from.
+        answering from -- whichever provider either one is.
         """
         workspace_id = access.workspace.id
-        domain = normalise_shop(shop)
+        provider = self.provider(name)
+        domain = provider.normalise_shop(shop)
         existing = self._accounts.get_for_workspace(workspace_id)
 
         if existing is not None and existing.status == EcommerceAccountStatus.CONNECTED:
             raise StorefrontAlreadyConnectedError(workspace_id)
 
-        return Installation(
-            authorize_url=self._provider.authorize_url(
+        return Started(
+            authorize_url=provider.authorize_url(
                 shop=domain,
                 state=_sign_state(workspace_id, domain),
-                redirect_uri=callback_url(),
+                callback_url=callback_url(name),
+                return_url=return_url(name),
             ),
             shop_domain=domain,
         )
 
-    def complete_install(self, params: dict[str, str]) -> EcommerceAccount:
+    def complete_install(
+        self,
+        name: EcommerceProviderName,
+        callback: InstallCallback,
+    ) -> EcommerceAccount:
         """Finish what begin_install started, on the provider's callback.
 
-        Three things have to hold, and all three fail the same way. The
-        provider's HMAC has to verify, the state has to be one this
-        application signed and not yet expired, and the shop named in the
-        state has to be the shop in the callback -- otherwise an operator
-        who could get a shop owner to approve one installation could
-        attach a different shop to their own workspace.
+        The state is read first and by this service rather than by the
+        adapter, because it is the one thing both flows have in common
+        and the only thing either of them can be trusted on. Shopify's
+        callback is signed and WooCommerce's is not signed at all, so for
+        WooCommerce a valid state is the whole of the proof -- which is
+        why it is checked here, once, rather than in two adapters.
+
+        Where the provider does name a shop, it has to be the shop the
+        installation was started for. Without that check, somebody who
+        could get one shop owner to approve an installation could attach
+        a different shop to their own workspace.
         """
-        if not self._provider.verify_install(params):
-            raise EcommerceProviderError("The installation callback did not verify")
+        workspace_id, expected_shop = _read_state(callback.params.get("state", ""))
+        installed = self.provider(name).complete_install(callback)
 
-        workspace_id, expected_shop = _read_state(params.get("state", ""))
-        shop = normalise_shop(params.get("shop", ""))
-
-        if shop != expected_shop:
+        if installed.shop is not None and installed.shop != expected_shop:
             raise EcommerceProviderError("The callback names a different shop")
 
-        code = params.get("code")
-
-        if not code:
-            raise EcommerceProviderError("The callback carried no code")
-
-        token = self._provider.exchange_code(shop=shop, code=code)
-
-        return self._store(workspace_id, shop, token)
+        return self._store(name, workspace_id, expected_shop, installed.secret)
 
     def _store(
         self,
+        name: EcommerceProviderName,
         workspace_id: uuid.UUID,
         shop: str,
-        token: str,
+        secret: str,
     ) -> EcommerceAccount:
         existing = self._accounts.get_by_shop_domain(shop)
 
@@ -168,7 +198,7 @@ class EcommerceService:
 
             account = self._accounts.reconnect(
                 existing,
-                access_token_encrypted=encrypt(token),
+                credentials_encrypted=encrypt(secret),
             )
             self._session.commit()
 
@@ -177,9 +207,9 @@ class EcommerceService:
         try:
             account = self._accounts.create(
                 workspace_id=workspace_id,
-                provider=self._provider.name,
+                provider=name,
                 shop_domain=shop,
-                access_token_encrypted=encrypt(token),
+                credentials_encrypted=encrypt(secret),
             )
             self._session.commit()
         except IntegrityError as exc:
@@ -208,18 +238,22 @@ class EcommerceService:
         same upsert, run over everything rather than over one record.
         """
         account = self._live(access.workspace.id)
-        token = decrypt(account.access_token_encrypted)
+        # Whichever storefront this workspace connected, rather than the
+        # one in the path: a workspace has one, and reading it is reading
+        # that one.
+        provider = self.provider(account.provider)
+        secret = decrypt(account.credentials_encrypted)
         report = SyncReport()
 
-        for product in self._provider.fetch_products(
+        for product in provider.fetch_products(
             shop=account.shop_domain,
-            access_token=token,
+            secret=secret,
         ):
             self._sync.upsert_product(account.workspace_id, product, report)
 
-        for order in self._provider.fetch_orders(
+        for order in provider.fetch_orders(
             shop=account.shop_domain,
-            access_token=token,
+            secret=secret,
         ):
             self._sync.upsert_order(account.workspace_id, order, report)
 
@@ -260,13 +294,32 @@ class EcommerceService:
         return account
 
 
-def callback_url() -> str:
+def callback_url(name: EcommerceProviderName) -> str:
+    return f"{_api_base()}{CALLBACK_PATH.format(provider=name.value)}"
+
+
+def return_url(name: EcommerceProviderName) -> str:
+    """Where the browser lands once the store has handed its keys over.
+
+    The dashboard, not this API -- what the shop owner should see next is
+    their own settings page saying it worked. Falls back to the API's own
+    callback path where no frontend is configured, which is a laptop.
+    """
+    base = get_settings().frontend_base_url
+
+    if base is None:
+        return callback_url(name)
+
+    return f"{base.rstrip('/')}{RETURN_PATH.format(provider=name.value)}"
+
+
+def _api_base() -> str:
     base = get_settings().api_base_url
 
     if base is None:
         raise EcommerceProviderError("api_base_url is not configured")
 
-    return f"{base.rstrip('/')}{CALLBACK_PATH}"
+    return base.rstrip("/")
 
 
 def _sign_state(workspace_id: uuid.UUID, shop: str) -> str:
@@ -327,13 +380,13 @@ EcommerceAccountRepositoryDep = Annotated[
 def get_ecommerce_service(
     session: SessionDep,
     accounts: EcommerceAccountRepositoryDep,
-    provider: EcommerceProviderDep,
+    providers: EcommerceProvidersDep,
     sync: EcommerceSyncServiceDep,
 ) -> EcommerceService:
     return EcommerceService(
         session=session,
         accounts=accounts,
-        provider=provider,
+        providers=providers,
         sync=sync,
     )
 

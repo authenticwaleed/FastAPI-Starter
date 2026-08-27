@@ -11,7 +11,7 @@ import hashlib
 import hmac
 import logging
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -22,6 +22,8 @@ from app.core.config import get_settings
 from app.core.exceptions import EcommerceProviderError
 from app.integrations.ecommerce.base import (
     EcommerceProviderName,
+    Installation,
+    InstallCallback,
     RemoteCustomer,
     RemoteOrder,
     RemoteProduct,
@@ -60,12 +62,24 @@ _TOPICS = {
 # Shopify's maximum, so this is 50,000 products.
 _MAX_PAGES = 200
 
+# How the one-time code is traded for a token. Injected rather than
+# called directly, the same way SmtpEmailSender takes its connection: the
+# part worth testing here is the verification in front of it and what is
+# done with what comes back, and neither needs a socket.
+Exchange = Callable[[str, str], str]
+
 
 class ShopifyProvider:
     """The Shopify Admin API, behind `EcommerceProvider`."""
 
-    def __init__(self, *, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: float = 30.0,
+        exchange: Exchange | None = None,
+    ) -> None:
         self._timeout = timeout
+        self._exchange = exchange or self._request_token
 
     @property
     def name(self) -> EcommerceProviderName:
@@ -73,7 +87,23 @@ class ShopifyProvider:
 
     # --- installing --------------------------------------------------------
 
-    def authorize_url(self, *, shop: str, state: str, redirect_uri: str) -> str:
+    def normalise_shop(self, shop: str) -> str:
+        return normalise_shop(shop)
+
+    def authorize_url(
+        self,
+        *,
+        shop: str,
+        state: str,
+        callback_url: str,
+        return_url: str,
+    ) -> str:
+        """Shopify's OAuth grant screen.
+
+        `return_url` is unused: Shopify sends the browser straight back
+        to the redirect URI with the grant on it, so there is no second
+        place to land.
+        """
         settings = get_settings()
         key = settings.shopify_api_key
 
@@ -84,14 +114,30 @@ class ShopifyProvider:
             {
                 "client_id": key.get_secret_value(),
                 "scope": settings.shopify_scopes,
-                "redirect_uri": redirect_uri,
+                "redirect_uri": callback_url,
                 "state": state,
             }
         )
 
         return f"https://{normalise_shop(shop)}/admin/oauth/authorize?{query}"
 
-    def verify_install(self, params: Mapping[str, str]) -> bool:
+    def complete_install(self, callback: InstallCallback) -> Installation:
+        """Verify Shopify's HMAC, then trade the code for a token."""
+        params = callback.params
+
+        if not self._verify_install(params):
+            raise EcommerceProviderError("The installation callback did not verify")
+
+        code = params.get("code")
+
+        if not code:
+            raise EcommerceProviderError("The callback carried no code")
+
+        shop = normalise_shop(params.get("shop", ""))
+
+        return Installation(secret=self._exchange(shop, code), shop=shop)
+
+    def _verify_install(self, params: Mapping[str, str]) -> bool:
         """Check the HMAC Shopify puts on its OAuth callback.
 
         Signed over the query string with the `hmac` parameter removed
@@ -116,7 +162,7 @@ class ShopifyProvider:
 
         return hmac.compare_digest(expected, given)
 
-    def exchange_code(self, *, shop: str, code: str) -> str:
+    def _request_token(self, shop: str, code: str) -> str:
         domain = normalise_shop(shop)
         settings = get_settings()
         key = settings.shopify_api_key
@@ -199,9 +245,9 @@ class ShopifyProvider:
         self,
         *,
         shop: str,
-        access_token: str,
+        secret: str,
     ) -> Iterator[RemoteProduct]:
-        for page in self._pages(shop, access_token, "products"):
+        for page in self._pages(shop, secret, "products"):
             for item in page.get("products", []):
                 yield self._product(item)
 
@@ -209,11 +255,11 @@ class ShopifyProvider:
         self,
         *,
         shop: str,
-        access_token: str,
+        secret: str,
     ) -> Iterator[RemoteOrder]:
         for page in self._pages(
             shop,
-            access_token,
+            secret,
             "orders",
             params={"status": "any"},
         ):

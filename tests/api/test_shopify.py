@@ -196,7 +196,7 @@ def test_the_token_is_never_stored_in_the_clear(
         uuid.UUID(acme.workspace_id)
     )
     assert account is not None
-    assert ecommerce_provider.token not in account.access_token_encrypted
+    assert ecommerce_provider.token not in account.credentials_encrypted
 
 
 def test_reading_what_is_connected_never_returns_the_token(
@@ -630,7 +630,7 @@ def test_disconnecting_destroys_the_token(
         uuid.UUID(acme.workspace_id)
     )
     assert account is not None
-    assert account.access_token_encrypted == ""
+    assert account.credentials_encrypted == ""
     assert account.status is EcommerceAccountStatus.DISCONNECTED
 
 

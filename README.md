@@ -140,14 +140,15 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `…/{workspace_id}/integrations/whatsapp/connect` | Connect a number |
 | GET | `…/{workspace_id}/integrations/whatsapp` | What is connected |
 | DELETE | `…/{workspace_id}/integrations/whatsapp` | Disconnect it |
-| POST | `…/integrations/shopify/install` | Start a storefront installation |
-| GET | `…/integrations/shopify` | What is connected |
-| POST | `…/integrations/shopify/sync` | Read the whole shop again |
-| DELETE | `…/integrations/shopify` | Disconnect it |
-| GET | `/api/v1/integrations/shopify/callback` | Shopify's OAuth callback |
+| POST | `…/integrations/{provider}/install` | Start a storefront installation |
+| GET | `…/integrations/{provider}` | What is connected |
+| POST | `…/integrations/{provider}/sync` | Read the whole shop again |
+| DELETE | `…/integrations/{provider}` | Disconnect it |
+| GET | `/api/v1/integrations/{provider}/callback` | Shopify's OAuth redirect |
+| POST | `/api/v1/integrations/{provider}/callback` | WooCommerce's key handover |
 | GET | `/api/v1/webhooks/whatsapp` | Meta's subscription handshake |
 | POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
-| POST | `/api/v1/webhooks/shopify` | Shopify's deliveries |
+| POST | `/api/v1/webhooks/{provider}` | A storefront's deliveries |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -569,19 +570,45 @@ the work they do all day.
 
 ### Connecting a storefront
 
-Shopify, over OAuth. `POST …/integrations/shopify/install` returns a URL on
-the shop's own domain; the owner approves it there, and Shopify calls
-`GET /api/v1/integrations/shopify/callback`. Which workspace an
-installation belongs to travels in a signed `state` — an app is configured
-with one redirect URI, so the callback cannot say otherwise. The shop
-domain is signed into that state as well, and checked against the callback:
-without it, somebody who could get one shop owner to approve an
-installation could attach a different shop to their own workspace.
+Two of them — **Shopify** and **WooCommerce** — behind one interface.
+`{provider}` is a path parameter, so `…/integrations/shopify/install` and
+`…/integrations/woocommerce/install` are the same four operations with a
+different adapter behind them, and an unknown provider is a `422` before
+any handler runs. One storefront per workspace, whichever it is.
 
-The access token is encrypted at rest with the same key provider tokens
-already use. It grants read access to a business's whole catalogue and
-every order it has taken, which is one more reason production refuses to
-start without `ENCRYPTION_KEY`.
+The two installations genuinely differ, and that is why the seam is shaped
+the way it is rather than being Shopify's flow with a second name on it:
+
+| | Shopify | WooCommerce |
+| --- | --- | --- |
+| Flow | OAuth: redirect back with `?code=` | store POSTs the keys, then redirects |
+| Callback proof | HMAC over the query string | **nothing** — the signed `state` is all of it |
+| Credentials | one access token | a consumer key *and* secret |
+| Webhook secret | the app secret you already hold | one the shop owner types in |
+| Address | `something.myshopify.com` | wherever WordPress lives |
+
+Which workspace an installation belongs to travels in a signed `state`,
+because a storefront app is configured with a single callback URL. The shop
+is signed into that state too and checked against whatever the provider
+says: without that, somebody who could get one shop owner to approve an
+installation could attach a different shop to their own workspace. For
+WooCommerce the state is the *only* proof, since nothing about its POST is
+signed — which is why it is checked once, in the service, rather than
+twice in two adapters.
+
+Credentials are encrypted at rest with the same key provider tokens
+already use, and stored as one opaque string that only the adapter which
+produced it takes apart. Either kind grants read access to a business's
+whole catalogue and every order it has taken, which is one more reason
+production refuses to start without `ENCRYPTION_KEY`.
+
+A WooCommerce address is checked before it is ever dialled — https only, no
+port, no path, and no loopback or private literal. This server makes
+requests to whatever address a caller supplies, and on a cloud host
+`169.254.169.254` is the machine's own credentials. What that check does
+*not* do is resolve the name and see where it points, so a hostname that
+resolves inward walks past it; `app/integrations/ecommerce/hosts.py` says
+so, and says what closing it would take.
 
 Everything the storefront sends is an **upsert keyed on the storefront's
 own id**, which is what makes a repeated delivery harmless — a provider
@@ -597,11 +624,19 @@ Disconnecting, and `app/uninstalled`, destroy the token and keep
 everything already synced. A business that uninstalls has stopped granting
 access; it has not asked to lose its own catalogue.
 
-`app/integrations/ecommerce/base.py` is the wall the plan asks for: a
-Shopify payload becomes `RemoteProduct` and `RemoteOrder` there, and
-nothing downstream has heard of a `variants` array or an
-`inventory_management` flag. WooCommerce is the next phase and the same
-shape.
+`app/integrations/ecommerce/base.py` is the wall the plan asks for. A
+payload becomes `RemoteProduct` and `RemoteOrder` there, and nothing
+downstream has heard of a `variants` array, an `inventory_management`
+flag, or a `date_modified_gmt`. Adding WooCommerce added one adapter and
+one migration widening a `CHECK` constraint; the sync, the catalogue, the
+orders, the account table and the webhook handler are the ones Shopify
+already used.
+
+Both adapters carry the same distinction about stock, and both get it from
+a different field: Shopify sends `inventory_quantity` as a present,
+meaningless zero when tracking is off, and WooCommerce sends
+`stock_quantity: null` with `manage_stock: false`. Either way a shop that
+has never counted arrives as "not tracked" rather than as "out of stock".
 
 ## Configuration
 
@@ -645,6 +680,7 @@ production.
 | `SHOPIFY_API_KEY` | unset | Without it, no storefront can be installed |
 | `SHOPIFY_API_SECRET` | unset | Signs the OAuth callback and every webhook |
 | `SHOPIFY_SCOPES` | read-only | Products, orders and customers |
+| `WOOCOMMERCE_WEBHOOK_SECRET` | unset | Without it, no Woo delivery verifies |
 | `WHATSAPP_VERIFY_TOKEN` | unset | Echoed back during Meta's webhook setup |
 | `WHATSAPP_APP_SECRET` | unset | Signs every delivery. Without it, none authenticate |
 | `VOYAGE_API_KEY` | unset | Embeddings. Without it, ingestion refuses clearly |
@@ -844,6 +880,14 @@ Worth knowing before this is used for something real:
   job is the background-jobs phase, and nothing above it changes.
 - **One storefront per workspace**, and one workspace per shop. More is a
   plan feature and a migration.
+- **A WooCommerce address is checked by shape, not by where it resolves.**
+  https only, no port, no path, no loopback or private literal — which
+  catches the whole obvious class, and not a hostname that resolves inward.
+  Closing that means resolving here and connecting to the resolved
+  address, which is a custom transport rather than a regular expression.
+- **WooCommerce keeps no tracking fields of its own.** They live in
+  whichever shipping plugin the shop installed; the two `meta_data` keys
+  the common ones use are read, and a shop using a third is not.
 
 ## Layout
 

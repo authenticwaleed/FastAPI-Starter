@@ -23,13 +23,13 @@ class EcommerceAccountRepository:
         workspace_id: uuid.UUID,
         provider: EcommerceProviderName,
         shop_domain: str,
-        access_token_encrypted: str,
+        credentials_encrypted: str,
     ) -> EcommerceAccount:
         account = EcommerceAccount(
             workspace_id=workspace_id,
             provider=provider,
             shop_domain=shop_domain,
-            access_token_encrypted=access_token_encrypted,
+            credentials_encrypted=credentials_encrypted,
         )
 
         self._session.add(account)
@@ -59,7 +59,7 @@ class EcommerceAccountRepository:
         self,
         account: EcommerceAccount,
         *,
-        access_token_encrypted: str,
+        credentials_encrypted: str,
     ) -> EcommerceAccount:
         """A shop that was uninstalled and installed again.
 
@@ -67,7 +67,7 @@ class EcommerceAccountRepository:
         synced stays attached to it -- and so a shop that reconnects
         picks up where it left off instead of arriving as a stranger.
         """
-        account.access_token_encrypted = access_token_encrypted
+        account.credentials_encrypted = credentials_encrypted
         account.status = EcommerceAccountStatus.CONNECTED
         self._session.flush()
 
@@ -94,7 +94,7 @@ class EcommerceAccountRepository:
         account.status = EcommerceAccountStatus.DISCONNECTED
         # Overwritten rather than left to expire. A revoked token is
         # worthless to the application and still worth stealing.
-        account.access_token_encrypted = ""
+        account.credentials_encrypted = ""
         self._session.flush()
 
         return account

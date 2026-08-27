@@ -20,13 +20,10 @@ from typing import Any, Protocol
 
 
 class EcommerceProviderName(StrEnum):
-    """Which storefront is behind the connection.
-
-    One value today. WooCommerce is the reason this is a column rather
-    than an assumption baked into the sync.
-    """
+    """Which storefront is behind the connection."""
 
     SHOPIFY = "shopify"
+    WOOCOMMERCE = "woocommerce"
 
 
 class WebhookTopic(StrEnum):
@@ -109,6 +106,40 @@ class RemoteOrder:
 
 
 @dataclass(frozen=True)
+class InstallCallback:
+    """Everything the provider sent to finish an installation.
+
+    Both halves, because the two providers use different ones. Shopify
+    redirects a browser back with its grant in the query string; a
+    WooCommerce store POSTs the credentials to a callback URL as JSON,
+    server to server, and sends the browser somewhere else entirely.
+    """
+
+    params: Mapping[str, str]
+    body: bytes = b""
+
+
+@dataclass(frozen=True)
+class Installation:
+    """What a finished installation handed over.
+
+    `secret` is opaque above this layer. Shopify's is an access token;
+    WooCommerce's is a key and a secret together. Nothing but the adapter
+    that produced it ever takes it apart, which is what lets one
+    encrypted column hold either.
+
+    `shop` is what the provider itself says the installation was for, or
+    None where it does not say. Shopify names the shop in its callback,
+    and the service checks that against the shop the installation was
+    started for; WooCommerce names nothing, so the signed state is the
+    only thing that decides.
+    """
+
+    secret: str
+    shop: str | None = None
+
+
+@dataclass(frozen=True)
 class WebhookEvent:
     """One delivery, sorted into something the sync can act on.
 
@@ -136,18 +167,43 @@ class EcommerceProvider(Protocol):
     @property
     def name(self) -> EcommerceProviderName: ...
 
-    def authorize_url(self, *, shop: str, state: str, redirect_uri: str) -> str:
-        """Where to send a shop owner to approve the installation."""
+    def normalise_shop(self, shop: str) -> str:
+        """The canonical form of a shop's address, or a refusal.
+
+        Each provider knows what one of its own looks like -- Shopify
+        issues `something.myshopify.com`, a WooCommerce store is wherever
+        its owner put WordPress -- and this is the only piece of a URL
+        that a caller supplies, so the check belongs beside the knowledge
+        rather than in a shared guess. Raises EcommerceProviderError for
+        anything it will not accept.
+        """
         ...
 
-    def verify_install(self, params: Mapping[str, str]) -> bool:
-        """Whether this callback really came from the provider."""
+    def authorize_url(
+        self,
+        *,
+        shop: str,
+        state: str,
+        callback_url: str,
+        return_url: str,
+    ) -> str:
+        """Where to send a shop owner to approve the installation.
+
+        Both URLs are offered because the two flows use them
+        differently. Shopify redirects the browser to `callback_url`
+        carrying its grant and has no use for `return_url`; a WooCommerce
+        store POSTs to `callback_url` behind the scenes and then sends
+        the browser to `return_url`.
+        """
         ...
 
-    def exchange_code(self, *, shop: str, code: str) -> str:
-        """Trade the one-time code for a lasting access token.
+    def complete_install(self, callback: InstallCallback) -> Installation:
+        """Turn the provider's callback into credentials worth storing.
 
-        Raises EcommerceProviderError if the provider refuses.
+        Verifies whatever the provider offers as proof, and does any
+        exchange the flow needs. Raises EcommerceProviderError if any of
+        that does not hold -- one answer for every way of failing,
+        because whoever sent it has proved nothing.
         """
         ...
 
@@ -167,11 +223,9 @@ class EcommerceProvider(Protocol):
         self,
         *,
         shop: str,
-        access_token: str,
+        secret: str,
     ) -> Iterable[RemoteProduct]:
         """Every product in the shop, for the first sync."""
         ...
 
-    def fetch_orders(
-        self, *, shop: str, access_token: str
-    ) -> Iterable[RemoteOrder]: ...
+    def fetch_orders(self, *, shop: str, secret: str) -> Iterable[RemoteOrder]: ...

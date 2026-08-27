@@ -19,13 +19,16 @@ from app.api.errors import RATE_LIMITED
 from app.core.config import get_settings
 from app.core.exceptions import InvalidWebhookError
 from app.core.rate_limit import RateLimited
-from app.integrations.ecommerce.base import WebhookEvent, WebhookTopic
+from app.integrations.ecommerce.base import (
+    EcommerceProviderName,
+    WebhookEvent,
+    WebhookTopic,
+)
 from app.models.ecommerce_account import EcommerceAccountStatus
 from app.services.ai_dispatch import SessionSourceDep, answer_inbound
 from app.services.ai_response_service import ReplyWriterDep
 from app.services.ecommerce_service import (
     EcommerceAccountRepositoryDep,
-    EcommerceProviderDep,
     EcommerceServiceDep,
 )
 from app.services.ecommerce_sync_service import (
@@ -170,22 +173,33 @@ async def receive_whatsapp_webhook(
 
 
 @router.post(
-    "/shopify",
+    "/{provider}",
     status_code=status.HTTP_200_OK,
     responses=RATE_LIMITED,
 )
-async def receive_shopify_webhook(
+async def receive_storefront_webhook(
+    provider: EcommerceProviderName,
     request: Request,
-    provider: EcommerceProviderDep,
     storefronts: EcommerceServiceDep,
     sync: EcommerceSyncServiceDep,
     accounts: EcommerceAccountRepositoryDep,
     limiter: RateLimiterDep,
-    signature: Annotated[str | None, Header(alias="X-Shopify-Hmac-Sha256")] = None,
-    topic: Annotated[str | None, Header(alias="X-Shopify-Topic")] = None,
-    shop: Annotated[str | None, Header(alias="X-Shopify-Shop-Domain")] = None,
+    shopify_signature: Annotated[
+        str | None, Header(alias="X-Shopify-Hmac-Sha256")
+    ] = None,
+    shopify_topic: Annotated[str | None, Header(alias="X-Shopify-Topic")] = None,
+    shopify_shop: Annotated[str | None, Header(alias="X-Shopify-Shop-Domain")] = None,
+    woo_signature: Annotated[str | None, Header(alias="X-WC-Webhook-Signature")] = None,
+    woo_topic: Annotated[str | None, Header(alias="X-WC-Webhook-Topic")] = None,
+    woo_source: Annotated[str | None, Header(alias="X-WC-Webhook-Source")] = None,
 ) -> dict[str, str]:
-    """Take delivery of whatever the storefront is telling us.
+    """Take delivery of whatever a storefront is telling us.
+
+    One handler for both, because the two deliveries differ only in which
+    headers carry the signature, the topic and the shop -- and every
+    header a provider does not send simply arrives as None. Below the
+    three lines that pick them out, nothing knows which storefront this
+    is. `/webhooks/shopify` is still exactly that path.
 
     Async for the reason the WhatsApp webhook is: the signature covers
     the raw body byte for byte, and reading that body is what needs
@@ -209,29 +223,35 @@ async def receive_shopify_webhook(
     sender = client_address(request)
     limiter.check(RateLimited.WEBHOOK_REJECTIONS, sender)
 
+    adapter = storefronts.provider(provider)
+    shopify = provider is EcommerceProviderName.SHOPIFY
+    signature = shopify_signature if shopify else woo_signature
+    topic = shopify_topic if shopify else woo_topic
+    shop = shopify_shop if shopify else woo_source
+
     body = await request.body()
 
-    if not provider.verify_webhook(payload=body, signature=signature):
+    if not adapter.verify_webhook(payload=body, signature=signature):
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
-        logger.warning("A Shopify delivery did not verify")
+        logger.warning("A %s delivery did not verify", provider.value)
         raise InvalidWebhookError
 
     try:
         payload: Any = json.loads(body)
     except ValueError as exc:
-        logger.warning("A signed Shopify delivery was not JSON")
+        logger.warning("A signed %s delivery was not JSON", provider.value)
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
         raise InvalidWebhookError from exc
 
     if not isinstance(payload, dict):
         return {"status": "ignored"}
 
-    event = provider.parse_webhook(topic=topic, shop=shop, payload=payload)
+    event = adapter.parse_webhook(topic=topic, shop=shop, payload=payload)
 
     if event.topic is None:
         # Subscribed to something nothing here acts on. Acknowledged, so
         # it is not retried, and logged once so somebody can notice.
-        logger.info("Ignoring an unhandled Shopify topic: %s", topic)
+        logger.info("Ignoring an unhandled %s topic: %s", provider.value, topic)
 
         return {"status": "ignored"}
 
@@ -246,7 +266,7 @@ async def receive_shopify_webhook(
         # A shop nothing here is connected to. Acknowledged rather than
         # refused: the delivery is real, it is simply not ours, and a
         # non-200 would have the provider retry it for a day.
-        logger.info("Ignoring a Shopify delivery for a shop we do not hold")
+        logger.info("Ignoring a delivery for a shop we do not hold")
 
         return {"status": "ignored"}
 

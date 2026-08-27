@@ -42,8 +42,17 @@ api_router.include_router(ai.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(products.router)
 api_router.include_router(orders.router)
+api_router.include_router(analytics.router)
+# Before the storefront routes, and this order is load-bearing. Both hang
+# off `/integrations/`, and the storefront ones take the provider as a
+# path parameter -- so `…/integrations/whatsapp` would match
+# `…/integrations/{provider}` and be refused as an unknown storefront.
+# Starlette matches in registration order, so a literal registered first
+# wins. Two tests pin this, one per pair, because a re-order here is a
+# silent 422 on a route nobody was thinking about.
+api_router.include_router(whatsapp.router)
 api_router.include_router(ecommerce.router)
 api_router.include_router(ecommerce.callback_router)
-api_router.include_router(analytics.router)
-api_router.include_router(whatsapp.router)
+# Same rule again: the WhatsApp webhook is a literal path and the
+# storefront one is `/webhooks/{provider}`, both inside this router.
 api_router.include_router(webhooks.router)

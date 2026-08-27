@@ -108,6 +108,15 @@ class Settings(BaseSettings):
     # asking a shop owner to trust it with something it never uses.
     shopify_scopes: str = "read_products,read_orders,read_customers"
 
+    # Installing a WooCommerce store. Different in shape from Shopify's
+    # credentials, and the difference is the store's rather than a
+    # choice: WooCommerce signs its webhooks with a secret whoever
+    # created the webhook typed into a form, so this application
+    # publishes one and asks for it to be used. Without it, nothing
+    # verifies -- which is refusing every delivery, and is the right way
+    # round.
+    woocommerce_webhook_secret: SecretStr | None = None
+
     # Turns a business's knowledge into vectors, and a customer's question
     # into one to compare against them. Optional, like the WhatsApp
     # credentials: everything that is not the knowledge base works without
@@ -216,6 +225,7 @@ class Settings(BaseSettings):
         "api_base_url",
         "shopify_api_key",
         "shopify_api_secret",
+        "woocommerce_webhook_secret",
         "frontend_base_url",
         "smtp_host",
         "smtp_username",

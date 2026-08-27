@@ -1986,6 +1986,10 @@ Follow the same internal integration interface as Shopify.
 
 Do not duplicate business logic.
 
+- [x] same interface, one adapter added
+- [x] no business logic duplicated
+- [x] install, sync, webhooks and disconnect all reuse Shopify's path
+
 ```text
 EcommerceProvider
         |

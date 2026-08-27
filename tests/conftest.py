@@ -22,6 +22,7 @@ from app.core.config import get_settings
 from app.core.encryption import _cipher
 from app.core.rate_limit import RateLimiter
 from app.db.session import get_db_session, get_engine, get_session_factory
+from app.integrations.ecommerce.base import EcommerceProviderName
 from app.main import create_app
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -44,11 +45,11 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_dispatch import get_session_source
 from app.services.ai_response_service import get_reply_writer
-from app.services.ecommerce_service import get_ecommerce_provider
+from app.services.ecommerce_service import get_ecommerce_providers
 from app.services.email_dispatch import get_email_sender
 from app.services.knowledge_service import get_embedding_provider
 from app.services.whatsapp_service import get_messaging_provider
-from tests.support.ecommerce import FakeEcommerceProvider
+from tests.support.ecommerce import FakeEcommerceProvider, fake_providers
 from tests.support.email import FakeEmailSender
 from tests.support.knowledge import FakeEmbeddingProvider, FakeReplyWriter
 from tests.support.messaging import FakeMessagingProvider
@@ -103,6 +104,7 @@ os.environ.setdefault("WHATSAPP_APP_SECRET", "an-app-secret-for-tests")
 # will accept.
 os.environ.setdefault("SHOPIFY_API_KEY", "a-shopify-key-for-tests")
 os.environ.setdefault("SHOPIFY_API_SECRET", "a-shopify-secret-for-tests")
+os.environ.setdefault("WOOCOMMERCE_WEBHOOK_SECRET", "a-woocommerce-secret-for-tests")
 
 os.environ["DATABASE_URL"] = TEST_DATABASE.render_as_string(hide_password=False)
 get_settings.cache_clear()
@@ -291,8 +293,17 @@ def email_sender() -> FakeEmailSender:
 
 
 @pytest.fixture
-def ecommerce_provider() -> FakeEcommerceProvider:
-    return FakeEcommerceProvider()
+def ecommerce_providers() -> dict[EcommerceProviderName, FakeEcommerceProvider]:
+    """One fake per real storefront, so a test can reach either."""
+    return fake_providers()
+
+
+@pytest.fixture
+def ecommerce_provider(
+    ecommerce_providers: dict[EcommerceProviderName, FakeEcommerceProvider],
+) -> FakeEcommerceProvider:
+    """The Shopify one, which is what most of the suite means by "the shop"."""
+    return ecommerce_providers[EcommerceProviderName.SHOPIFY]
 
 
 @pytest.fixture
@@ -315,7 +326,7 @@ def client(
     embedding_provider: FakeEmbeddingProvider,
     reply_writer: FakeReplyWriter,
     email_sender: FakeEmailSender,
-    ecommerce_provider: FakeEcommerceProvider,
+    ecommerce_providers: dict[EcommerceProviderName, FakeEcommerceProvider],
     rate_limiter: RateLimiter,
 ) -> Iterator[TestClient]:
     """A test client sharing the test's rolled-back session.
@@ -344,7 +355,7 @@ def client(
     app.dependency_overrides[get_embedding_provider] = lambda: embedding_provider
     app.dependency_overrides[get_reply_writer] = lambda: reply_writer
     app.dependency_overrides[get_email_sender] = lambda: email_sender
-    app.dependency_overrides[get_ecommerce_provider] = lambda: ecommerce_provider
+    app.dependency_overrides[get_ecommerce_providers] = lambda: ecommerce_providers
     app.dependency_overrides[get_rate_limiter] = lambda: rate_limiter
 
     with TestClient(app) as test_client:
