@@ -1755,10 +1755,10 @@ Store refresh token hashes, not raw tokens.
 
 ## Acceptance criteria
 
-- [ ] refresh works
-- [ ] logout invalidates session
-- [ ] stolen old refresh token cannot be reused indefinitely
-- [ ] session list exists
+- [x] refresh works
+- [x] logout invalidates session
+- [x] stolen old refresh token cannot be reused indefinitely
+- [x] session list exists
 
 ---
 

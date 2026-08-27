@@ -25,6 +25,7 @@ from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.user_session_repository import UserSessionRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
@@ -156,7 +157,8 @@ def engine() -> Iterator[Engine]:
                 "knowledge_documents, knowledge_sources, "
                 "messages, conversations, contacts, "
                 "whatsapp_accounts, workspace_invitations, "
-                "workspace_memberships, workspaces, users "
+                "workspace_memberships, workspaces, "
+                "refresh_tokens, user_sessions, users "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -197,6 +199,11 @@ def db_session(engine: Engine) -> Iterator[Session]:
 @pytest.fixture
 def user_repository(db_session: Session) -> UserRepository:
     return UserRepository(db_session)
+
+
+@pytest.fixture
+def user_session_repository(db_session: Session) -> UserSessionRepository:
+    return UserSessionRepository(db_session)
 
 
 @pytest.fixture

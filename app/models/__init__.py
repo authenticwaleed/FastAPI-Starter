@@ -29,6 +29,11 @@ from app.models.message import (
     SenderType,
 )
 from app.models.user import User
+from app.models.user_session import (
+    RefreshToken,
+    SessionEndReason,
+    UserSession,
+)
 from app.models.whatsapp_account import (
     MessagingProviderName,
     WhatsAppAccount,
@@ -64,9 +69,12 @@ __all__ = [
     "Message",
     "MessageStatus",
     "MessagingProviderName",
+    "RefreshToken",
     "SenderType",
+    "SessionEndReason",
     "SourceType",
     "User",
+    "UserSession",
     "WhatsAppAccount",
     "WhatsAppAccountStatus",
     "Workspace",

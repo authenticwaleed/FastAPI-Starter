@@ -3,8 +3,13 @@
 Hashing was pulled forward from Phase 7 because the NOT NULL
 hashed_password column makes user creation impossible without it. The token
 half arrives with Phase 8, where login finally has a use for verification.
+
+Phase 15 added the session claim. A token now says which sign-in it came
+from as well as who it belongs to, and one without that is not a token
+this application issues.
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -25,9 +30,26 @@ from app.core.security import (
 
 PASSWORD = "correct horse battery staple"
 
+SESSION_ID = uuid.UUID("2f1a4c60-0d5f-4a3f-9a5b-4a0c3e7d1b22")
+
+
+def _token(subject: str = "42", **kwargs: Any) -> str:
+    return create_access_token(subject, session_id=SESSION_ID, **kwargs)
+
 
 def _future() -> datetime:
     return datetime.now(UTC) + timedelta(minutes=5)
+
+
+def _sign(payload: dict[str, Any]) -> str:
+    """Sign a payload of our choosing, to test what decoding refuses."""
+    settings = get_settings()
+
+    return jwt.encode(
+        payload,
+        settings.jwt_secret_key.get_secret_value(),
+        algorithm=settings.jwt_algorithm,
+    )
 
 
 def _read_payload(token: str) -> dict[str, Any]:
@@ -88,11 +110,15 @@ def test_nothing_verifies_against_the_unusable_hash() -> None:
 
 
 def test_a_fresh_token_decodes_to_its_subject() -> None:
-    assert decode_access_token(create_access_token("42")) == "42"
+    assert decode_access_token(_token()).subject == "42"
+
+
+def test_a_fresh_token_names_the_session_it_came_from() -> None:
+    assert decode_access_token(_token()).session_id == SESSION_ID
 
 
 def test_the_token_expires_after_the_configured_lifetime() -> None:
-    payload = _read_payload(create_access_token("42"))
+    payload = _read_payload(_token())
 
     lifetime = payload["exp"] - payload["iat"]
 
@@ -101,12 +127,13 @@ def test_the_token_expires_after_the_configured_lifetime() -> None:
 
 def test_the_token_carries_nothing_but_its_claims() -> None:
     # A JWT payload is signed, not encrypted: anyone holding the token can
-    # read it. Nothing personal belongs in there.
-    assert set(_read_payload(create_access_token("42"))) == {"sub", "iat", "exp"}
+    # read it. Both claims here are identifiers; nothing personal belongs
+    # in there.
+    assert set(_read_payload(_token())) == {"sub", "sid", "iat", "exp"}
 
 
 def test_an_expired_token_is_rejected() -> None:
-    expired = create_access_token("42", expires_in=timedelta(seconds=-1))
+    expired = _token(expires_in=timedelta(seconds=-1))
 
     with pytest.raises(jwt.ExpiredSignatureError):
         decode_access_token(expired)
@@ -115,7 +142,7 @@ def test_an_expired_token_is_rejected() -> None:
 def test_an_expired_token_fails_as_an_invalid_token() -> None:
     # ExpiredSignatureError subclasses InvalidTokenError, so callers can
     # treat "expired" and "forged" identically with one except clause.
-    expired = create_access_token("42", expires_in=timedelta(seconds=-1))
+    expired = _token(expires_in=timedelta(seconds=-1))
 
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(expired)
@@ -123,12 +150,12 @@ def test_an_expired_token_fails_as_an_invalid_token() -> None:
 
 def test_a_tampered_token_is_rejected() -> None:
     with pytest.raises(jwt.InvalidTokenError):
-        decode_access_token(_tamper(create_access_token("42")))
+        decode_access_token(_tamper(_token()))
 
 
 def test_a_token_signed_with_another_key_is_rejected() -> None:
     forged = jwt.encode(
-        {"sub": "42", "exp": _future()},
+        {"sub": "42", "sid": str(SESSION_ID), "exp": _future()},
         "not the application signing key, and long enough not to warn",
         algorithm="HS256",
     )
@@ -140,22 +167,39 @@ def test_a_token_signed_with_another_key_is_rejected() -> None:
 def test_an_unsigned_token_is_rejected() -> None:
     # The classic JWT attack: strip the signature and claim `alg: none`.
     # Pinning algorithms at decode time is what stops it.
-    unsigned = jwt.encode({"sub": "42", "exp": _future()}, None, algorithm="none")
+    unsigned = jwt.encode(
+        {"sub": "42", "sid": str(SESSION_ID), "exp": _future()},
+        None,
+        algorithm="none",
+    )
 
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(unsigned)
 
 
 def test_a_token_without_a_subject_is_rejected() -> None:
-    settings = get_settings()
-    subjectless = jwt.encode(
-        {"exp": _future()},
-        settings.jwt_secret_key.get_secret_value(),
-        algorithm=settings.jwt_algorithm,
-    )
+    subjectless = _sign({"sid": str(SESSION_ID), "exp": _future()})
 
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(subjectless)
+
+
+def test_a_token_without_a_session_is_rejected() -> None:
+    # What this application signed before sessions existed, and what an
+    # attacker would mint if they ever got the key and did not know the
+    # shape. A token with no session behind it cannot be revoked, which is
+    # the reason the claim is there at all.
+    sessionless = _sign({"sub": "42", "exp": _future()})
+
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_access_token(sessionless)
+
+
+def test_a_token_whose_session_is_not_an_id_is_rejected() -> None:
+    nonsense = _sign({"sub": "42", "sid": "not-a-uuid", "exp": _future()})
+
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_access_token(nonsense)
 
 
 def test_garbage_is_rejected() -> None:

@@ -1,5 +1,7 @@
 import hashlib
 import secrets
+import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
@@ -35,8 +37,42 @@ def unusable_hash() -> str:
     return hash_password("no password hashes to this value")
 
 
-def create_access_token(subject: str, *, expires_in: timedelta | None = None) -> str:
-    """Sign a bearer token identifying `subject`.
+@dataclass(frozen=True)
+class AccessTokenClaims:
+    """What a valid access token says, once it has been checked.
+
+    Two claims, both identifiers: who the holder is, and which sign-in
+    they are holding. Nothing personal -- a JWT payload is signed, not
+    encrypted, so anybody with the token can read it.
+    """
+
+    subject: str
+    session_id: uuid.UUID
+
+
+def access_token_lifetime() -> timedelta:
+    """How long a freshly minted access token is good for.
+
+    Short on purpose: it is the window in which a stolen access token is
+    worth anything, and the refresh token is what makes a short one
+    workable. Exposed as a function so `expires_in` in a token response
+    and the `exp` claim cannot disagree.
+    """
+    return timedelta(minutes=get_settings().access_token_expire_minutes)
+
+
+def create_access_token(
+    subject: str,
+    *,
+    session_id: uuid.UUID,
+    expires_in: timedelta | None = None,
+) -> str:
+    """Sign a bearer token identifying `subject` within one session.
+
+    The session is named in the token rather than looked up from the
+    user, which is what lets a request be traced back to the sign-in it
+    came from -- and so what lets signing one device out take effect on
+    the next request rather than whenever the token happened to expire.
 
     `expires_in` overrides the configured lifetime. It exists so tests can
     mint an already-expired token instead of waiting for one to age.
@@ -44,15 +80,12 @@ def create_access_token(subject: str, *, expires_in: timedelta | None = None) ->
     settings = get_settings()
 
     issued_at = datetime.now(UTC)
-    lifetime = (
-        expires_in
-        if expires_in is not None
-        else timedelta(minutes=settings.access_token_expire_minutes)
-    )
+    lifetime = expires_in if expires_in is not None else access_token_lifetime()
 
     return jwt.encode(
         {
             "sub": subject,
+            "sid": str(session_id),
             "iat": issued_at,
             "exp": issued_at + lifetime,
         },
@@ -61,8 +94,8 @@ def create_access_token(subject: str, *, expires_in: timedelta | None = None) ->
     )
 
 
-def decode_access_token(token: str) -> str:
-    """Return the subject of a valid token.
+def decode_access_token(token: str) -> AccessTokenClaims:
+    """Return the claims of a valid token.
 
     Raises `jwt.InvalidTokenError` if the signature, the expiry or the
     payload does not hold up. `ExpiredSignatureError` is a subclass of it,
@@ -84,7 +117,18 @@ def decode_access_token(token: str) -> str:
     if not isinstance(subject, str):
         raise jwt.InvalidTokenError("token carries no subject")
 
-    return subject
+    session_id = payload.get("sid")
+
+    if not isinstance(session_id, str):
+        # Correctly signed, but not by any version of this application
+        # that issues tokens now. A token with no session behind it
+        # cannot be revoked, which is the whole point of carrying one.
+        raise jwt.InvalidTokenError("token carries no session")
+
+    try:
+        return AccessTokenClaims(subject=subject, session_id=uuid.UUID(session_id))
+    except ValueError:
+        raise jwt.InvalidTokenError("token carries no session") from None
 
 
 def generate_token() -> str:

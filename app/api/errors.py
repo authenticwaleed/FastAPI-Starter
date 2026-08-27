@@ -25,6 +25,7 @@ from app.core.exceptions import (
     InsufficientWorkspaceRoleError,
     InvalidCredentialsError,
     InvalidDateRangeError,
+    InvalidRefreshTokenError,
     InvalidWebhookError,
     InvitationAlreadyAcceptedError,
     InvitationExpiredError,
@@ -36,7 +37,9 @@ from app.core.exceptions import (
     MembershipNotFoundError,
     MessagingProviderError,
     PendingInvitationExistsError,
+    RefreshTokenReusedError,
     ReplyProviderError,
+    SessionNotFoundError,
     SlugAlreadyExistsError,
     UnknownTimezoneError,
     UnreadableDocumentError,
@@ -79,6 +82,23 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     IncorrectPasswordError: _Answer(
         status.HTTP_400_BAD_REQUEST,
         "incorrect_password",
+    ),
+    InvalidRefreshTokenError: _Answer(
+        status.HTTP_401_UNAUTHORIZED,
+        "invalid_refresh_token",
+        {"WWW-Authenticate": "Bearer"},
+    ),
+    # Its own code although it subclasses the one above, because a client
+    # has something to do about this one: stop retrying, throw the tokens
+    # away and send the user back to the login screen.
+    RefreshTokenReusedError: _Answer(
+        status.HTTP_401_UNAUTHORIZED,
+        "refresh_token_reused",
+        {"WWW-Authenticate": "Bearer"},
+    ),
+    SessionNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "session_not_found",
     ),
     WorkspaceNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
@@ -343,6 +363,14 @@ BAD_REQUEST = _documented(
 )
 CONFLICT = _documented(status.HTTP_409_CONFLICT, "Email already registered")
 UNAUTHORISED = _documented(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+REFRESH_UNAUTHORISED = _documented(
+    status.HTTP_401_UNAUTHORIZED,
+    "The refresh token is unknown, spent, or its session has ended",
+)
+SESSION_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No live session of yours has that id",
+)
 FORBIDDEN = _documented(status.HTTP_403_FORBIDDEN, "Inactive user")
 
 # A route documents one description per status code, so where two errors

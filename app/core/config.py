@@ -23,7 +23,19 @@ class Settings(BaseSettings):
     # SecretStr keeps the value out of reprs and stray log lines.
     jwt_secret_key: SecretStr
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+
+    # Short, because an access token cannot be taken back mid-flight the
+    # way a refresh token can: it is checked against its session on every
+    # request, but a request already in progress is already in progress.
+    # Fifteen minutes is the window a stolen one is worth anything for.
+    access_token_expire_minutes: int = 15
+
+    # How long a session survives being idle. Every refresh pushes it out
+    # again, so this is "sign me out if I disappear for a month" rather
+    # than a fixed date -- which is what a dashboard people use weekly
+    # wants, and short enough that a laptop left in a hotel does not stay
+    # signed in for a year.
+    refresh_token_expire_days: int = 30
 
     # How long an invitation link stays usable. A week is long enough to
     # survive somebody being on holiday and short enough that a link found

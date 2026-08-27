@@ -66,12 +66,17 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `/api/v1/health/live` | Liveness probe |
 | GET | `/api/v1/health/ready` | Readiness probe, checks the database |
 | POST | `/api/v1/auth/register` | Create an account |
-| POST | `/api/v1/auth/login` | Exchange credentials for a token |
+| POST | `/api/v1/auth/login` | Exchange credentials for a token pair |
+| POST | `/api/v1/auth/refresh` | Exchange the refresh token for a new pair |
+| POST | `/api/v1/auth/logout` | End the session that token belongs to |
 | GET | `/api/v1/auth/me` | The current user, requires a token |
 | GET | `/api/v1/account` | Read your own account |
 | PATCH | `/api/v1/account` | Change your own name or email |
 | POST | `/api/v1/account/change-password` | Replace your password |
 | DELETE | `/api/v1/account` | Delete your own account |
+| GET | `/api/v1/account/sessions` | Where you are signed in |
+| DELETE | `/api/v1/account/sessions/{session_id}` | Sign one device out |
+| DELETE | `/api/v1/account/sessions` | Sign out everywhere |
 | POST | `/api/v1/workspaces` | Create a workspace; you become its owner |
 | GET | `/api/v1/workspaces` | List the workspaces you belong to |
 | GET | `/api/v1/workspaces/{workspace_id}` | Read one workspace |
@@ -124,12 +129,58 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `/api/v1/webhooks/whatsapp` | Meta's subscription handshake |
 | POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
 
-Protected endpoints take `Authorization: Bearer <token>`. The two webhook
-routes are not: their caller is Meta, which has no account here.
+Protected endpoints take `Authorization: Bearer <access_token>`. The two
+webhook routes are not: their caller is Meta, which has no account here.
+`/auth/refresh` and `/auth/logout` are not either — the refresh token in
+the body is the credential, and requiring a live access token would make
+both useless at the only moment they are needed.
 
 Everything under `/account` acts on the account the token belongs to. None
 of those paths takes a user id, which is deliberate: there is no id for a
 caller to substitute, and so no ownership check for anyone to forget.
+
+### Sessions
+
+Logging in opens a **session** and returns two tokens. The access token is
+short-lived and goes in the header of every request. The refresh token
+buys the next access token, is good for exactly one use, and is what a
+client should keep out of reach of a script.
+
+```text
+POST /auth/login    ->  access_token (15 min)  +  refresh_token
+POST /auth/refresh  ->  a new one of each; the one you sent is now spent
+```
+
+Every refresh replaces both halves and pushes the session's deadline out
+again, so `REFRESH_TOKEN_EXPIRE_DAYS` is an idle timeout: a session dies
+when nobody has used it for that long, not on a fixed date.
+
+A session is a **chain** of refresh tokens rather than one long-lived key,
+and each spent link is kept while the session lives. That is what makes a
+copied token detectable. If a spent token is presented again, the rightful
+client has already moved on to the next link, so whoever sent this one
+either copied it or is working from a copy that was taken — and the two
+cannot be told apart. The whole session is revoked, both parties are
+signed out, and the response is `401 refresh_token_reused`.
+
+The access token names its session (`sid`), and that session is checked on
+every request. Signing a device out therefore lands on its next call
+rather than whenever its token happened to expire. That costs nothing
+extra: authenticating already meant one query to load the user, and it is
+now that same query with a join and two more conditions. Requests already
+in flight are the only gap, which is what the short access-token lifetime
+bounds.
+
+`GET /account/sessions` lists the live ones, marking the one that asked;
+`DELETE /account/sessions/{id}` ends one, and `DELETE /account/sessions`
+ends all of them, this device included. Changing your password ends every
+session **except** the one changing it — the point is to close the access
+that knowing the old password gave, not to throw you out of the screen you
+are standing in front of.
+
+Refresh tokens are stored as SHA-256 digests, never as tokens, and a
+session's chain is deleted the moment it is revoked. Rate limiting on
+login and refresh is Phase 17 and is not here yet.
 
 A **workspace** is the tenant boundary: one customer business, with the
 users who work in it attached through memberships. Four roles exist,
@@ -373,7 +424,8 @@ production.
 | `LOG_LEVEL` | `INFO` | Standard Python level names |
 | `LOG_FORMAT` | per environment | `text` in development, `json` elsewhere |
 | `JWT_ALGORITHM` | `HS256` | |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Short: it is sent with every request |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Idle timeout. Every refresh pushes it out |
 | `CORS_ORIGINS` | empty | Comma separated. Empty means no cross-origin access |
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |
@@ -518,9 +570,15 @@ database you have already created if that is not available.
 
 Worth knowing before this is used for something real:
 
-- **No refresh tokens or revocation.** A token is valid until it expires;
-  logging out is the client discarding it, and changing a password does not
-  sign anyone out.
+- **Nothing prunes ended sessions.** A revoked session's refresh tokens are
+  deleted with it, but the session row itself stays, and one that simply
+  lapsed keeps its chain. Neither can authorise anything — every lookup is
+  filtered on the clock — so this is table growth rather than exposure. A
+  sweep belongs with the background jobs phase.
+- **A session's device and address are labels, not evidence.** `User-Agent`
+  is whatever the client sent, and the address is the peer's, which is the
+  proxy's unless uvicorn runs with `--proxy-headers`. Nothing decides
+  anything from either.
 - **No administration API.** A user can manage their own account and nothing
   else.
 - **Nothing drains the queued messages.** A reply sent while no number is

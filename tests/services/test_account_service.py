@@ -13,12 +13,14 @@ from app.core.exceptions import (
 from app.core.security import verify_password
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from app.repositories.user_session_repository import UserSessionRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.schemas.account import AccountUpdate, PasswordChange
 from app.schemas.user import UserCreate
 from app.services.account_service import AccountService
+from app.services.session_service import SessionService
 from app.services.user_service import UserService
 
 PASSWORD = "correct horse battery staple"
@@ -31,11 +33,24 @@ def users(db_session: Session, user_repository: UserRepository) -> UserService:
 
 
 @pytest.fixture
+def sessions(
+    db_session: Session,
+    user_session_repository: UserSessionRepository,
+) -> SessionService:
+    return SessionService(session=db_session, repository=user_session_repository)
+
+
+@pytest.fixture
 def service(
     users: UserService,
     membership_repository: WorkspaceMembershipRepository,
+    sessions: SessionService,
 ) -> AccountService:
-    return AccountService(users=users, memberships=membership_repository)
+    return AccountService(
+        users=users,
+        memberships=membership_repository,
+        sessions=sessions,
+    )
 
 
 @pytest.fixture

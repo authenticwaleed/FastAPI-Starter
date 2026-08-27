@@ -80,6 +80,48 @@ class IncorrectPasswordError(AppError):
         self.user_id = user_id
 
 
+class InvalidRefreshTokenError(AppError):
+    """The presented refresh token will not do anything.
+
+    Unknown, already spent, or belonging to a session that has been
+    revoked or has gone idle for too long -- all the same answer, for the
+    reason InvalidCredentialsError collapses its cases: whoever is
+    holding it has proved nothing, and telling them which of the four it
+    was would tell them what to try next.
+    """
+
+    detail = "Invalid or expired refresh token"
+
+
+class RefreshTokenReusedError(InvalidRefreshTokenError):
+    """A refresh token came back after it had already been exchanged.
+
+    The session has been revoked by the time this is raised. Told apart
+    from an ordinary refusal on purpose, and this one leaks nothing: the
+    holder had a real token, and the mechanism is public. What it buys is
+    that the person who was signed out gets to know it was not a glitch.
+    """
+
+    detail = "That session was ended: a refresh token was used twice. Sign in again"
+
+
+class SessionNotFoundError(AppError):
+    """No live session with that id belongs to this account.
+
+    Safe to distinguish from every other refusal, like
+    MembershipNotFoundError: whoever is asking has already proved who
+    they are, so being told that one of their own sessions has already
+    ended reveals nothing.
+    """
+
+    detail = "Session not found"
+
+    def __init__(self, user_id: int, session_id: object) -> None:
+        super().__init__(f"Session {session_id} is not live for user {user_id}")
+        self.user_id = user_id
+        self.session_id = session_id
+
+
 class WorkspaceNotFoundError(AppError):
     """No workspace with that id is visible to this user.
 
