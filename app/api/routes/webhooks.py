@@ -24,9 +24,11 @@ from app.integrations.ecommerce.base import (
     WebhookEvent,
     WebhookTopic,
 )
+from app.models.automation import AutomationTrigger
 from app.models.ecommerce_account import EcommerceAccountStatus
 from app.services.ai_dispatch import SessionSourceDep, answer_inbound
 from app.services.ai_response_service import ReplyWriterDep
+from app.services.automation_dispatch import fire_automations
 from app.services.ecommerce_service import (
     EcommerceAccountRepositoryDep,
     EcommerceServiceDep,
@@ -37,6 +39,7 @@ from app.services.ecommerce_sync_service import (
 )
 from app.services.knowledge_service import EmbeddingProviderDep
 from app.services.message_ingestion_service import MessageIngestionServiceDep
+from app.services.order_service import OrderRepositoryDep
 from app.services.whatsapp_service import MessagingProviderDep
 
 logger = logging.getLogger(__name__)
@@ -151,6 +154,20 @@ async def receive_whatsapp_webhook(
         return {"status": "ignored"}
 
     for recorded in service.ingest(payload):
+        # Automations first, and the order matters. A customer asking for
+        # a person should be handed over before the assistant answers
+        # them, not after -- the handoff switches nothing off, but an
+        # assistant that has already replied has already spoken over the
+        # colleague being fetched.
+        background.add_task(
+            fire_automations,
+            workspace_id=recorded.workspace_id,
+            trigger_type=AutomationTrigger.MESSAGE_RECEIVED,
+            conversation_id=recorded.conversation_id,
+            message_id=recorded.message_id,
+            messaging=messaging,
+            session_source=session_source,
+        )
         background.add_task(
             answer_inbound,
             workspace_id=recorded.workspace_id,
@@ -180,9 +197,13 @@ async def receive_whatsapp_webhook(
 async def receive_storefront_webhook(
     provider: EcommerceProviderName,
     request: Request,
+    background: BackgroundTasks,
     storefronts: EcommerceServiceDep,
     sync: EcommerceSyncServiceDep,
     accounts: EcommerceAccountRepositoryDep,
+    orders: OrderRepositoryDep,
+    messaging: MessagingProviderDep,
+    session_source: SessionSourceDep,
     limiter: RateLimiterDep,
     shopify_signature: Annotated[
         str | None, Header(alias="X-Shopify-Hmac-Sha256")
@@ -272,6 +293,26 @@ async def receive_storefront_webhook(
 
     _apply(event, account.workspace_id, sync)
     sync.commit()
+
+    if event.topic is WebhookTopic.ORDER_UPSERT and event.order is not None:
+        stored = orders.get_by_external_id(
+            account.workspace_id,
+            event.order.external_id,
+        )
+
+        if stored is not None:
+            # Only from a webhook, never from a full sync. A delivery is a
+            # thing that has just happened; a sync is a shop's history,
+            # and confirming all of it would message every customer the
+            # business has ever had the moment it connects.
+            background.add_task(
+                fire_automations,
+                workspace_id=account.workspace_id,
+                trigger_type=AutomationTrigger.ORDER_CREATED,
+                order_id=stored.id,
+                messaging=messaging,
+                session_source=session_source,
+            )
 
     return {"status": "received"}
 

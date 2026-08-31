@@ -5,6 +5,7 @@ from app.api.routes import (
     ai,
     analytics,
     auth,
+    automations,
     contacts,
     conversations,
     ecommerce,
@@ -42,6 +43,7 @@ api_router.include_router(ai.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(products.router)
 api_router.include_router(orders.router)
+api_router.include_router(automations.router)
 api_router.include_router(analytics.router)
 # Before the storefront routes, and this order is load-bearing. Both hang
 # off `/integrations/`, and the storefront ones take the provider as a

@@ -101,6 +101,23 @@ class MessageRepository:
             or 0
         )
 
+    def get(
+        self,
+        workspace_id: uuid.UUID,
+        message_id: uuid.UUID,
+    ) -> Message | None:
+        """One message, scoped by workspace rather than looked up by id.
+
+        An id is a guess anybody can make; requiring the workspace it
+        belongs to is what keeps one business's thread out of another's.
+        """
+        return self._session.scalar(
+            select(Message).where(
+                Message.id == message_id,
+                Message.workspace_id == workspace_id,
+            )
+        )
+
     def get_by_external_id(
         self,
         workspace_id: uuid.UUID,

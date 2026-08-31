@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, BackgroundTasks, Query, status
 
 from app.api.dependencies.workspace import WorkspaceAgentDep, WorkspaceMemberDep
 from app.api.errors import (
@@ -12,9 +12,13 @@ from app.api.errors import (
     WORKSPACE_FORBIDDEN,
     WORKSPACE_NOT_FOUND,
 )
+from app.models.automation import AutomationTrigger
 from app.models.order import OrderStatus
 from app.schemas.order import OrderCreate, OrderPage, OrderRead, OrderUpdate
+from app.services.ai_dispatch import SessionSourceDep
+from app.services.automation_dispatch import fire_automations
 from app.services.order_service import OrderServiceDep
+from app.services.whatsapp_service import MessagingProviderDep
 
 router = APIRouter(
     prefix="/workspaces/{workspace_id}/orders",
@@ -45,10 +49,32 @@ def _read(order: object) -> OrderRead:
 )
 def create_order(
     payload: OrderCreate,
+    background: BackgroundTasks,
     access: WorkspaceAgentDep,
     service: OrderServiceDep,
+    messaging: MessagingProviderDep,
+    session_source: SessionSourceDep,
 ) -> OrderRead:
-    return _read(service.create(access, payload))
+    """Record an order, and let the automations know one arrived.
+
+    Scheduled rather than run here: confirming an order means messaging a
+    customer, and a provider taking four seconds must not be four seconds
+    an agent waits for this form to submit. Whether anything is sent is
+    the workspace's own decision -- nothing happens unless order
+    confirmation is switched on.
+    """
+    order = service.create(access, payload)
+
+    background.add_task(
+        fire_automations,
+        workspace_id=access.workspace.id,
+        trigger_type=AutomationTrigger.ORDER_CREATED,
+        order_id=order.id,
+        messaging=messaging,
+        session_source=session_source,
+    )
+
+    return _read(order)
 
 
 @router.get("", responses=SCOPED)
