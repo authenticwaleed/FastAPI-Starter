@@ -13,6 +13,7 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
+from tests.support.services import put_on_plan
 
 PASSWORD = "correct horse battery staple"
 
@@ -137,7 +138,12 @@ def test_the_token_is_returned_once_and_never_again(
 def test_an_admin_can_invite_below_their_rank(
     client: TestClient,
     team: Team,
+    db_session: Session,
 ) -> None:
+    # On a plan with room for a third: an owner and an admin already fill
+    # a Starter team, and what this asserts is about rank rather than
+    # seats. The limit has its own tests in test_billing.py.
+    put_on_plan(db_session, team.workspace_id)
     admin = team.member("admin@example.com", ADMIN)
 
     assert team.invite(role=VIEWER, headers=admin).status_code == 201

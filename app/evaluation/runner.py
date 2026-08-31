@@ -39,7 +39,10 @@ from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.schemas.knowledge import DocumentCreate, SourceCreate
-from app.services.ai_dispatch import build_ai_response_service
+from app.services.ai_dispatch import (
+    build_ai_response_service,
+    build_subscription_service,
+)
 from app.services.ai_response_service import AiResponseService
 from app.services.knowledge_service import KnowledgeService
 from app.services.notification_service import NotificationService
@@ -277,6 +280,7 @@ def run(
             notifications=NotificationRepository(session),
             memberships=WorkspaceMembershipRepository(session),
         ),
+        subscriptions=build_subscription_service(session),
     )
     source = knowledge.create_source(access, SourceCreate(name="Evaluation"))
 

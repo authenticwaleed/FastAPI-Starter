@@ -34,6 +34,7 @@ from app.schemas.workspace import WorkspaceCreate
 from app.schemas.workspace_invitation import InvitationCreate
 from app.services.invitation_service import InvitationService
 from app.services.workspace_service import WorkspaceService
+from tests.support.services import put_on_plan, subscription_service
 
 OWNER = WorkspaceRole.OWNER
 ADMIN = WorkspaceRole.ADMIN
@@ -68,6 +69,7 @@ def service(
         memberships=membership_repository,
         workspaces=workspace_repository,
         users=user_repository,
+        subscriptions=subscription_service(db_session),
     )
 
 
@@ -191,7 +193,12 @@ def test_an_email_address_is_stored_in_one_case(
 def test_an_admin_may_invite_below_their_own_rank(
     service: InvitationService,
     team: Team,
+    db_session: Session,
 ) -> None:
+    # On a plan with room for a third: an owner and an admin already fill
+    # a Starter team, and what this asserts is about rank rather than
+    # seats.
+    put_on_plan(db_session, team.workspace.id)
     admin = team.member("admin@example.com", ADMIN)
 
     invitation, _ = _invite(service, team, actor=admin, role=VIEWER)

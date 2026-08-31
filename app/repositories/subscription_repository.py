@@ -1,0 +1,128 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.subscription import (
+    BillingEvent,
+    BillingProviderName,
+    Subscription,
+    SubscriptionStatus,
+)
+from app.services.plans import PlanTier
+
+
+class SubscriptionRepository:
+    """Every query against the billing tables lives here."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    # --- subscriptions -----------------------------------------------------
+
+    def create(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        provider: BillingProviderName,
+        plan: PlanTier,
+        provider_customer_id: str | None = None,
+    ) -> Subscription:
+        subscription = Subscription(
+            workspace_id=workspace_id,
+            provider=provider,
+            plan=plan,
+            provider_customer_id=provider_customer_id,
+            status=SubscriptionStatus.INCOMPLETE,
+        )
+
+        self._session.add(subscription)
+        self._session.flush()
+
+        return subscription
+
+    def get_for_workspace(self, workspace_id: uuid.UUID) -> Subscription | None:
+        return self._session.scalar(
+            select(Subscription).where(Subscription.workspace_id == workspace_id)
+        )
+
+    def get_by_provider_subscription_id(
+        self,
+        provider_subscription_id: str,
+    ) -> Subscription | None:
+        """The lookup a webhook costs.
+
+        A delivery names a provider subscription and nothing else, so
+        this is what turns it into a workspace -- and the reason that
+        column is unique across every workspace rather than within one.
+        """
+        return self._session.scalar(
+            select(Subscription).where(
+                Subscription.provider_subscription_id == provider_subscription_id
+            )
+        )
+
+    def apply(
+        self,
+        subscription: Subscription,
+        *,
+        provider_subscription_id: str | None = None,
+        provider_customer_id: str | None = None,
+        plan: PlanTier | None = None,
+        status: SubscriptionStatus | None = None,
+        current_period_start: datetime | None = None,
+        current_period_end: datetime | None = None,
+        cancel_at_period_end: bool | None = None,
+    ) -> Subscription:
+        """Copy across what the provider said, and leave the rest.
+
+        `None` means "the provider did not say" rather than "set this to
+        null", which is the right reading here and not merely the
+        convention: an event about a failed payment carries a status and
+        nothing else, and treating its silence about the period as an
+        instruction would erase a date the provider still believes in.
+        """
+        for field, value in (
+            ("provider_subscription_id", provider_subscription_id),
+            ("provider_customer_id", provider_customer_id),
+            ("plan", plan),
+            ("status", status),
+            ("current_period_start", current_period_start),
+            ("current_period_end", current_period_end),
+            ("cancel_at_period_end", cancel_at_period_end),
+        ):
+            if value is not None:
+                setattr(subscription, field, value)
+
+        self._session.flush()
+
+        return subscription
+
+    # --- events ------------------------------------------------------------
+
+    def record_event(
+        self,
+        *,
+        provider: BillingProviderName,
+        provider_event_id: str,
+        event_type: str,
+    ) -> BillingEvent:
+        """Claim an event, by writing the row that says it was handled.
+
+        Written before the work rather than after it, for the reason an
+        automation run is: the unique index is the check, and an index
+        only prevents anything if the claim exists before the second
+        delivery looks. Raises IntegrityError on a repeat, which is what
+        the caller treats as "already done".
+        """
+        event = BillingEvent(
+            provider=provider,
+            provider_event_id=provider_event_id,
+            event_type=event_type,
+        )
+
+        self._session.add(event)
+        self._session.flush()
+
+        return event

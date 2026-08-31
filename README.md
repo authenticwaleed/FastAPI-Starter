@@ -63,6 +63,7 @@ test is rolled back afterwards, so it never touches application data. Set
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/v1/health` | Simple health check |
+| GET | `/api/v1/plans` | The price list. No account needed |
 | GET | `/api/v1/health/live` | Liveness probe |
 | GET | `/api/v1/health/ready` | Readiness probe, checks the database |
 | POST | `/api/v1/auth/register` | Create an account |
@@ -144,6 +145,9 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `…/{workspace_id}/integrations/whatsapp/connect` | Connect a number |
 | GET | `…/{workspace_id}/integrations/whatsapp` | What is connected |
 | DELETE | `…/{workspace_id}/integrations/whatsapp` | Disconnect it |
+| GET | `…/{workspace_id}/subscription` | What you may do, and what you pay |
+| POST | `…/{workspace_id}/subscription/checkout` | Somewhere to pay |
+| POST | `…/{workspace_id}/subscription/cancel` | Stop at the period's end |
 | POST | `…/{workspace_id}/automations` | Switch a predefined automation on |
 | GET | `…/{workspace_id}/automations` | What is switched on |
 | GET | `…/automations/{automation_id}` | Read one |
@@ -160,6 +164,7 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `/api/v1/webhooks/whatsapp` | Meta's subscription handshake |
 | POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
 | POST | `/api/v1/webhooks/{provider}` | A storefront's deliveries |
+| POST | `/api/v1/webhooks/billing` | The payment provider's deliveries |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -579,6 +584,81 @@ price list is what the business charges, and an agent answering messages
 should not change it mid-conversation — but marking an order shipped is
 the work they do all day.
 
+### Plans and billing
+
+Three plans, and **they are code**, in `app/services/plans.py`. That is the
+plan's instruction for this phase read literally: do not hard-code plan
+checks around the codebase, create centralised capability checks. So
+`GET /plans` and every capability check answer from the same catalogue and
+cannot drift, and a `subscriptions` row records only *which* plan a
+workspace is on.
+
+Two kinds of thing, enforced two ways. A **feature** is a yes or no,
+declared in a route's decorator:
+
+```python
+dependencies=[REQUIRES_AUTOMATIONS]
+```
+
+A **limit** is a number, so it has to count something — team members,
+knowledge documents, AI responses this period — and those live in
+`SubscriptionService.require_within_limit`. Counted rather than remembered:
+a stored count is a second thing that can disagree with the rows it counts.
+
+| | Starter | Growth | Business |
+| --- | --- | --- | --- |
+| Team members | 2 | 10 | unlimited |
+| AI responses / month | 1,000 | 10,000 | 100,000 |
+| Knowledge documents | 50 | 500 | unlimited |
+| Automations, storefronts | — | ✓ | ✓ |
+| API access, audit logs | — | — | ✓ |
+
+`402 Payment Required`, not `403`. A `403` says "you may not", which sends
+somebody to an administrator who cannot help. A `402` says the *plan* is
+what is in the way, and the plan is something they can change. Membership
+is still checked first, so a stranger guessing at a workspace id is told it
+does not exist rather than what it pays for.
+
+**Only creating is gated.** A workspace whose plan lapses keeps being able
+to read and switch off the automations it already has, and to see and
+disconnect its storefront. That is the difference between losing a feature
+and losing your data — or being locked in by one.
+
+Nothing about a subscription is decided here. A checkout starts one at the
+provider and a webhook brings the answer back; every field on the row is a
+copy, because a row that disagreed with the provider would be a workspace
+using a plan nobody is paying for. Cancelling sets it to end at the period
+boundary rather than ending it: somebody who has paid for a month is
+entitled to the month.
+
+**Billing failures do not switch anything off.** `past_due` is a card that
+did not go through and a provider that is still retrying, so the plan still
+applies and the administrators get a notification. Only `canceled` and
+`unpaid` fall back — and they fall back to **Starter**, not to nothing,
+because a declined card must never lock a business out of its own inbox.
+
+Billing webhooks are the one place in this application where handling a
+delivery twice is not merely untidy: what gets got wrong is what somebody
+is charged and what they are allowed to use. So the provider's event id is
+claimed in `billing_events` *before* anything is applied, and a redelivery
+loses at the claim — answering the same `200`, because the provider asked
+whether we have it and we do. Stripe signs the timestamp along with the
+body, so a delivery captured today cannot be replayed next week; that
+window is checked, not just the digest.
+
+The AI quota is the one limit that stops work rather than refusing to start
+it. Running out records a `blocked` decision with reason `plan_limit`
+rather than raising, because both callers need it that way — the endpoint
+renders it, and the webhook has already answered `200` and has nobody left
+to tell. The customer's message is stored either way and shows up
+unanswered in the inbox.
+
+Stripe is what the MVP charges through, over raw HTTP rather than the SDK,
+for the reason the Shopify adapter is raw HTTP. With no `STRIPE_API_KEY`
+configured nothing can be sold and every workspace is on Starter, which is
+a perfectly working deployment — and the plan's own advice is not to build
+billing before pilots prove value.
+
 ### Notifications
 
 **No workspace in any of these paths**, which is the plan's endpoint list
@@ -802,6 +882,10 @@ production.
 | `SHOPIFY_API_SECRET` | unset | Signs the OAuth callback and every webhook |
 | `SHOPIFY_SCOPES` | read-only | Products, orders and customers |
 | `WOOCOMMERCE_WEBHOOK_SECRET` | unset | Without it, no Woo delivery verifies |
+| `STRIPE_API_KEY` | unset | Without it, nothing can be sold |
+| `STRIPE_WEBHOOK_SECRET` | unset | Signs every billing delivery |
+| `STRIPE_PRICE_GROWTH` | unset | Stripe's name for what Growth costs |
+| `STRIPE_PRICE_BUSINESS` | unset | Same, for Business |
 | `WHATSAPP_VERIFY_TOKEN` | unset | Echoed back during Meta's webhook setup |
 | `WHATSAPP_APP_SECRET` | unset | Signs every delivery. Without it, none authenticate |
 | `VOYAGE_API_KEY` | unset | Embeddings. Without it, ingestion refuses clearly |
@@ -1024,6 +1108,13 @@ Worth knowing before this is used for something real:
 - **Nothing tells anybody a customer has been waiting.** That one is about
   time passing rather than an event, so it needs the same scheduler the
   automation sweep does.
+- **The WhatsApp number limit cannot bite.** One number per workspace is a
+  unique constraint, so every plan is effectively capped at one until that
+  changes. The limit is declared so the plan reads honestly and so the
+  check is already in place.
+- **Usage is counted at the moment of adding, never swept.** A workspace
+  that drops to a smaller plan keeps whatever it already had — more
+  members than the plan allows, say — and simply cannot add more.
 - **Notifications are never pruned.** The table grows with activity. None
   of it is exposure — every read is scoped to the recipient and their
   current memberships — and it belongs with the same sweep the ended

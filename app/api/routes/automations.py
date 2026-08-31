@@ -3,11 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
+from app.api.dependencies.plan import REQUIRES_AUTOMATIONS
 from app.api.dependencies.workspace import WorkspaceAdminDep, WorkspaceMemberDep
 from app.api.errors import (
     AUTOMATION_CONFLICT,
     AUTOMATION_NOT_FOUND,
     BAD_AUTOMATION_SETTINGS,
+    PLAN_REQUIRED,
     UNAUTHORISED,
     WORKSPACE_FORBIDDEN,
     WORKSPACE_NOT_FOUND,
@@ -40,7 +42,18 @@ SCOPED = {**UNAUTHORISED, **WORKSPACE_FORBIDDEN, **WORKSPACE_NOT_FOUND}
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
-    responses={**SCOPED, **AUTOMATION_CONFLICT, **BAD_AUTOMATION_SETTINGS},
+    responses={
+        **SCOPED,
+        **AUTOMATION_CONFLICT,
+        **BAD_AUTOMATION_SETTINGS,
+        **PLAN_REQUIRED,
+    },
+    # Gated on the plan rather than on a check inside the handler, which
+    # is the plan's instruction for Phase 24 as one line. Only creating
+    # is gated: a workspace that drops to a plan without automations
+    # keeps being able to read and switch off what it already has, which
+    # is the difference between losing a feature and losing your data.
+    dependencies=[REQUIRES_AUTOMATIONS],
 )
 def create_automation(
     payload: AutomationCreate,
@@ -74,7 +87,8 @@ def list_automations(
 
 @router.post(
     "/run-due",
-    responses={**SCOPED},
+    responses={**SCOPED, **PLAN_REQUIRED},
+    dependencies=[REQUIRES_AUTOMATIONS],
 )
 def run_due_automations(
     access: WorkspaceAdminDep,

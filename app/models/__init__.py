@@ -43,6 +43,12 @@ from app.models.message import (
 from app.models.notification import Notification, NotificationKind
 from app.models.order import Order, OrderStatus
 from app.models.product import Product, ProductStatus, ProductVariant
+from app.models.subscription import (
+    BillingEvent,
+    BillingProviderName,
+    Subscription,
+    SubscriptionStatus,
+)
 from app.models.user import User
 from app.models.user_session import (
     RefreshToken,
@@ -72,6 +78,8 @@ __all__ = [
     "AutomationRun",
     "AutomationStatus",
     "AutomationTrigger",
+    "BillingEvent",
+    "BillingProviderName",
     "Channel",
     "Contact",
     "ContactStatus",
@@ -104,6 +112,8 @@ __all__ = [
     "SenderType",
     "SessionEndReason",
     "SourceType",
+    "Subscription",
+    "SubscriptionStatus",
     "User",
     "UserSession",
     "UserToken",

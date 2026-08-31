@@ -17,6 +17,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.integrations.ecommerce.base import (
@@ -67,8 +68,13 @@ def acme(
     client: TestClient,
     user_repository: UserRepository,
     membership_repository: WorkspaceMembershipRepository,
+    db_session: Session,
 ) -> Tenant:
-    return Tenant(client, user_repository, membership_repository, "acme-fashion")
+    # A storefront is a Growth feature; this suite is about the storefront.
+    tenant = Tenant(client, user_repository, membership_repository, "acme-fashion")
+    tenant.on_plan(db_session)
+
+    return tenant
 
 
 def _install(tenant: Tenant, store: str = STORE, **kwargs: object):

@@ -61,8 +61,13 @@ def acme(
     client: TestClient,
     user_repository: UserRepository,
     membership_repository: WorkspaceMembershipRepository,
+    db_session: Session,
 ) -> Tenant:
-    return Tenant(client, user_repository, membership_repository, "acme-fashion")
+    # A storefront is a Growth feature; this suite is about the storefront.
+    tenant = Tenant(client, user_repository, membership_repository, "acme-fashion")
+    tenant.on_plan(db_session)
+
+    return tenant
 
 
 @pytest.fixture
@@ -70,8 +75,13 @@ def rival(
     client: TestClient,
     user_repository: UserRepository,
     membership_repository: WorkspaceMembershipRepository,
+    db_session: Session,
 ) -> Tenant:
-    return Tenant(client, user_repository, membership_repository, "rival-store")
+    # A storefront is a Growth feature; this suite is about the storefront.
+    tenant = Tenant(client, user_repository, membership_repository, "rival-store")
+    tenant.on_plan(db_session)
+
+    return tenant
 
 
 def _install(tenant: Tenant, shop: str = SHOP, **kwargs: object):

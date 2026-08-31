@@ -108,6 +108,20 @@ class Settings(BaseSettings):
     # asking a shop owner to trust it with something it never uses.
     shopify_scopes: str = "read_products,read_orders,read_customers"
 
+    # Taking the money. Optional like every other integration credential
+    # and checked where it is used: a deployment that is not selling
+    # anything yet -- which the plan says is most of them for a while --
+    # works without any of it, and every workspace is simply on the free
+    # plan.
+    #
+    # The price identifiers are Stripe's names for what a plan costs, and
+    # they differ between test mode and live mode. That is why they are
+    # configuration rather than a fact in app/services/plans.py.
+    stripe_api_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    stripe_price_growth: str | None = None
+    stripe_price_business: str | None = None
+
     # Installing a WooCommerce store. Different in shape from Shopify's
     # credentials, and the difference is the store's rather than a
     # choice: WooCommerce signs its webhooks with a secret whoever
@@ -226,6 +240,10 @@ class Settings(BaseSettings):
         "shopify_api_key",
         "shopify_api_secret",
         "woocommerce_webhook_secret",
+        "stripe_api_key",
+        "stripe_webhook_secret",
+        "stripe_price_growth",
+        "stripe_price_business",
         "frontend_base_url",
         "smtp_host",
         "smtp_username",

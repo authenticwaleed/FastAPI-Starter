@@ -2185,10 +2185,10 @@ POST /api/v1/webhooks/billing
 
 ## Acceptance criteria
 
-- [ ] subscription state synced
-- [ ] webhook idempotency implemented
-- [ ] feature limits enforced centrally
-- [ ] billing failure states handled
+- [x] subscription state synced
+- [x] webhook idempotency implemented
+- [x] feature limits enforced centrally
+- [x] billing failure states handled
 
 ---
 

@@ -37,6 +37,7 @@ class NotificationKind(StrEnum):
     HANDOFF_REQUESTED = "handoff_requested"
     KNOWLEDGE_INGESTION_FAILED = "knowledge_ingestion_failed"
     MESSAGE_DELIVERY_FAILED = "message_delivery_failed"
+    BILLING_PAYMENT_FAILED = "billing_payment_failed"
 
 
 class Notification(Base):
