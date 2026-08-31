@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Request, status
 
+from app.api.dependencies.plan import REQUIRES_ECOMMERCE
 from app.api.dependencies.workspace import WorkspaceAdminDep, WorkspaceMemberDep
 from app.api.errors import (
+    PLAN_REQUIRED,
     STOREFRONT_CONFLICT,
     STOREFRONT_NOT_FOUND,
     UNAUTHORISED,
@@ -49,7 +51,15 @@ SCOPED = {**UNAUTHORISED, **WORKSPACE_FORBIDDEN, **WORKSPACE_NOT_FOUND}
 # Connecting a storefront is administration: it hands this application
 # read access to every price and every order the business has. An agent
 # answering messages does not get to do that.
-@router.post("/install", responses={**SCOPED, **STOREFRONT_CONFLICT})
+@router.post(
+    "/install",
+    responses={**SCOPED, **STOREFRONT_CONFLICT, **PLAN_REQUIRED},
+    # Installing is gated, and reading and disconnecting are not. A
+    # business whose plan lapses should still be able to see what is
+    # connected and take it out, which is the difference between losing a
+    # feature and being locked in by one.
+    dependencies=[REQUIRES_ECOMMERCE],
+)
 def begin_install(
     provider: EcommerceProviderName,
     payload: StorefrontConnect,

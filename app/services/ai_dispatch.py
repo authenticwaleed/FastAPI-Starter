@@ -40,6 +40,7 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
@@ -52,6 +53,10 @@ from app.services.commerce_context import CommerceContextService
 from app.services.message_service import MessageService
 from app.services.notification_service import NotificationService
 from app.services.retrieval_service import RetrievalService
+from app.services.subscription_service import (
+    SubscriptionService,
+    get_billing_provider,
+)
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
@@ -74,6 +79,28 @@ def get_session_source() -> SessionSource:
 
 
 SessionSourceDep = Annotated[SessionSource, Depends(get_session_source)]
+
+
+def build_subscription_service(session: Session) -> SubscriptionService:
+    """The capability checks, assembled against one session.
+
+    Wanted by the background graphs because the assistant's quota is
+    checked before it drafts, and a run that skipped the check would let
+    a webhook spend what a dashboard could not.
+    """
+    accounts = WhatsAppAccountRepository(session)
+
+    return SubscriptionService(
+        session=session,
+        subscriptions=SubscriptionRepository(session),
+        provider=get_billing_provider(),
+        notifications=NotificationService(
+            session=session,
+            notifications=NotificationRepository(session),
+            memberships=WorkspaceMembershipRepository(session),
+        ),
+        accounts=accounts,
+    )
 
 
 def build_ai_response_service(
@@ -112,6 +139,7 @@ def build_ai_response_service(
         writer=writer,
         events=ConversationEventRepository(session),
         notifications=notifications,
+        subscriptions=build_subscription_service(session),
         outbound=MessageService(
             session=session,
             messages=messages,

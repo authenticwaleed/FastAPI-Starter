@@ -40,6 +40,10 @@ from app.services.ecommerce_sync_service import (
 from app.services.knowledge_service import EmbeddingProviderDep
 from app.services.message_ingestion_service import MessageIngestionServiceDep
 from app.services.order_service import OrderRepositoryDep
+from app.services.subscription_service import (
+    BillingProviderDep,
+    SubscriptionServiceDep,
+)
 from app.services.whatsapp_service import MessagingProviderDep
 
 logger = logging.getLogger(__name__)
@@ -187,6 +191,64 @@ async def receive_whatsapp_webhook(
         )
 
     return {"status": "received"}
+
+
+# Before the parameterised storefront route below, and this order is
+# load-bearing: `billing` is not a storefront, so `/{provider}` would
+# match this path and refuse it as an unknown one. Starlette matches in
+# registration order, so the literal has to be declared first. A test
+# pins it, because a re-order here is a silent 422 on the endpoint that
+# tells us whether anybody has paid.
+@router.post(
+    "/billing",
+    status_code=status.HTTP_200_OK,
+    responses=RATE_LIMITED,
+)
+async def receive_billing_webhook(
+    request: Request,
+    provider: BillingProviderDep,
+    subscriptions: SubscriptionServiceDep,
+    limiter: RateLimiterDep,
+    signature: Annotated[str | None, Header(alias="Stripe-Signature")] = None,
+) -> dict[str, str]:
+    """Take delivery of whatever the payment provider is telling us.
+
+    Async for the reason the other two webhooks are: the signature covers
+    the raw body byte for byte, and reading that body is what needs
+    awaiting.
+
+    Handling one of these twice is the only place in this application
+    where a repeat is not merely untidy -- what is being got wrong is
+    what somebody is charged and what they are allowed to use. So the
+    event id is claimed before any of it is applied, and a redelivery
+    loses at the claim. That is the same 200 as a first delivery, on
+    purpose: the provider asked whether we have it, and we do.
+
+    Rate limited on deliveries that fail, exactly like the other two.
+    """
+    sender = client_address(request)
+    limiter.check(RateLimited.WEBHOOK_REJECTIONS, sender)
+
+    body = await request.body()
+
+    if not provider.verify_webhook(payload=body, signature=signature):
+        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        logger.warning("A billing delivery did not verify")
+        raise InvalidWebhookError
+
+    try:
+        payload: Any = json.loads(body)
+    except ValueError as exc:
+        logger.warning("A signed billing delivery was not JSON")
+        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        raise InvalidWebhookError from exc
+
+    if not isinstance(payload, dict):
+        return {"status": "ignored"}
+
+    applied = subscriptions.apply_event(provider.parse_webhook(payload))
+
+    return {"status": "applied" if applied else "ignored"}
 
 
 @router.post(

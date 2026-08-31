@@ -7,13 +7,23 @@ more to the point, the wiring several suites would otherwise each have to
 be edited for the next time a constructor grows an argument.
 """
 
+import uuid
+
 from sqlalchemy.orm import Session
 
+from app.models.subscription import BillingProviderName, SubscriptionStatus
 from app.repositories.notification_repository import NotificationRepository
+from app.repositories.subscription_repository import SubscriptionRepository
+from app.repositories.whatsapp_account_repository import (
+    WhatsAppAccountRepository,
+)
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.services.notification_service import NotificationService
+from app.services.plans import PlanTier
+from app.services.subscription_service import SubscriptionService
+from tests.support.billing import FakeBillingProvider
 
 
 def notification_service(session: Session) -> NotificationService:
@@ -29,3 +39,54 @@ def notification_service(session: Session) -> NotificationService:
         notifications=NotificationRepository(session),
         memberships=WorkspaceMembershipRepository(session),
     )
+
+
+def subscription_service(session: Session) -> SubscriptionService:
+    """The capability checks, on a test's own session.
+
+    Real, and with a provider that charges nobody. Most suites reach this
+    only because a service they are testing consults it -- a workspace
+    with no subscription is on the free plan, which is what those tests
+    already assumed before plans existed.
+    """
+    return SubscriptionService(
+        session=session,
+        subscriptions=SubscriptionRepository(session),
+        provider=FakeBillingProvider(),
+        notifications=notification_service(session),
+        accounts=WhatsAppAccountRepository(session),
+    )
+
+
+def put_on_plan(
+    session: Session,
+    workspace_id: uuid.UUID | str,
+    tier: PlanTier = PlanTier.GROWTH,
+) -> None:
+    """Put a workspace on a plan, without going through a checkout.
+
+    For the suites that are about something else. Testing automations or
+    a storefront means having a plan that includes them, and walking a
+    payment flow to get one would make every one of those tests also a
+    test of billing -- which is what tests/api/test_billing.py is for.
+
+    Written the way a completed checkout leaves it: active, with a
+    provider subscription id, because a row without one is a checkout
+    somebody started and never finished.
+    """
+    repository = SubscriptionRepository(session)
+    workspace = (
+        workspace_id if isinstance(workspace_id, uuid.UUID) else uuid.UUID(workspace_id)
+    )
+    subscription = repository.create(
+        workspace_id=workspace,
+        provider=BillingProviderName.STRIPE,
+        plan=tier,
+        provider_customer_id=f"cus_{workspace.hex[:12]}",
+    )
+    repository.apply(
+        subscription,
+        provider_subscription_id=f"sub_{workspace.hex[:12]}",
+        status=SubscriptionStatus.ACTIVE,
+    )
+    session.flush()

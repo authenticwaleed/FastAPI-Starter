@@ -6,6 +6,7 @@ from app.api.routes import (
     analytics,
     auth,
     automations,
+    billing,
     contacts,
     conversations,
     ecommerce,
@@ -24,6 +25,9 @@ from app.api.routes import (
 api_router = APIRouter()
 
 api_router.include_router(health.router)
+# Public, like health: a price list is what somebody reads before they
+# have an account.
+api_router.include_router(billing.plans_router)
 api_router.include_router(auth.router)
 # `/users` used to be included here: a public, unauthenticated CRUD surface
 # over every account in the system. It is gone rather than protected,
@@ -48,6 +52,7 @@ api_router.include_router(knowledge.router)
 api_router.include_router(products.router)
 api_router.include_router(orders.router)
 api_router.include_router(automations.router)
+api_router.include_router(billing.router)
 api_router.include_router(analytics.router)
 # Before the storefront routes, and this order is load-bearing. Both hang
 # off `/integrations/`, and the storefront ones take the provider as a

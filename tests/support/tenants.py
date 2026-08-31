@@ -10,12 +10,15 @@ businesses can actually be pushed on.
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.models.workspace_membership import WorkspaceRole
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
+from app.services.plans import PlanTier
+from tests.support.services import put_on_plan
 
 PASSWORD = "correct horse battery staple"
 
@@ -70,6 +73,20 @@ class Tenant:
         return "/".join(
             [f"/api/v1/workspaces/{self.workspace_id}", *(p for p in parts if p)]
         )
+
+    def on_plan(
+        self,
+        session: Session,
+        tier: PlanTier = PlanTier.GROWTH,
+    ) -> None:
+        """Put this workspace on a plan that includes what a test needs.
+
+        Here because this is where every suite already builds its
+        workspace. Testing automations or a storefront means having a
+        plan that includes them, and walking a payment flow to get one
+        would make every one of those tests also a test of billing.
+        """
+        put_on_plan(session, self.workspace_id, tier)
 
     def contact(self, phone_number: str = "+923001234567", **fields: object) -> str:
         response = self.client.post(

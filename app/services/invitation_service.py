@@ -36,6 +36,11 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace_invitation import InvitationCreate
 from app.services.membership_service import may_manage
+from app.services.plans import PlanLimit
+from app.services.subscription_service import (
+    SubscriptionService,
+    SubscriptionServiceDep,
+)
 from app.services.user_service import UserRepositoryDep
 from app.services.workspace_service import (
     WorkspaceAccess,
@@ -62,12 +67,14 @@ class InvitationService:
         memberships: WorkspaceMembershipRepository,
         workspaces: WorkspaceRepository,
         users: UserRepository,
+        subscriptions: SubscriptionService,
     ) -> None:
         self._session = session
         self._invitations = invitations
         self._memberships = memberships
         self._workspaces = workspaces
         self._users = users
+        self._subscriptions = subscriptions
 
     # --- sending ------------------------------------------------------
 
@@ -98,6 +105,21 @@ class InvitationService:
 
         if outstanding is not None:
             raise PendingInvitationExistsError(access.workspace.id, payload.email)
+
+        # After those two, and the order matters. Inviting somebody who is
+        # already on the team takes no seat, so "your team is full" would
+        # be both unhelpful and untrue -- what they need to hear is that
+        # this person is already here.
+        #
+        # A courtesy check rather than the enforcement: learning a team is
+        # full is better before somebody is emailed a seat than after they
+        # have clicked the link. What actually holds the line is the same
+        # check in `accept` below, because a seat is taken when an
+        # invitation is used and not when it is sent.
+        self._subscriptions.require_within_limit(
+            access.workspace.id,
+            PlanLimit.TEAM_MEMBERS,
+        )
 
         # The only moment this value exists in readable form. What is
         # stored is its digest, so nothing after this can reproduce it.
@@ -163,6 +185,16 @@ class InvitationService:
 
         if existing is not None and existing.status == MembershipStatus.ACTIVE:
             raise AlreadyAMemberError(workspace.id, invitation.email)
+
+        # The real enforcement, because this is the moment a seat is
+        # taken. Checked at invite time as well, but a workspace can have
+        # more invitations outstanding than seats -- and without this,
+        # every one of them accepting would put the team over its plan
+        # with nothing having refused.
+        self._subscriptions.require_within_limit(
+            workspace.id,
+            PlanLimit.TEAM_MEMBERS,
+        )
 
         try:
             if existing is not None:
@@ -246,6 +278,7 @@ def get_invitation_service(
     memberships: WorkspaceMembershipRepositoryDep,
     workspaces: WorkspaceRepositoryDep,
     users: UserRepositoryDep,
+    subscriptions: SubscriptionServiceDep,
 ) -> InvitationService:
     return InvitationService(
         session=session,
@@ -253,6 +286,7 @@ def get_invitation_service(
         memberships=memberships,
         workspaces=workspaces,
         users=users,
+        subscriptions=subscriptions,
     )
 
 

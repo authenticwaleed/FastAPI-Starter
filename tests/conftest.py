@@ -48,7 +48,9 @@ from app.services.ai_response_service import get_reply_writer
 from app.services.ecommerce_service import get_ecommerce_providers
 from app.services.email_dispatch import get_email_sender
 from app.services.knowledge_service import get_embedding_provider
+from app.services.subscription_service import get_billing_provider
 from app.services.whatsapp_service import get_messaging_provider
+from tests.support.billing import FakeBillingProvider
 from tests.support.ecommerce import FakeEcommerceProvider, fake_providers
 from tests.support.email import FakeEmailSender
 from tests.support.knowledge import FakeEmbeddingProvider, FakeReplyWriter
@@ -105,6 +107,12 @@ os.environ.setdefault("WHATSAPP_APP_SECRET", "an-app-secret-for-tests")
 os.environ.setdefault("SHOPIFY_API_KEY", "a-shopify-key-for-tests")
 os.environ.setdefault("SHOPIFY_API_SECRET", "a-shopify-secret-for-tests")
 os.environ.setdefault("WOOCOMMERCE_WEBHOOK_SECRET", "a-woocommerce-secret-for-tests")
+# The payment provider signs every delivery, and the tests that exercise
+# those have to be able to produce a signature the adapter will accept.
+os.environ.setdefault("STRIPE_API_KEY", "sk_test_for_tests")
+os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_for_tests")
+os.environ.setdefault("STRIPE_PRICE_GROWTH", "price_growth")
+os.environ.setdefault("STRIPE_PRICE_BUSINESS", "price_business")
 
 os.environ["DATABASE_URL"] = TEST_DATABASE.render_as_string(hide_password=False)
 get_settings.cache_clear()
@@ -173,7 +181,8 @@ def engine() -> Iterator[Engine]:
                 "TRUNCATE conversation_events, ai_response_logs, "
                 "knowledge_chunks, "
                 "knowledge_documents, knowledge_sources, "
-                "notifications, automation_runs, automations, "
+                "notifications, billing_events, subscriptions, "
+                "automation_runs, automations, "
                 "product_variants, products, orders, "
                 "messages, conversations, contacts, "
                 "whatsapp_accounts, ecommerce_accounts, workspace_invitations, "
@@ -308,6 +317,11 @@ def ecommerce_provider(
 
 
 @pytest.fixture
+def billing_provider() -> FakeBillingProvider:
+    return FakeBillingProvider()
+
+
+@pytest.fixture
 def rate_limiter() -> RateLimiter:
     """A limiter that counts nothing, which is what most tests want.
 
@@ -328,6 +342,7 @@ def client(
     reply_writer: FakeReplyWriter,
     email_sender: FakeEmailSender,
     ecommerce_providers: dict[EcommerceProviderName, FakeEcommerceProvider],
+    billing_provider: FakeBillingProvider,
     rate_limiter: RateLimiter,
 ) -> Iterator[TestClient]:
     """A test client sharing the test's rolled-back session.
@@ -357,6 +372,7 @@ def client(
     app.dependency_overrides[get_reply_writer] = lambda: reply_writer
     app.dependency_overrides[get_email_sender] = lambda: email_sender
     app.dependency_overrides[get_ecommerce_providers] = lambda: ecommerce_providers
+    app.dependency_overrides[get_billing_provider] = lambda: billing_provider
     app.dependency_overrides[get_rate_limiter] = lambda: rate_limiter
 
     with TestClient(app) as test_client:

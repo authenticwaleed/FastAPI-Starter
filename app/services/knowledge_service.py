@@ -40,6 +40,11 @@ from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
 )
+from app.services.plans import PlanLimit
+from app.services.subscription_service import (
+    SubscriptionService,
+    SubscriptionServiceDep,
+)
 from app.services.workspace_service import MAY_ADMINISTER, WorkspaceAccess
 
 logger = logging.getLogger(__name__)
@@ -72,11 +77,13 @@ class KnowledgeService:
         knowledge: KnowledgeRepository,
         embeddings: EmbeddingProvider,
         notifications: NotificationService,
+        subscriptions: SubscriptionService,
     ) -> None:
         self._session = session
         self._knowledge = knowledge
         self._embeddings = embeddings
         self._notifications = notifications
+        self._subscriptions = subscriptions
 
     # --- sources -----------------------------------------------------------
 
@@ -265,6 +272,13 @@ class KnowledgeService:
         can be retried, where the other order leaves an upload that
         vanished.
         """
+        # Before any of it, and before the provider is called: a document
+        # that cannot be kept is not worth paying to embed.
+        self._subscriptions.require_within_limit(
+            access.workspace.id,
+            PlanLimit.KNOWLEDGE_DOCUMENTS,
+        )
+
         workspace_id = access.workspace.id
         source = self.get_source(access, source_id)
 
@@ -479,12 +493,14 @@ def get_knowledge_service(
     knowledge: KnowledgeRepositoryDep,
     embeddings: EmbeddingProviderDep,
     notifications: NotificationServiceDep,
+    subscriptions: SubscriptionServiceDep,
 ) -> KnowledgeService:
     return KnowledgeService(
         session=session,
         knowledge=knowledge,
         embeddings=embeddings,
         notifications=notifications,
+        subscriptions=subscriptions,
     )
 
 

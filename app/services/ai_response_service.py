@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import (
     ConversationNotFoundError,
     MessagingProviderError,
+    PlanLimitReachedError,
     ReplyProviderError,
 )
 from app.db.session import SessionDep
@@ -52,11 +53,16 @@ from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
 )
+from app.services.plans import PlanLimit
 from app.services.prompts import PROMPT_VERSION, system_prompt
 from app.services.retrieval_service import (
     Retrieval,
     RetrievalService,
     RetrievalServiceDep,
+)
+from app.services.subscription_service import (
+    SubscriptionService,
+    SubscriptionServiceDep,
 )
 from app.services.workspace_service import MAY_HANDLE_CUSTOMERS
 
@@ -124,6 +130,7 @@ class AiResponseService:
         outbound: MessageService,
         events: ConversationEventRepository,
         notifications: NotificationService,
+        subscriptions: SubscriptionService,
     ) -> None:
         self._session = session
         self._conversations = conversations
@@ -135,6 +142,7 @@ class AiResponseService:
         self._outbound = outbound
         self._events = events
         self._notifications = notifications
+        self._subscriptions = subscriptions
 
     def generate_reply(
         self,
@@ -210,6 +218,30 @@ class AiResponseService:
                 question,
                 AiDecision.BLOCKED,
                 reason="ai_disabled",
+            )
+
+        try:
+            # The last check before anything is spent, and the only plan
+            # limit that stops work already in progress rather than
+            # refusing to start some. Recorded as a decision rather than
+            # raised, because both callers need it that way: the endpoint
+            # renders it, and the webhook has already answered 200 and
+            # has nobody left to tell. The customer's message is stored
+            # either way and shows up unanswered in the inbox, which is
+            # what a person is for.
+            self._subscriptions.require_within_limit(
+                workspace_id,
+                PlanLimit.AI_RESPONSES_PER_MONTH,
+            )
+        except PlanLimitReachedError:
+            logger.info("Workspace %s is out of AI responses", workspace_id)
+
+            return self._record(
+                workspace,
+                conversation,
+                question,
+                AiDecision.BLOCKED,
+                reason="plan_limit",
             )
 
         already = self._logs.get_for_message(workspace_id, question.id)
@@ -598,6 +630,7 @@ def get_ai_response_service(
     outbound: MessageServiceDep,
     events: ConversationEventRepositoryDep,
     notifications: NotificationServiceDep,
+    subscriptions: SubscriptionServiceDep,
 ) -> AiResponseService:
     return AiResponseService(
         session=session,
@@ -610,6 +643,7 @@ def get_ai_response_service(
         outbound=outbound,
         events=events,
         notifications=notifications,
+        subscriptions=subscriptions,
     )
 
 

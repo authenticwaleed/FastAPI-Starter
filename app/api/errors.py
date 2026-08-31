@@ -13,6 +13,7 @@ from app.core.exceptions import (
     AppError,
     AutomationAlreadyExistsError,
     AutomationNotFoundError,
+    BillingProviderError,
     ContactAlreadyExistsError,
     ContactNotFoundError,
     ConversationAlreadyOpenError,
@@ -24,6 +25,7 @@ from app.core.exceptions import (
     EmailDeliveryError,
     EmbeddingProviderError,
     EncryptionUnavailableError,
+    FeatureNotInPlanError,
     InactiveUserError,
     IncorrectPasswordError,
     InsufficientWorkspaceRoleError,
@@ -42,11 +44,13 @@ from app.core.exceptions import (
     LastOwnerError,
     MembershipNotFoundError,
     MessagingProviderError,
+    NoSubscriptionError,
     NotificationNotFoundError,
     OrderAlreadyExistsError,
     OrderNotConfirmableError,
     OrderNotFoundError,
     PendingInvitationExistsError,
+    PlanLimitReachedError,
     ProductConflictError,
     ProductNotFoundError,
     RateLimitExceededError,
@@ -178,6 +182,28 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     ProductNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "product_not_found"),
     ProductConflictError: _Answer(status.HTTP_409_CONFLICT, "product_conflict"),
     OrderNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "order_not_found"),
+    NoSubscriptionError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "no_subscription",
+    ),
+    # 402 rather than 403, for both. A 403 says "you may not", which
+    # sends somebody to an administrator who cannot help; these say the
+    # plan is what is in the way, and the plan is something they can
+    # change.
+    FeatureNotInPlanError: _Answer(
+        status.HTTP_402_PAYMENT_REQUIRED,
+        "feature_not_in_plan",
+    ),
+    PlanLimitReachedError: _Answer(
+        status.HTTP_402_PAYMENT_REQUIRED,
+        "plan_limit_reached",
+    ),
+    # 502 for the reason every other outbound failure gets one: this
+    # application worked and the thing it depends on did not.
+    BillingProviderError: _Answer(
+        status.HTTP_502_BAD_GATEWAY,
+        "billing_provider_error",
+    ),
     NotificationNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
         "notification_not_found",
@@ -532,6 +558,14 @@ ORDER_NOT_FOUND = _documented(
 ORDER_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "That external id is taken, or the order is not pending",
+)
+PLAN_REQUIRED = _documented(
+    status.HTTP_402_PAYMENT_REQUIRED,
+    "Your plan does not include this, or you have reached its limit",
+)
+NO_SUBSCRIPTION = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace, or it has no subscription",
 )
 NOTIFICATION_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,

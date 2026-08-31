@@ -431,6 +431,70 @@ class InvalidAutomationSettingsError(AppError):
         self.problems = problems
 
 
+class BillingProviderError(AppError):
+    """The payment provider refused, failed, or is not configured.
+
+    Whatever it said goes to the log. What reaches the client is that it
+    did not work, because a card decline and an API error read
+    identically to somebody who is not us -- and the provider's own
+    checkout page is where a customer is told about their card.
+    """
+
+    detail = "Billing is unavailable right now"
+
+
+class NoSubscriptionError(AppError):
+    """This workspace has never subscribed to anything.
+
+    Not the same as being on the free plan, which every workspace is.
+    This is the answer to "cancel it" when there is nothing to cancel.
+    """
+
+    detail = "This workspace has no subscription"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} has no subscription")
+        self.workspace_id = workspace_id
+
+
+class FeatureNotInPlanError(AppError):
+    """The workspace's plan does not include this.
+
+    A 402 rather than a 403, and the difference is worth having: 403 says
+    "you may not", which sends somebody to an administrator who cannot
+    help them. This says the plan is the thing in the way, and the plan
+    is something they can change.
+    """
+
+    detail = "Your plan does not include this"
+
+    def __init__(self, workspace_id: object, feature: object) -> None:
+        super().__init__(f"Workspace {workspace_id} has no {feature} in its plan")
+        self.workspace_id = workspace_id
+        self.feature = feature
+
+
+class PlanLimitReachedError(AppError):
+    """The workspace has as many of these as its plan allows.
+
+    Carries the number in the message the client sees, unlike most errors
+    here: how many are allowed is not a secret, and "you have reached the
+    limit" without saying what it is leaves somebody guessing at what to
+    delete.
+    """
+
+    detail = "You have reached your plan's limit"
+
+    def __init__(self, workspace_id: object, limit: object, ceiling: int) -> None:
+        super().__init__(
+            f"Workspace {workspace_id} is at its {limit} limit of {ceiling}",
+            detail=f"Your plan allows {ceiling}. Upgrade to add more",
+        )
+        self.workspace_id = workspace_id
+        self.limit = limit
+        self.ceiling = ceiling
+
+
 class NotificationNotFoundError(AppError):
     """No notification with that id is addressed to this person.
 

@@ -45,10 +45,16 @@ def acme(
     whatsapp_account_repository: WhatsAppAccountRepository,
     db_session: Session,
 ) -> Tenant:
-    """A business with a number connected, so a send actually goes out."""
+    """A business with a number connected, so a send actually goes out.
+
+    On Growth, because automations are a Growth feature and what this
+    suite is about is what they do rather than what they cost. Billing
+    has its own tests.
+    """
     from app.core.encryption import encrypt
 
     tenant = Tenant(client, user_repository, membership_repository, "acme-fashion")
+    tenant.on_plan(db_session)
     whatsapp_account_repository.create(
         workspace_id=uuid.UUID(tenant.workspace_id),
         provider="meta_cloud",  # type: ignore[arg-type]
@@ -290,8 +296,10 @@ def test_another_workspaces_automation_is_not_found(
     client: TestClient,
     user_repository: UserRepository,
     membership_repository: WorkspaceMembershipRepository,
+    db_session: Session,
 ) -> None:
     rival = Tenant(client, user_repository, membership_repository, "rival-store")
+    rival.on_plan(db_session)
     theirs = _enable(rival, AutomationKind.HUMAN_HANDOFF)
 
     response = acme.client.get(

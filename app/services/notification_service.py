@@ -25,6 +25,7 @@ _ALERTS = frozenset(
     {
         NotificationKind.KNOWLEDGE_INGESTION_FAILED,
         NotificationKind.MESSAGE_DELIVERY_FAILED,
+        NotificationKind.BILLING_PAYMENT_FAILED,
     }
 )
 
