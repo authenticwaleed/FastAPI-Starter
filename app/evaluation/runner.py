@@ -34,10 +34,15 @@ from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.notification_repository import NotificationRepository
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
+)
 from app.schemas.knowledge import DocumentCreate, SourceCreate
 from app.services.ai_dispatch import build_ai_response_service
 from app.services.ai_response_service import AiResponseService
 from app.services.knowledge_service import KnowledgeService
+from app.services.notification_service import NotificationService
 from app.services.prompts import PROMPT_VERSION
 from app.services.workspace_service import WorkspaceAccess
 
@@ -267,6 +272,11 @@ def run(
         session=session,
         knowledge=KnowledgeRepository(session),
         embeddings=embeddings,
+        notifications=NotificationService(
+            session=session,
+            notifications=NotificationRepository(session),
+            memberships=WorkspaceMembershipRepository(session),
+        ),
     )
     source = knowledge.create_source(access, SourceCreate(name="Evaluation"))
 

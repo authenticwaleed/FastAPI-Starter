@@ -26,6 +26,7 @@ from app.models.ai_response_log import AiDecision, AiResponseLog
 from app.models.conversation import AiMode, Conversation
 from app.models.conversation_event import EventType
 from app.models.message import Direction, Message, SenderType
+from app.models.notification import NotificationKind
 from app.models.workspace import Workspace
 from app.repositories.ai_response_log_repository import AiResponseLogRepository
 from app.repositories.conversation_event_repository import (
@@ -47,12 +48,17 @@ from app.services.message_service import (
     MessageService,
     MessageServiceDep,
 )
+from app.services.notification_service import (
+    NotificationService,
+    NotificationServiceDep,
+)
 from app.services.prompts import PROMPT_VERSION, system_prompt
 from app.services.retrieval_service import (
     Retrieval,
     RetrievalService,
     RetrievalServiceDep,
 )
+from app.services.workspace_service import MAY_HANDLE_CUSTOMERS
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +123,7 @@ class AiResponseService:
         writer: ReplyWriter,
         outbound: MessageService,
         events: ConversationEventRepository,
+        notifications: NotificationService,
     ) -> None:
         self._session = session
         self._conversations = conversations
@@ -127,6 +134,7 @@ class AiResponseService:
         self._writer = writer
         self._outbound = outbound
         self._events = events
+        self._notifications = notifications
 
     def generate_reply(
         self,
@@ -418,6 +426,18 @@ class AiResponseService:
                 event_type=EventType.AI_HANDOFF,
                 reason=reason,
             )
+            # Everybody who handles customers, because nobody has claimed
+            # it: a thread the assistant could not answer, sitting in the
+            # unassigned queue, is exactly the thing that goes unnoticed
+            # until a customer gives up.
+            self._notifications.tell_everyone(
+                workspace_id=workspace.id,
+                roles=MAY_HANDLE_CUSTOMERS,
+                kind=NotificationKind.HANDOFF_REQUESTED,
+                title="The assistant needs a person",
+                body=reason,
+                meta={"conversation_id": str(conversation.id)},
+            )
             self._session.commit()
 
         if decision == AiDecision.ANSWERED and log.reply_text:
@@ -577,6 +597,7 @@ def get_ai_response_service(
     writer: ReplyWriterDep,
     outbound: MessageServiceDep,
     events: ConversationEventRepositoryDep,
+    notifications: NotificationServiceDep,
 ) -> AiResponseService:
     return AiResponseService(
         session=session,
@@ -588,6 +609,7 @@ def get_ai_response_service(
         writer=writer,
         outbound=outbound,
         events=events,
+        notifications=notifications,
     )
 
 

@@ -78,6 +78,10 @@ test is rolled back afterwards, so it never touches application data. Set
 | PATCH | `/api/v1/account` | Change your own name or email |
 | POST | `/api/v1/account/change-password` | Replace your password |
 | DELETE | `/api/v1/account` | Delete your own account |
+| GET | `/api/v1/notifications` | Your feed, across every workspace |
+| GET | `/api/v1/notifications/unread-count` | What the badge shows |
+| PATCH | `/api/v1/notifications/{notification_id}/read` | Mark one read |
+| POST | `/api/v1/notifications/read-all` | Clear the badge |
 | GET | `/api/v1/account/sessions` | Where you are signed in |
 | DELETE | `/api/v1/account/sessions/{session_id}` | Sign one device out |
 | DELETE | `/api/v1/account/sessions` | Sign out everywhere |
@@ -140,6 +144,13 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `…/{workspace_id}/integrations/whatsapp/connect` | Connect a number |
 | GET | `…/{workspace_id}/integrations/whatsapp` | What is connected |
 | DELETE | `…/{workspace_id}/integrations/whatsapp` | Disconnect it |
+| POST | `…/{workspace_id}/automations` | Switch a predefined automation on |
+| GET | `…/{workspace_id}/automations` | What is switched on |
+| GET | `…/automations/{automation_id}` | Read one |
+| PATCH | `…/automations/{automation_id}` | Rename, reconfigure, or disable it |
+| DELETE | `…/automations/{automation_id}` | Remove it and its history |
+| GET | `…/automations/{automation_id}/runs` | What it has done, and skipped |
+| POST | `…/{workspace_id}/automations/run-due` | Run the ones nothing fires |
 | POST | `…/integrations/{provider}/install` | Start a storefront installation |
 | GET | `…/integrations/{provider}` | What is connected |
 | POST | `…/integrations/{provider}/sync` | Read the whole shop again |
@@ -568,6 +579,116 @@ price list is what the business charges, and an agent answering messages
 should not change it mid-conversation — but marking an order shipped is
 the work they do all day.
 
+### Notifications
+
+**No workspace in any of these paths**, which is the plan's endpoint list
+read literally and also the right shape: a notification is addressed to a
+*person*, and a person opening theirs wants everything meant for them —
+from every business they work in, not one at a time. `workspace_id` is a
+filter on all four endpoints, never a requirement, and every notification
+says which workspace it came from.
+
+What keeps the tenant boundary is the recipient *plus a membership check
+on every read*. A notification outlives the membership that justified it,
+so somebody removed from a business stops seeing its activity the moment
+they are removed rather than keeping a feed of it.
+
+| Told about | Who hears it |
+| --- | --- |
+| A conversation assigned to you | the assignee — never the person who assigned it |
+| The assistant asking for a person | everyone who handles customers |
+| A message that could not be delivered | administrators |
+| A document that could not be ingested | administrators |
+
+One row per recipient, because read state is per person and three of the
+four endpoints are about read state. A shared row would need a second
+table to hold who had read it, which is the same rows in a worse shape.
+
+Notifications are written **in the same transaction as the thing they
+describe**. One committed separately can exist for an assignment that was
+rolled back, or be missing for one that was not.
+
+The two failure kinds **do not repeat while they are still unread** — a
+partial unique index on `(user_id, dedupe_key) WHERE read_at IS NULL`. A
+provider outage produces one failure per message, and one notification per
+failure would bury the problem under itself. An integration is not more
+broken for having failed twice. The event kinds leave that key null and
+never collide, so two assignments are two notifications.
+
+`read_at` is a timestamp, not a flag, and is set once: marking something
+read twice must not move it, or "when did they see this" stops being true
+the moment somebody clicks twice.
+
+**In-app only.** Email and push are named in the plan as later channels,
+and the sender built in Phase 16 is there when they arrive. **"Customer
+waiting"** is the one example from the plan not built: it is about time
+passing rather than an event, so it needs the sweep the background-jobs
+phase supplies.
+
+### Automations
+
+Three predefined automations, not a workflow builder — which is the plan's
+instruction for this phase, and the reason an `automations` row holds
+*settings* rather than a program. What each one does is code in
+`app/services/automations.py`; what a business chooses is whether it runs,
+when, and what it says. Settings are validated against the schema the
+named automation declares before they are stored, so a row cannot exist
+that the code reading it will not understand.
+
+| Automation | Fires on | Deduplicated by |
+| --- | --- | --- |
+| Order confirmation | an order recorded | the order |
+| Hand over to a person | a customer message matching a keyword | the message |
+| Unanswered lead follow-up | a sweep, not an event | the conversation |
+
+Three of the plan's six, and the other three are worth saying out loud.
+**FAQ auto-response** and **order status response** are what the assistant
+already does, driven by a conversation's `ai_mode` — retrieval, the
+catalogue lookup and this customer's orders, all since Phase 11. Building
+them again here would be a second path to the same reply with a second set
+of bugs, which is the one thing this phase's plan says not to do.
+**Abandoned cart follow-up** needs a cart, and nothing in this product has
+one: that is a table and a webhook topic, not a setting.
+
+**Duplicate execution** is a unique index on `(automation_id, dedupe_key)`,
+and the run row is written *before* the work rather than after it. An index
+only prevents anything if the claim exists before the second attempt looks,
+so a redelivered webhook loses the race at the claim rather than halfway
+through sending a message. An automation that returns no key is saying it
+may run again, which is a decision each one makes for itself.
+
+**Retries** are the automation's own policy — three attempts for a send,
+two for a follow-up — and only `AppError` is retried, this application's
+vocabulary for "something outside said no". Anything else is a bug, and
+retrying a bug three times produces three of the same stack trace. Retries
+are inline, which is honest rather than ideal: it runs after its response
+so nobody is waiting, but a provider down for a minute produces a failed
+run rather than one that resumes. The row it leaves is what a retry worker
+would pick up.
+
+**Run history** is `GET …/automations/{id}/runs`. Most rows are `skipped`,
+and that is the point rather than noise: an automation is considered on
+every matching event, so the history is also the record of everything it
+correctly left alone. Filter by `status` for the ones that did something —
+or the ones that failed, which is the question people usually arrive with.
+
+Automations never run in a request. Messaging a customer means waiting on a
+provider, and that must not be time a webhook spends before acknowledging
+or an agent spends on a form. `POST …/automations/run-due` is the exception
+by necessity: a follow-up is about something *failing* to happen, so it has
+to be looked for, and there is no scheduler yet. That endpoint is what the
+background-jobs phase will call on a timer, and nothing else changes when
+it does. It is safe to call repeatedly — every run it records is
+deduplicated on the thing it acted on.
+
+One thing worth knowing before connecting a storefront: **an order
+confirmation fires on a webhook and never on a sync.** A delivery is
+something that has just happened; a sync is a shop's history, and
+confirming all of it would message every customer the business has ever
+had, about orders they placed months ago. That is enforced at the caller
+rather than in the automation, because it is a property of how the order
+arrived.
+
 ### Connecting a storefront
 
 Two of them — **Shopify** and **WooCommerce** — behind one interface.
@@ -888,6 +1009,25 @@ Worth knowing before this is used for something real:
 - **WooCommerce keeps no tracking fields of its own.** They live in
   whichever shipping plugin the shop installed; the two `meta_data` keys
   the common ones use are read, and a shop using a third is not.
+- **Automation retries are inline and bounded.** A provider down for a
+  minute leaves a `failed` run rather than one that resumes. The row is
+  what a retry worker would pick up; there is no worker yet.
+- **Nothing runs `run-due` on a timer.** Until the background-jobs phase
+  supplies a scheduler, a follow-up only happens when something calls that
+  endpoint.
+- **A follow-up goes out once per conversation, ever.** That is
+  deliberate — the alternative is the same nudge every sweep, for as long
+  as a lead stays dropped — but it also means a lead dropped twice is
+  nudged once.
+- **Notifications are in-app only.** Email and push are later channels;
+  nothing is delivered outside the API.
+- **Nothing tells anybody a customer has been waiting.** That one is about
+  time passing rather than an event, so it needs the same scheduler the
+  automation sweep does.
+- **Notifications are never pruned.** The table grows with activity. None
+  of it is exposure — every read is scoped to the recipient and their
+  current memberships — and it belongs with the same sweep the ended
+  sessions and spent links need.
 
 ## Layout
 

@@ -385,6 +385,68 @@ class ProductConflictError(AppError):
         self.workspace_id = workspace_id
 
 
+class AutomationNotFoundError(AppError):
+    """No automation with that id exists in this workspace."""
+
+    detail = "Automation not found"
+
+    def __init__(self, workspace_id: object, automation_id: object) -> None:
+        super().__init__(f"Automation {automation_id} not in {workspace_id}")
+        self.workspace_id = workspace_id
+        self.automation_id = automation_id
+
+
+class AutomationAlreadyExistsError(AppError):
+    """That automation is already configured for this workspace.
+
+    One configuration per kind, so that switching a thing on twice is a
+    refusal rather than two of it running side by side -- which for an
+    order confirmation would be two messages to one customer about one
+    purchase, with no screen able to explain why.
+    """
+
+    detail = "That automation is already set up for this workspace"
+
+    def __init__(self, workspace_id: object, kind: object) -> None:
+        super().__init__(f"Automation {kind} already exists in {workspace_id}")
+        self.workspace_id = workspace_id
+        self.kind = kind
+
+
+class InvalidAutomationSettingsError(AppError):
+    """The settings do not match the automation they are for.
+
+    Each predefined automation declares the shape of its own settings, so
+    this is caught on the way in rather than on the way out -- a stored
+    definition the code reading it cannot understand would be a run that
+    fails every time, for a reason nobody could see from the form that
+    caused it.
+    """
+
+    detail = "Those settings are not valid for this automation"
+
+    def __init__(self, kind: object, problems: int) -> None:
+        super().__init__(f"{problems} invalid setting(s) for automation {kind}")
+        self.kind = kind
+        self.problems = problems
+
+
+class NotificationNotFoundError(AppError):
+    """No notification with that id is addressed to this person.
+
+    The same answer whether it does not exist or belongs to somebody
+    else, for the reason every other lookup here gives it: telling those
+    apart makes an id a way of asking what other people are being told.
+    """
+
+    detail = "Notification not found"
+
+    def __init__(self, user_id: int, notification_id: object) -> None:
+        super().__init__(f"Notification {notification_id} is not for user {user_id}")
+        self.user_id = user_id
+        self.notification_id = notification_id
+
+
 class ContactNotFoundError(AppError):
     """No contact with that id exists in this workspace.
 

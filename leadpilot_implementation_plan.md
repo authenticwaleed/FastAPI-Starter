@@ -2084,10 +2084,10 @@ order confirmation
 
 ## Acceptance criteria
 
-- [ ] predefined automation can run
-- [ ] retry behavior defined
-- [ ] run history available
-- [ ] duplicate execution prevented where required
+- [x] predefined automation can run
+- [x] retry behavior defined
+- [x] run history available
+- [x] duplicate execution prevented where required
 
 ---
 

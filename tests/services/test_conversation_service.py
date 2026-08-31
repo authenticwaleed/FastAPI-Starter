@@ -30,6 +30,7 @@ from app.schemas.workspace import WorkspaceCreate
 from app.services.contact_service import ContactService
 from app.services.conversation_service import ConversationService
 from app.services.workspace_service import WorkspaceAccess, WorkspaceService
+from tests.support.services import notification_service
 
 NUMBER = "+923001234567"
 OTHER_NUMBER = "+923009876543"
@@ -86,6 +87,7 @@ def service(
         contacts=contact_repository,
         memberships=membership_repository,
         events=ConversationEventRepository(db_session),
+        notifications=notification_service(db_session),
     )
 
 

@@ -14,8 +14,10 @@ from app.core.exceptions import (
     MembershipNotFoundError,
 )
 from app.db.session import SessionDep
+from app.models.contact import Contact
 from app.models.conversation import AiMode, Conversation, ConversationStatus
 from app.models.conversation_event import ConversationEvent, EventType
+from app.models.notification import NotificationKind
 from app.models.workspace_membership import MembershipStatus
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_event_repository import (
@@ -30,6 +32,10 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.schemas.conversation import ConversationCreate, ConversationUpdate
 from app.services.contact_service import ContactRepositoryDep
+from app.services.notification_service import (
+    NotificationService,
+    NotificationServiceDep,
+)
 from app.services.workspace_service import (
     WorkspaceAccess,
     WorkspaceMembershipRepositoryDep,
@@ -51,12 +57,14 @@ class ConversationService:
         contacts: ContactRepository,
         memberships: WorkspaceMembershipRepository,
         events: ConversationEventRepository,
+        notifications: NotificationService,
     ) -> None:
         self._session = session
         self._conversations = conversations
         self._contacts = contacts
         self._memberships = memberships
         self._events = events
+        self._notifications = notifications
 
     def create(
         self,
@@ -199,6 +207,21 @@ class ConversationService:
                 raise MembershipNotFoundError(access.workspace.id, user_id)
 
         self._conversations.set_assignee(conversation, user_id)
+
+        if user_id is not None and user_id != access.membership.user_id:
+            # Told in the same transaction as the assignment, so the two
+            # cannot disagree -- and not told to whoever did it, who
+            # already knows and does not need a badge for their own click.
+            contact = self._contacts.get(access.workspace.id, conversation.contact_id)
+            self._notifications.tell(
+                user_id=user_id,
+                workspace_id=access.workspace.id,
+                kind=NotificationKind.CONVERSATION_ASSIGNED,
+                title="A conversation was assigned to you",
+                body=_about(contact),
+                meta={"conversation_id": str(conversation.id)},
+            )
+
         self._session.commit()
 
         return self._row(access, conversation)
@@ -414,6 +437,7 @@ def get_conversation_service(
     contacts: ContactRepositoryDep,
     memberships: WorkspaceMembershipRepositoryDep,
     events: ConversationEventRepositoryDep,
+    notifications: NotificationServiceDep,
 ) -> ConversationService:
     return ConversationService(
         session=session,
@@ -421,6 +445,7 @@ def get_conversation_service(
         contacts=contacts,
         memberships=memberships,
         events=events,
+        notifications=notifications,
     )
 
 
@@ -428,3 +453,16 @@ ConversationServiceDep = Annotated[
     ConversationService,
     Depends(get_conversation_service),
 ]
+
+
+def _about(contact: Contact | None) -> str | None:
+    """Who the thread is with, as one line, written down now.
+
+    Composed here rather than looked up when the notification is read,
+    because a notification is a record of a moment: a contact renamed
+    next month should not silently rewrite what somebody was told today.
+    """
+    if contact is None:
+        return None
+
+    return f"With {contact.name or contact.phone_number}"

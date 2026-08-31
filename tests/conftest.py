@@ -173,6 +173,7 @@ def engine() -> Iterator[Engine]:
                 "TRUNCATE conversation_events, ai_response_logs, "
                 "knowledge_chunks, "
                 "knowledge_documents, knowledge_sources, "
+                "notifications, automation_runs, automations, "
                 "product_variants, products, orders, "
                 "messages, conversations, contacts, "
                 "whatsapp_accounts, ecommerce_accounts, workspace_invitations, "

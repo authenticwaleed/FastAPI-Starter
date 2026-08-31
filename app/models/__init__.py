@@ -5,6 +5,14 @@ what Alembic autogenerate needs in order to see the full schema.
 """
 
 from app.models.ai_response_log import AiDecision, AiResponseLog
+from app.models.automation import (
+    Automation,
+    AutomationKind,
+    AutomationRun,
+    AutomationStatus,
+    AutomationTrigger,
+    RunStatus,
+)
 from app.models.contact import Contact, ContactStatus
 from app.models.conversation import (
     AiMode,
@@ -32,6 +40,7 @@ from app.models.message import (
     MessageStatus,
     SenderType,
 )
+from app.models.notification import Notification, NotificationKind
 from app.models.order import Order, OrderStatus
 from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.user import User
@@ -58,6 +67,11 @@ __all__ = [
     "AiDecision",
     "AiMode",
     "AiResponseLog",
+    "Automation",
+    "AutomationKind",
+    "AutomationRun",
+    "AutomationStatus",
+    "AutomationTrigger",
     "Channel",
     "Contact",
     "ContactStatus",
@@ -78,12 +92,15 @@ __all__ = [
     "Message",
     "MessageStatus",
     "MessagingProviderName",
+    "Notification",
+    "NotificationKind",
     "Order",
     "OrderStatus",
     "Product",
     "ProductStatus",
     "ProductVariant",
     "RefreshToken",
+    "RunStatus",
     "SenderType",
     "SessionEndReason",
     "SourceType",
