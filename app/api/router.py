@@ -13,6 +13,7 @@ from app.api.routes import (
     invitations,
     knowledge,
     memberships,
+    notifications,
     orders,
     products,
     webhooks,
@@ -30,6 +31,9 @@ api_router.include_router(auth.router)
 # before it needs a route. UserService still holds the logic, so the admin
 # surface that eventually needs it has something to build on.
 api_router.include_router(account.router)
+# Beside /account rather than under a workspace, for the same reason: a
+# notification is addressed to a person, and a person has one feed.
+api_router.include_router(notifications.router)
 api_router.include_router(workspaces.router)
 api_router.include_router(memberships.router)
 api_router.include_router(invitations.workspace_router)

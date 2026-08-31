@@ -431,6 +431,22 @@ class InvalidAutomationSettingsError(AppError):
         self.problems = problems
 
 
+class NotificationNotFoundError(AppError):
+    """No notification with that id is addressed to this person.
+
+    The same answer whether it does not exist or belongs to somebody
+    else, for the reason every other lookup here gives it: telling those
+    apart makes an id a way of asking what other people are being told.
+    """
+
+    detail = "Notification not found"
+
+    def __init__(self, user_id: int, notification_id: object) -> None:
+        super().__init__(f"Notification {notification_id} is not for user {user_id}")
+        self.user_id = user_id
+        self.notification_id = notification_id
+
+
 class ContactNotFoundError(AppError):
     """No contact with that id exists in this workspace.
 

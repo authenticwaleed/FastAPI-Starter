@@ -40,6 +40,7 @@ from app.models.message import (
     MessageStatus,
     SenderType,
 )
+from app.models.notification import Notification, NotificationKind
 from app.models.order import Order, OrderStatus
 from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.user import User
@@ -91,6 +92,8 @@ __all__ = [
     "Message",
     "MessageStatus",
     "MessagingProviderName",
+    "Notification",
+    "NotificationKind",
     "Order",
     "OrderStatus",
     "Product",

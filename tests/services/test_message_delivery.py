@@ -30,6 +30,7 @@ from app.services.message_service import MessageService
 from app.services.whatsapp_service import WhatsAppService
 from app.services.workspace_service import WorkspaceService
 from tests.support.messaging import FakeMessagingProvider
+from tests.support.services import notification_service
 from tests.support.whatsapp import PHONE_NUMBER_ID
 
 CUSTOMER = "+923001234567"
@@ -86,6 +87,7 @@ class Setup:
             contacts=contact_repository,
             memberships=membership_repository,
             events=ConversationEventRepository(db_session),
+            notifications=notification_service(db_session),
         )
         self.conversation = self.conversations.create(
             self.access,
@@ -103,6 +105,7 @@ class Setup:
                 accounts=accounts,
                 provider=provider,
             ),
+            notifications=notification_service(db_session),
         )
 
     def connect(self) -> None:

@@ -78,6 +78,10 @@ test is rolled back afterwards, so it never touches application data. Set
 | PATCH | `/api/v1/account` | Change your own name or email |
 | POST | `/api/v1/account/change-password` | Replace your password |
 | DELETE | `/api/v1/account` | Delete your own account |
+| GET | `/api/v1/notifications` | Your feed, across every workspace |
+| GET | `/api/v1/notifications/unread-count` | What the badge shows |
+| PATCH | `/api/v1/notifications/{notification_id}/read` | Mark one read |
+| POST | `/api/v1/notifications/read-all` | Clear the badge |
 | GET | `/api/v1/account/sessions` | Where you are signed in |
 | DELETE | `/api/v1/account/sessions/{session_id}` | Sign one device out |
 | DELETE | `/api/v1/account/sessions` | Sign out everywhere |
@@ -575,6 +579,52 @@ price list is what the business charges, and an agent answering messages
 should not change it mid-conversation — but marking an order shipped is
 the work they do all day.
 
+### Notifications
+
+**No workspace in any of these paths**, which is the plan's endpoint list
+read literally and also the right shape: a notification is addressed to a
+*person*, and a person opening theirs wants everything meant for them —
+from every business they work in, not one at a time. `workspace_id` is a
+filter on all four endpoints, never a requirement, and every notification
+says which workspace it came from.
+
+What keeps the tenant boundary is the recipient *plus a membership check
+on every read*. A notification outlives the membership that justified it,
+so somebody removed from a business stops seeing its activity the moment
+they are removed rather than keeping a feed of it.
+
+| Told about | Who hears it |
+| --- | --- |
+| A conversation assigned to you | the assignee — never the person who assigned it |
+| The assistant asking for a person | everyone who handles customers |
+| A message that could not be delivered | administrators |
+| A document that could not be ingested | administrators |
+
+One row per recipient, because read state is per person and three of the
+four endpoints are about read state. A shared row would need a second
+table to hold who had read it, which is the same rows in a worse shape.
+
+Notifications are written **in the same transaction as the thing they
+describe**. One committed separately can exist for an assignment that was
+rolled back, or be missing for one that was not.
+
+The two failure kinds **do not repeat while they are still unread** — a
+partial unique index on `(user_id, dedupe_key) WHERE read_at IS NULL`. A
+provider outage produces one failure per message, and one notification per
+failure would bury the problem under itself. An integration is not more
+broken for having failed twice. The event kinds leave that key null and
+never collide, so two assignments are two notifications.
+
+`read_at` is a timestamp, not a flag, and is set once: marking something
+read twice must not move it, or "when did they see this" stops being true
+the moment somebody clicks twice.
+
+**In-app only.** Email and push are named in the plan as later channels,
+and the sender built in Phase 16 is there when they arrive. **"Customer
+waiting"** is the one example from the plan not built: it is about time
+passing rather than an event, so it needs the sweep the background-jobs
+phase supplies.
+
 ### Automations
 
 Three predefined automations, not a workflow builder — which is the plan's
@@ -969,6 +1019,15 @@ Worth knowing before this is used for something real:
   deliberate — the alternative is the same nudge every sweep, for as long
   as a lead stays dropped — but it also means a lead dropped twice is
   nudged once.
+- **Notifications are in-app only.** Email and push are later channels;
+  nothing is delivered outside the API.
+- **Nothing tells anybody a customer has been waiting.** That one is about
+  time passing rather than an event, so it needs the same scheduler the
+  automation sweep does.
+- **Notifications are never pruned.** The table grows with activity. None
+  of it is exposure — every read is scoped to the recipient and their
+  current memberships — and it belongs with the same sweep the ended
+  sessions and spent links need.
 
 ## Layout
 

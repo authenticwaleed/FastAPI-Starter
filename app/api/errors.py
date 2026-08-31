@@ -42,6 +42,7 @@ from app.core.exceptions import (
     LastOwnerError,
     MembershipNotFoundError,
     MessagingProviderError,
+    NotificationNotFoundError,
     OrderAlreadyExistsError,
     OrderNotConfirmableError,
     OrderNotFoundError,
@@ -177,6 +178,10 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     ProductNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "product_not_found"),
     ProductConflictError: _Answer(status.HTTP_409_CONFLICT, "product_conflict"),
     OrderNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "order_not_found"),
+    NotificationNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "notification_not_found",
+    ),
     AutomationNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
         "automation_not_found",
@@ -527,6 +532,10 @@ ORDER_NOT_FOUND = _documented(
 ORDER_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "That external id is taken, or the order is not pending",
+)
+NOTIFICATION_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No notification of yours has that id",
 )
 AUTOMATION_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,

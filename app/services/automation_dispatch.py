@@ -28,15 +28,20 @@ from app.repositories.conversation_event_repository import (
 )
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.notification_repository import NotificationRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
+)
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_dispatch import SessionSource, open_session
 from app.services.automation_service import AutomationService
 from app.services.automations import Tools, Trigger
 from app.services.message_service import MessageService
+from app.services.notification_service import NotificationService
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
@@ -58,6 +63,11 @@ def build_automation_service(
     accounts = WhatsAppAccountRepository(session)
     contacts = ContactRepository(session)
     automations = AutomationRepository(session)
+    notifications = NotificationService(
+        session=session,
+        notifications=NotificationRepository(session),
+        memberships=WorkspaceMembershipRepository(session),
+    )
 
     return AutomationService(
         session=session,
@@ -75,6 +85,7 @@ def build_automation_service(
                     accounts=accounts,
                     provider=messaging,
                 ),
+                notifications=notifications,
             ),
             message_repository=messages,
             conversations=conversations,

@@ -16,6 +16,7 @@ from app.core.exceptions import (
 from app.db.session import SessionDep
 from app.models.conversation import Conversation
 from app.models.message import Direction, Message, MessageStatus, SenderType
+from app.models.notification import NotificationKind
 from app.models.workspace import Workspace
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -26,11 +27,16 @@ from app.repositories.whatsapp_account_repository import (
 from app.schemas.message import MessageCreate
 from app.services.contact_service import ContactRepositoryDep
 from app.services.conversation_service import ConversationRepositoryDep
+from app.services.notification_service import (
+    NotificationService,
+    NotificationServiceDep,
+)
 from app.services.whatsapp_service import (
     WhatsAppAccountRepositoryDep,
     WhatsAppService,
     WhatsAppServiceDep,
 )
+from app.services.workspace_service import MAY_ADMINISTER
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +61,7 @@ class MessageService:
         contacts: ContactRepository,
         accounts: WhatsAppAccountRepository,
         whatsapp: WhatsAppService,
+        notifications: NotificationService,
     ) -> None:
         self._session = session
         self._messages = messages
@@ -62,6 +69,7 @@ class MessageService:
         self._contacts = contacts
         self._accounts = accounts
         self._whatsapp = whatsapp
+        self._notifications = notifications
 
     def list_for(
         self,
@@ -151,11 +159,24 @@ class MessageService:
                 to=contact.phone_number,
                 text=payload.text,
             )
-        except MessagingProviderError:
+        except MessagingProviderError as exc:
             # Recorded on the message and then re-raised. The agent is
             # told it failed, and the thread shows why rather than showing
             # a reply that looks like it went.
             message.status = MessageStatus.FAILED
+            # And the administrators are told, once. A provider outage
+            # produces one failure per message, and one notification per
+            # failure would bury the problem under itself -- so this kind
+            # does not repeat while it is still unread. See
+            # NotificationService.
+            self._notifications.tell_everyone(
+                workspace_id=workspace_id,
+                roles=MAY_ADMINISTER,
+                kind=NotificationKind.MESSAGE_DELIVERY_FAILED,
+                title="A message could not be delivered",
+                body=str(exc),
+                meta={"conversation_id": str(conversation.id)},
+            )
             self._session.commit()
             raise
 
@@ -218,6 +239,7 @@ def get_message_service(
     contacts: ContactRepositoryDep,
     accounts: WhatsAppAccountRepositoryDep,
     whatsapp: WhatsAppServiceDep,
+    notifications: NotificationServiceDep,
 ) -> MessageService:
     return MessageService(
         session=session,
@@ -226,6 +248,7 @@ def get_message_service(
         contacts=contacts,
         accounts=accounts,
         whatsapp=whatsapp,
+        notifications=notifications,
     )
 
 

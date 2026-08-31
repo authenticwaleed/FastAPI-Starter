@@ -33,9 +33,14 @@ from app.models.knowledge import (
     KnowledgeDocument,
     KnowledgeSource,
 )
+from app.models.notification import NotificationKind
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.schemas.knowledge import DocumentCreate, FaqCreate, SourceCreate
-from app.services.workspace_service import WorkspaceAccess
+from app.services.notification_service import (
+    NotificationService,
+    NotificationServiceDep,
+)
+from app.services.workspace_service import MAY_ADMINISTER, WorkspaceAccess
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +71,12 @@ class KnowledgeService:
         session: Session,
         knowledge: KnowledgeRepository,
         embeddings: EmbeddingProvider,
+        notifications: NotificationService,
     ) -> None:
         self._session = session
         self._knowledge = knowledge
         self._embeddings = embeddings
+        self._notifications = notifications
 
     # --- sources -----------------------------------------------------------
 
@@ -301,6 +308,18 @@ class KnowledgeService:
                 error=exc.detail,
             )
             self._knowledge.set_source_status(source, DocumentStatus.FAILED)
+            # Told once while it is still unread, for the reason a failed
+            # delivery is: a business uploading twenty documents against a
+            # provider that is down would otherwise get twenty alerts
+            # about one outage.
+            self._notifications.tell_everyone(
+                workspace_id=access.workspace.id,
+                roles=MAY_ADMINISTER,
+                kind=NotificationKind.KNOWLEDGE_INGESTION_FAILED,
+                title="A document could not be added to the knowledge base",
+                body=exc.detail,
+                meta={"document_id": str(document.id), "title": title},
+            )
             self._session.commit()
             raise
 
@@ -459,11 +478,13 @@ def get_knowledge_service(
     session: SessionDep,
     knowledge: KnowledgeRepositoryDep,
     embeddings: EmbeddingProviderDep,
+    notifications: NotificationServiceDep,
 ) -> KnowledgeService:
     return KnowledgeService(
         session=session,
         knowledge=knowledge,
         embeddings=embeddings,
+        notifications=notifications,
     )
 
 

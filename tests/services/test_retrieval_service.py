@@ -23,6 +23,7 @@ from app.services.knowledge_service import KnowledgeService
 from app.services.retrieval_service import MIN_SCORE, RetrievalService
 from app.services.workspace_service import WorkspaceAccess, WorkspaceService
 from tests.support.knowledge import FakeEmbeddingProvider
+from tests.support.services import notification_service
 
 RETURNS = (
     "Returns are accepted within 14 days of delivery. The item must be "
@@ -58,6 +59,7 @@ def ingest(
         session=db_session,
         knowledge=knowledge_repository,
         embeddings=embeddings,
+        notifications=notification_service(db_session),
     )
 
 

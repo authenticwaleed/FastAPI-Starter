@@ -37,15 +37,20 @@ from app.repositories.conversation_event_repository import (
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.notification_repository import NotificationRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
+)
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_response_service import AiResponseService
 from app.services.commerce_context import CommerceContextService
 from app.services.message_service import MessageService
+from app.services.notification_service import NotificationService
 from app.services.retrieval_service import RetrievalService
 from app.services.whatsapp_service import WhatsAppService
 
@@ -88,6 +93,11 @@ def build_ai_response_service(
     messages = MessageRepository(session)
     accounts = WhatsAppAccountRepository(session)
     knowledge = KnowledgeRepository(session)
+    notifications = NotificationService(
+        session=session,
+        notifications=NotificationRepository(session),
+        memberships=WorkspaceMembershipRepository(session),
+    )
 
     return AiResponseService(
         session=session,
@@ -101,6 +111,7 @@ def build_ai_response_service(
         ),
         writer=writer,
         events=ConversationEventRepository(session),
+        notifications=notifications,
         outbound=MessageService(
             session=session,
             messages=messages,
@@ -112,6 +123,7 @@ def build_ai_response_service(
                 accounts=accounts,
                 provider=messaging,
             ),
+            notifications=notifications,
         ),
     )
 
