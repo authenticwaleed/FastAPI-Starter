@@ -15,9 +15,11 @@ class AuditActor(BaseModel):
     changed a subscription -- and `actor: null` says that in a way that
     `actor_name: null, actor_email: null` does not.
 
-    Present with an id and no name where the account has since been
-    deleted. The record of what they did survives them, which is the
-    reason this table exists.
+    Present with an address and no id where the account has since been
+    deleted: the foreign key nulled the id when the row went, and the
+    address was written down at the time so that it did not go too. The
+    record of what somebody did outliving their account is the reason this
+    table exists.
     """
 
     user_id: int | None
