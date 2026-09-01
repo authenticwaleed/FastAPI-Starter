@@ -12,12 +12,14 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models.subscription import BillingProviderName, SubscriptionStatus
+from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.usage_repository import UsageRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
+from app.services.audit_service import AuditService
 from app.services.notification_service import NotificationService
 from app.services.plans import PlanTier
 from app.services.subscription_service import SubscriptionService
@@ -38,6 +40,16 @@ def notification_service(session: Session) -> NotificationService:
         notifications=NotificationRepository(session),
         memberships=WorkspaceMembershipRepository(session),
     )
+
+
+def audit_service(session: Session) -> AuditService:
+    """The audit log, on a test's own session.
+
+    Real, like the notifications and the meter. What an audit entry has to
+    get right is landing in the same transaction as the act it records,
+    and a stub would be a second implementation of exactly that.
+    """
+    return AuditService(session=session, logs=AuditLogRepository(session))
 
 
 def usage_service(session: Session) -> UsageService:
@@ -64,6 +76,7 @@ def subscription_service(session: Session) -> SubscriptionService:
         provider=FakeBillingProvider(),
         notifications=notification_service(session),
         usage=usage_service(session),
+        audit=audit_service(session),
     )
 
 
