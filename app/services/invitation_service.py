@@ -19,6 +19,7 @@ from app.core.exceptions import (
 )
 from app.core.security import generate_token, hash_token
 from app.db.session import SessionDep
+from app.models.audit_log import AuditEvent
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.models.workspace_invitation import WorkspaceInvitation
@@ -35,6 +36,7 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace_invitation import InvitationCreate
+from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.membership_service import may_manage
 from app.services.plans import PlanLimit
 from app.services.subscription_service import (
@@ -68,6 +70,7 @@ class InvitationService:
         workspaces: WorkspaceRepository,
         users: UserRepository,
         subscriptions: SubscriptionService,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._invitations = invitations
@@ -75,6 +78,7 @@ class InvitationService:
         self._workspaces = workspaces
         self._users = users
         self._subscriptions = subscriptions
+        self._audit = audit
 
     # --- sending ------------------------------------------------------
 
@@ -132,6 +136,16 @@ class InvitationService:
             token_hash=hash_token(token),
             expires_at=now + timedelta(hours=get_settings().invitation_expire_hours),
             invited_by_user_id=access.membership.user_id,
+        )
+        # The email and the rank offered, not the token. What makes an
+        # invitation worth auditing is that it is a seat at a rank handed
+        # to an address nobody here controls -- and an audit log holding
+        # the token would be a table of live credentials.
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.MEMBER_INVITED,
+            actor_user_id=access.membership.user_id,
+            meta={"email": invitation.email, "role": invitation.role.value},
         )
         self._session.commit()
 
@@ -218,6 +232,16 @@ class InvitationService:
             # makes acceptance single-use: two requests racing the same
             # link cannot both come away with a seat.
             self._invitations.mark_accepted(invitation, datetime.now(UTC))
+            # The actor is the person joining, which is the one place in
+            # this file where that is not somebody who was already a
+            # member: an invitation is accepted by a stranger holding a
+            # token, and the entry has to say who that turned out to be.
+            self._audit.did(
+                workspace.id,
+                AuditEvent.MEMBER_JOINED,
+                actor_user_id=user.id,
+                meta={"email": invitation.email, "role": invitation.role.value},
+            )
             self._session.commit()
         except IntegrityError as exc:
             self._session.rollback()
@@ -279,6 +303,7 @@ def get_invitation_service(
     workspaces: WorkspaceRepositoryDep,
     users: UserRepositoryDep,
     subscriptions: SubscriptionServiceDep,
+    audit: AuditServiceDep,
 ) -> InvitationService:
     return InvitationService(
         session=session,
@@ -287,6 +312,7 @@ def get_invitation_service(
         workspaces=workspaces,
         users=users,
         subscriptions=subscriptions,
+        audit=audit,
     )
 
 
