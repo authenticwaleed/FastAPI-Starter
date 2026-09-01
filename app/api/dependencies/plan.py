@@ -42,3 +42,4 @@ def require_feature(feature: Feature) -> Callable[..., None]:
 REQUIRES_AUTOMATIONS = Depends(require_feature(Feature.AUTOMATIONS))
 REQUIRES_ECOMMERCE = Depends(require_feature(Feature.ECOMMERCE))
 REQUIRES_ADVANCED_ANALYTICS = Depends(require_feature(Feature.ADVANCED_ANALYTICS))
+REQUIRES_AUDIT_LOGS = Depends(require_feature(Feature.AUDIT_LOGS))
