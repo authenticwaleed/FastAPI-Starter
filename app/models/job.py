@@ -39,6 +39,12 @@ class JobKind(StrEnum):
     # failure is not every business's.
     SWEEP_AUTOMATIONS = "sweep_automations"
     RUN_DUE_AUTOMATIONS = "run_due_automations"
+    # Destroy a closed workspace's data once its retention period is over.
+    # The one job in this list that cannot be undone, and the reason it is
+    # a job at all: erasure has to happen on a date rather than when
+    # somebody remembers, and a queue is the only part of this system that
+    # does anything on a date.
+    ERASE_WORKSPACE = "erase_workspace"
 
 
 class JobStatus(StrEnum):
