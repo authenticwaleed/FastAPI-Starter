@@ -191,6 +191,30 @@ class Settings(BaseSettings):
     # forgeries stops being answered.
     rate_limit_webhook_rejections_per_minute: int = 30
 
+    # How long the worker waits when it finds nothing to do. Short enough
+    # that a message queued by a request goes out while the person who
+    # sent it is still looking at the thread, long enough that an idle
+    # deployment is not one query a second against the jobs table for ever.
+    worker_poll_seconds: float = 2.0
+
+    # How many jobs one pass claims before going back to look for more.
+    # Claimed one at a time regardless -- this is how many times round the
+    # loop, not a batch -- so a slow job delays the next rather than
+    # holding a lock over ten of them.
+    worker_batch_size: int = 20
+
+    # When a job that says it is running is assumed to have been abandoned.
+    # A worker killed mid-job leaves the row claimed, and nothing but a
+    # clock can tell that from a job that is simply taking a while -- so
+    # this has to be comfortably longer than the slowest handler, which is
+    # a WhatsApp delivery behind its own timeout.
+    worker_stall_after_seconds: int = 300
+
+    # How often the automation sweep is planned. Also the width of the
+    # window its deduplication key is bucketed into, so shortening it
+    # cannot produce two sweeps for one window.
+    worker_sweep_every_seconds: int = 300
+
     log_level: str = "INFO"
     # "text" reads better in a terminal; "json" is what a log aggregator can
     # actually query. Left unset it follows the environment, which is the
