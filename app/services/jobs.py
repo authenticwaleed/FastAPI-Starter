@@ -72,6 +72,51 @@ class DeliverMessage:
         messages.deliver_pending(workspace, uuid.UUID(job.payload["message_id"]))
 
 
+class EraseWorkspace:
+    """Destroy one closed workspace's data, once its date has passed.
+
+    The date is checked again here and not merely when the job was
+    queued. A job can sit in the queue through a restart, a reclaim, and
+    an administrator changing their mind -- and the one job in this system
+    that cannot be undone is the one that must not act on a stale reason.
+
+    Nothing is written to the audit log at this point, because there is
+    nowhere to write it: the entry would belong to the workspace being
+    deleted and would go with it. What survives is the `workspace.closed`
+    entry from when the erasure was scheduled, and the line this leaves in
+    the log stream.
+    """
+
+    def run(self, context: JobContext, job: Job) -> None:
+        workspace_id = job.workspace_id
+
+        if workspace_id is None:
+            logger.warning("An erasure job named no workspace")
+
+            return
+
+        workspaces = WorkspaceRepository(context.session)
+        workspace = workspaces.get(workspace_id)
+
+        if workspace is None:
+            # Already gone. Two workers, or a retry after the delete
+            # committed and the job did not -- either way there is nothing
+            # left to do and that is a success.
+            return
+
+        if workspace.erase_after is None or workspace.erase_after > context.now:
+            # Reopened, or the date was moved out. Not an error: somebody
+            # changed their mind, which is what the grace period is for.
+            logger.info("Workspace %s is no longer due for erasure", workspace_id)
+
+            return
+
+        workspaces.erase(workspace)
+        context.session.commit()
+
+        logger.info("Erased workspace %s and everything it held", workspace_id)
+
+
 class SweepAutomations:
     """Plan the scheduled work, without doing any of it.
 
@@ -116,6 +161,38 @@ class SweepAutomations:
         context.session.commit()
 
 
+class SweepErasures:
+    """Queue an erasure for every workspace whose retention period is over.
+
+    A fan-out like the automation sweep, and for a sharper version of the
+    same reason: one job that deleted every due workspace would, on
+    failing halfway, retry and delete the first ones again -- harmlessly,
+    but with no way to tell a partial run from a complete one. One job per
+    workspace makes each deletion its own success or failure.
+    """
+
+    def run(self, context: JobContext, job: Job) -> None:
+        workspaces = WorkspaceRepository(context.session)
+
+        for workspace_id in workspaces.due_for_erasure(now=context.now):
+            try:
+                with context.session.begin_nested():
+                    context.jobs.enqueue(
+                        kind=JobKind.ERASE_WORKSPACE,
+                        workspace_id=workspace_id,
+                        payload={},
+                        # One per workspace, for ever. There is no second
+                        # erasure of the same business, and a key without
+                        # a window in it says so.
+                        dedupe_key=f"erase_workspace:{workspace_id}",
+                        max_attempts=3,
+                    )
+            except IntegrityError:
+                logger.debug("Workspace %s is already queued for erasure", workspace_id)
+
+        context.session.commit()
+
+
 class RunDueAutomations:
     """Run one workspace's scheduled automations.
 
@@ -153,4 +230,6 @@ CATALOGUE: dict[JobKind, JobHandler] = {
     JobKind.DELIVER_MESSAGE: DeliverMessage(),
     JobKind.SWEEP_AUTOMATIONS: SweepAutomations(),
     JobKind.RUN_DUE_AUTOMATIONS: RunDueAutomations(),
+    JobKind.SWEEP_ERASURES: SweepErasures(),
+    JobKind.ERASE_WORKSPACE: EraseWorkspace(),
 }
