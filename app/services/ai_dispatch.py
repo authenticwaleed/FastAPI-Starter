@@ -36,6 +36,7 @@ from app.repositories.conversation_event_repository import (
     ConversationEventRepository,
 )
 from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.job_repository import JobRepository
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.notification_repository import NotificationRepository
@@ -127,6 +128,45 @@ def build_subscription_service(session: Session) -> SubscriptionService:
     )
 
 
+def build_message_service(
+    session: Session,
+    *,
+    messaging: MessagingProvider,
+) -> MessageService:
+    """Sending, assembled against one session.
+
+    Written out once because three graphs want it: the assistant
+    answering a webhook, an automation messaging a customer, and the
+    worker retrying a delivery that did not go. Three copies of a
+    constructor is three places to edit the next time it grows an
+    argument, and the last time it did the third was the one that would
+    have been missed.
+    """
+    accounts = WhatsAppAccountRepository(session)
+    conversations = ConversationRepository(session)
+
+    return MessageService(
+        session=session,
+        messages=MessageRepository(session),
+        conversations=conversations,
+        contacts=ContactRepository(session),
+        accounts=accounts,
+        whatsapp=WhatsAppService(
+            session=session,
+            accounts=accounts,
+            provider=messaging,
+            audit=build_audit_service(session),
+        ),
+        notifications=NotificationService(
+            session=session,
+            notifications=NotificationRepository(session),
+            memberships=WorkspaceMembershipRepository(session),
+        ),
+        usage=build_usage_service(session),
+        jobs=JobRepository(session),
+    )
+
+
 def build_ai_response_service(
     session: Session,
     *,
@@ -142,7 +182,6 @@ def build_ai_response_service(
     """
     conversations = ConversationRepository(session)
     messages = MessageRepository(session)
-    accounts = WhatsAppAccountRepository(session)
     knowledge = KnowledgeRepository(session)
     notifications = NotificationService(
         session=session,
@@ -166,21 +205,7 @@ def build_ai_response_service(
         notifications=notifications,
         subscriptions=build_subscription_service(session),
         usage=usage,
-        outbound=MessageService(
-            session=session,
-            messages=messages,
-            conversations=conversations,
-            contacts=ContactRepository(session),
-            accounts=accounts,
-            whatsapp=WhatsAppService(
-                session=session,
-                accounts=accounts,
-                provider=messaging,
-                audit=build_audit_service(session),
-            ),
-            notifications=notifications,
-            usage=usage,
-        ),
+        outbound=build_message_service(session, messaging=messaging),
     )
 
 
