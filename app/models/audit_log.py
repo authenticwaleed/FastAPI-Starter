@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    String,
     Uuid,
     func,
     text,
@@ -126,12 +127,23 @@ class AuditLog(Base):
     # naming one would put a row in the evidence that accuses somebody of
     # something they did not do.
     actor_user_id: Mapped[int | None] = mapped_column(
-        # SET NULL rather than CASCADE, and this is the whole point of an
-        # audit log: somebody leaving must not delete the record of what
-        # they did while they were here.
+        # SET NULL rather than CASCADE: somebody leaving must not delete
+        # the record of what they did while they were here. It does mean
+        # the id goes when the account does, which is what the column
+        # below is for.
         ForeignKey("users.id", ondelete="SET NULL"),
         default=None,
     )
+
+    # Who they were, copied at the moment they did it. The one
+    # denormalised value in this table, and it earns its place: accounts
+    # in this application are deleted rather than retired, so without it
+    # an administrator could erase themselves from the record of what they
+    # did by closing their own account -- which is the exact move an audit
+    # log exists to defeat.
+    #
+    # Null only where `actor_user_id` is: nobody did it.
+    actor_email: Mapped[str | None] = mapped_column(String(255), default=None)
 
     # The particulars: which document, which role, which member. Ids and
     # values, not prose -- what a reader sees is composed on the screen
