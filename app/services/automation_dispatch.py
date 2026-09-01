@@ -39,6 +39,7 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_dispatch import (
     SessionSource,
+    build_audit_service,
     build_usage_service,
     open_session,
 )
@@ -88,6 +89,7 @@ def build_automation_service(
                     session=session,
                     accounts=accounts,
                     provider=messaging,
+                    audit=build_audit_service(session),
                 ),
                 notifications=notifications,
                 usage=build_usage_service(session),
