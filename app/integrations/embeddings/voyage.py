@@ -6,6 +6,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.exceptions import EmbeddingProviderError
+from app.core.observability import observed
 from app.core.vectors import normalise
 from app.integrations.embeddings.base import (
     EmbeddingPurpose,
@@ -59,22 +60,23 @@ class VoyageEmbeddingProvider:
             raise EmbeddingProviderError("No embedding provider key is configured")
 
         try:
-            response = httpx.post(
-                _URL,
-                headers={"Authorization": f"Bearer {key.get_secret_value()}"},
-                json={
-                    "model": settings.embedding_model,
-                    "input": list(texts),
-                    "input_type": purpose.value,
-                    "output_dimension": settings.embedding_dimensions,
-                    # Over-length input is cut rather than refused. A
-                    # single oversized passage should not fail a whole
-                    # document's ingestion, and the chunker has already
-                    # made passages far shorter than any model's limit.
-                    "truncation": True,
-                },
-                timeout=_TIMEOUT,
-            )
+            with observed("voyage", f"embed.{purpose.value}"):
+                response = httpx.post(
+                    _URL,
+                    headers={"Authorization": f"Bearer {key.get_secret_value()}"},
+                    json={
+                        "model": settings.embedding_model,
+                        "input": list(texts),
+                        "input_type": purpose.value,
+                        "output_dimension": settings.embedding_dimensions,
+                        # Over-length input is cut rather than refused. A
+                        # single oversized passage should not fail a whole
+                        # document's ingestion, and the chunker has already
+                        # made passages far shorter than any model's limit.
+                        "truncation": True,
+                    },
+                    timeout=_TIMEOUT,
+                )
         except httpx.HTTPError as exc:
             logger.warning("The embedding provider could not be reached: %s", exc)
             raise EmbeddingProviderError(
