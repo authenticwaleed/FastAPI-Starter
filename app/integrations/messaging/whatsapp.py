@@ -8,6 +8,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.exceptions import MessagingProviderError
+from app.core.observability import observed
 from app.integrations.messaging.base import (
     InboundMessage,
     SentMessage,
@@ -49,6 +50,27 @@ class WhatsAppCloudProvider:
         to: str,
         text: str,
     ) -> SentMessage:
+        with observed("whatsapp", "send_text"):
+            return self._post(
+                phone_number_id=phone_number_id,
+                access_token=access_token,
+                to=to,
+                text=text,
+            )
+
+    def _post(
+        self,
+        *,
+        phone_number_id: str,
+        access_token: str,
+        to: str,
+        text: str,
+    ) -> SentMessage:
+        """The call itself, so that what `observed` wraps is only the call.
+
+        Split out rather than wrapped in place: the timing should cover the
+        request and the reading of its answer, and nothing else.
+        """
         try:
             response = httpx.post(
                 f"{_GRAPH_URL}/{phone_number_id}/messages",
