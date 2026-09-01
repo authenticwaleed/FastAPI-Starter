@@ -13,10 +13,10 @@ class WorkspaceStatus(StrEnum):
     ACTIVE = "active"
     # Reachable but frozen -- an unpaid bill, an abuse investigation.
     SUSPENDED = "suspended"
-    # What DELETE leaves behind. The rows stay: a workspace will soon own
-    # contacts, conversations and message history, and a customer's records
-    # should not be destroyed by one call to one endpoint. Erasing them for
-    # real is a deliberate workflow, not a side effect.
+    # What DELETE leaves behind. The rows stay, for a while: a workspace
+    # owns contacts, conversations and message history, and a customer's
+    # records should not be destroyed by one call to one endpoint. What
+    # closing it does instead is start a clock -- see `erase_after` below.
     CANCELLED = "cancelled"
 
 
@@ -67,6 +67,20 @@ class Workspace(Base):
     # for the memberships table, not this column.
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
+    )
+
+    # When this workspace's data is to be destroyed, set when it is
+    # closed. Null on an open one, which is what makes the erasure sweep a
+    # single indexed query rather than a status check and a date
+    # subtraction over every business on the platform.
+    #
+    # A date rather than an immediate delete, because the two things a
+    # customer needs from a deletion workflow are that it happens and that
+    # it is not instant: somebody who closes the wrong account on a Friday
+    # should be able to say so on Monday.
+    erase_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
     )
 
     created_at: Mapped[datetime] = mapped_column(
