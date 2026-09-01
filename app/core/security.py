@@ -154,3 +154,38 @@ def hash_token(token: str) -> str:
     against every outstanding invitation in the table.
     """
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# What every API key this application issues begins with. A fixed, visible
+# marker so that a leaked key is recognisable as one: secret scanners match
+# on prefixes like this, and a key pasted into an issue is spotted by its
+# shape rather than by somebody reading 40 characters of base64 and
+# wondering. Short, because the rest of the string is what has to be long.
+API_KEY_PREFIX = "lp_"
+
+# How much of a key is safe to show, and long enough to tell two of them
+# apart in a list. Eleven characters is the marker plus eight of the
+# secret, which leaves the remaining 35 doing the work -- there is nothing
+# to guess from a fragment this size.
+API_KEY_DISPLAY_LENGTH = 11
+
+
+def generate_api_key() -> str:
+    """A machine credential, in the only moment it exists in readable form.
+
+    Built on the same 32 bytes of system randomness a link token uses, and
+    for the same reason: what is stored is its SHA-256 digest, so this
+    value cannot be recovered from the database and has to be shown to
+    whoever asked for it exactly once.
+    """
+    return f"{API_KEY_PREFIX}{generate_token()}"
+
+
+def api_key_display(key: str) -> str:
+    """The part of a key that may be shown again.
+
+    Kept on the row so a list of keys is readable -- "which of these three
+    is the one on the staging server" is not a question anybody can answer
+    from a name they chose in a hurry six months ago.
+    """
+    return key[:API_KEY_DISPLAY_LENGTH]

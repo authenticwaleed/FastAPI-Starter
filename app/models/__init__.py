@@ -5,6 +5,7 @@ what Alembic autogenerate needs in order to see the full schema.
 """
 
 from app.models.ai_response_log import AiDecision, AiResponseLog
+from app.models.api_key import ApiKey
 from app.models.audit_log import AuditEvent, AuditLog
 from app.models.automation import (
     Automation,
@@ -75,6 +76,7 @@ __all__ = [
     "AiDecision",
     "AiMode",
     "AiResponseLog",
+    "ApiKey",
     "AuditEvent",
     "AuditLog",
     "Automation",

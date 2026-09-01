@@ -2298,6 +2298,27 @@ created_at
 
 Return plaintext key only once.
 
+## Acceptance criteria
+
+- [x] the key is returned once and cannot be recovered afterwards
+- [x] only a digest and a readable fragment are stored
+- [x] revoked and expired keys are refused, indistinguishably from unknown
+- [x] keys are workspace-scoped and administrator-only
+- [x] issuing and revoking reach the audit log
+
+`GET /api/v1/api-keys/current` is not in the list above: it is the call an
+integration makes to confirm its key works and learn which workspace the
+key addresses, and it is what gives `last_used_at` something to stamp.
+
+What this phase does *not* do is let a key authenticate the workspace
+endpoints themselves. `WorkspaceAccess` carries the membership that
+permitted reaching a workspace, and a dozen services read the person off
+it -- to attribute an audit entry, to address a notification, to decide
+whether a thread was assigned to somebody else. A key has no person
+behind it, so admitting one means deciding what each of those does with
+nobody, which is a change to the tenant boundary rather than to key
+management.
+
 ---
 
 # 37. Phase 28 — Background Jobs
@@ -2650,7 +2671,8 @@ Audit
 API Keys
 ├── POST   /workspaces/{workspace_id}/api-keys
 ├── GET    /workspaces/{workspace_id}/api-keys
-└── DELETE /workspaces/{workspace_id}/api-keys/{key_id}
+├── DELETE /workspaces/{workspace_id}/api-keys/{key_id}
+└── GET    /api-keys/current
 ```
 
 ---

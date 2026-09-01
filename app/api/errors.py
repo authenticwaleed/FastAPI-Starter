@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import (
     AlreadyAMemberError,
+    ApiKeyNotFoundError,
     AppError,
     AutomationAlreadyExistsError,
     AutomationNotFoundError,
@@ -29,6 +30,7 @@ from app.core.exceptions import (
     InactiveUserError,
     IncorrectPasswordError,
     InsufficientWorkspaceRoleError,
+    InvalidApiKeyError,
     InvalidAutomationSettingsError,
     InvalidCredentialsError,
     InvalidDateRangeError,
@@ -207,6 +209,16 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     NotificationNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
         "notification_not_found",
+    ),
+    ApiKeyNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "api_key_not_found"),
+    InvalidApiKeyError: _Answer(
+        status.HTTP_401_UNAUTHORIZED,
+        "invalid_api_key",
+        # RFC 9110 requires a 401 to name a scheme. This one is not
+        # Bearer: the key travels in a header of its own, so naming
+        # Bearer would send a client to retry with an Authorization
+        # header that will never work.
+        {"WWW-Authenticate": 'ApiKey realm="api"'},
     ),
     AutomationNotFoundError: _Answer(
         status.HTTP_404_NOT_FOUND,
@@ -570,6 +582,14 @@ NO_SUBSCRIPTION = _documented(
 NOTIFICATION_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,
     "No notification of yours has that id",
+)
+API_KEY_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such workspace or API key, or you are not a member",
+)
+API_KEY_UNAUTHORISED = _documented(
+    status.HTTP_401_UNAUTHORIZED,
+    "No API key, or it is unknown, revoked or expired",
 )
 AUTOMATION_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,
