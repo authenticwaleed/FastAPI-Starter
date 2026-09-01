@@ -25,6 +25,7 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace import WorkspaceCreate
 from app.services.workspace_service import WorkspaceService
+from tests.support.services import audit_service
 from tests.support.whatsapp import (
     PHONE_NUMBER_ID,
     inbound_payload,
@@ -69,6 +70,7 @@ def workspace_id(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
     workspace = workspaces.create(
         WorkspaceCreate(name="Acme Fashion", slug="acme-fashion"),
