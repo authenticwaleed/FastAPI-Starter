@@ -2256,6 +2256,18 @@ GET /api/v1/workspaces/{workspace_id}/audit-logs
 
 Audit logs should be append-only from application perspective.
 
+## Acceptance criteria
+
+- [x] every event above that has something to emit it is recorded
+- [x] entries are workspace-scoped and administrator-only
+- [x] the log is append-only: nothing updates or deletes an entry
+- [x] an actor survives their account being closed
+
+`api_key.created` and `api_key.revoked` are not in the vocabulary yet,
+because nothing issues an API key until Phase 27. The event column is a
+CHECK constraint rather than a native enum precisely so that adding them
+is an ordinary migration.
+
 ---
 
 # 36. Phase 27 — API Keys
