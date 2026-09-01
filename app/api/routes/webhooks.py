@@ -79,7 +79,10 @@ def verify_whatsapp_subscription(
         or token is None
         or not hmac.compare_digest(token, expected.get_secret_value())
     ):
-        logger.warning("A WhatsApp subscription handshake was refused")
+        logger.warning(
+            "A WhatsApp subscription handshake was refused",
+            extra={"outcome": "rejected"},
+        )
 
         return Response(status_code=status.HTTP_403_FORBIDDEN)
 
@@ -148,12 +151,18 @@ async def receive_whatsapp_webhook(
         payload: Any = json.loads(body)
     except ValueError as exc:
         # Signed, and not JSON. Worth a line, not worth a retry.
-        logger.warning("A signed WhatsApp delivery was not JSON")
+        logger.warning(
+            "A signed WhatsApp delivery was not JSON",
+            extra={"outcome": "unreadable"},
+        )
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
         raise InvalidWebhookError from exc
 
     if not isinstance(payload, dict):
-        logger.warning("A signed WhatsApp delivery was not an object")
+        logger.warning(
+            "A signed WhatsApp delivery was not an object",
+            extra={"outcome": "unreadable"},
+        )
 
         return {"status": "ignored"}
 
@@ -233,13 +242,19 @@ async def receive_billing_webhook(
 
     if not provider.verify_webhook(payload=body, signature=signature):
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
-        logger.warning("A billing delivery did not verify")
+        logger.warning(
+            "A billing delivery did not verify",
+            extra={"outcome": "rejected"},
+        )
         raise InvalidWebhookError
 
     try:
         payload: Any = json.loads(body)
     except ValueError as exc:
-        logger.warning("A signed billing delivery was not JSON")
+        logger.warning(
+            "A signed billing delivery was not JSON",
+            extra={"outcome": "unreadable"},
+        )
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
         raise InvalidWebhookError from exc
 
@@ -316,13 +331,21 @@ async def receive_storefront_webhook(
 
     if not adapter.verify_webhook(payload=body, signature=signature):
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
-        logger.warning("A %s delivery did not verify", provider.value)
+        logger.warning(
+            "A %s delivery did not verify",
+            provider.value,
+            extra={"outcome": "rejected"},
+        )
         raise InvalidWebhookError
 
     try:
         payload: Any = json.loads(body)
     except ValueError as exc:
-        logger.warning("A signed %s delivery was not JSON", provider.value)
+        logger.warning(
+            "A signed %s delivery was not JSON",
+            provider.value,
+            extra={"outcome": "unreadable"},
+        )
         limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
         raise InvalidWebhookError from exc
 
