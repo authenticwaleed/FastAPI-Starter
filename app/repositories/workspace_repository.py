@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
@@ -61,6 +62,32 @@ class WorkspaceRepository:
 
     def get(self, workspace_id: uuid.UUID) -> Workspace | None:
         return self._session.get(Workspace, workspace_id)
+
+    def due_for_erasure(self, *, now: datetime) -> Sequence[uuid.UUID]:
+        """Workspaces whose retention period is over.
+
+        Ids only, and not workspace-scoped -- one of the few queries here
+        that is not, because what asks it is the sweep deciding what has
+        come due. Everything it then does is one workspace at a time.
+        """
+        return self._session.scalars(
+            select(Workspace.id)
+            .where(Workspace.erase_after.is_not(None), Workspace.erase_after <= now)
+            .order_by(Workspace.erase_after)
+        ).all()
+
+    def erase(self, workspace: Workspace) -> None:
+        """Destroy a workspace and everything hanging off it.
+
+        One DELETE, and that is not a shortcut: every table that belongs
+        to a tenant references `workspaces.id` with ON DELETE CASCADE, and
+        has since the tenant boundary was drawn. Deleting row by row here
+        would be a second list of what a workspace owns, kept in step with
+        the schema by hand, and the day it fell behind would be the day a
+        deletion quietly left something.
+        """
+        self._session.delete(workspace)
+        self._session.flush()
 
     def get_by_slug(self, slug: str) -> Workspace | None:
         return self._session.scalar(select(Workspace).where(Workspace.slug == slug))
