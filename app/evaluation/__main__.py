@@ -33,6 +33,7 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace import WorkspaceCreate
+from app.services.ai_dispatch import build_audit_service
 from app.services.workspace_service import WorkspaceAccess, WorkspaceService
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,7 @@ def _scratch_workspace(session: Session) -> WorkspaceAccess:
         session=session,
         workspaces=WorkspaceRepository(session),
         memberships=WorkspaceMembershipRepository(session),
+        audit=build_audit_service(session),
     )
     workspace = workspaces.create(
         WorkspaceCreate(name="Evaluation", slug=f"evaluation-{marker}"),
