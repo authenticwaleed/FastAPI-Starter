@@ -13,6 +13,7 @@ from app.core.exceptions import (
     WorkspaceNotFoundError,
 )
 from app.db.session import SessionDep
+from app.models.audit_log import AuditEvent
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.models.workspace_membership import (
@@ -25,6 +26,7 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate
+from app.services.audit_service import AuditService, AuditServiceDep
 
 # Who may change the workspace itself, and who may close it. Named here
 # rather than written into each method, so the answer to "what does an
@@ -66,10 +68,12 @@ class WorkspaceService:
         session: Session,
         workspaces: WorkspaceRepository,
         memberships: WorkspaceMembershipRepository,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._workspaces = workspaces
         self._memberships = memberships
+        self._audit = audit
 
     def create(self, payload: WorkspaceCreate, *, creator: User) -> Workspace:
         """Create a workspace and make its creator the owner.
@@ -93,6 +97,15 @@ class WorkspaceService:
                 workspace_id=workspace.id,
                 user_id=creator.id,
                 role=WorkspaceRole.OWNER,
+            )
+            # The first line of the workspace's own history, written in
+            # the transaction that created it -- so there is no workspace
+            # anywhere whose audit log does not begin with its creation.
+            self._audit.did(
+                workspace.id,
+                AuditEvent.WORKSPACE_CREATED,
+                actor_user_id=creator.id,
+                meta={"name": workspace.name, "slug": workspace.slug},
             )
             self._session.commit()
         except IntegrityError as exc:
@@ -141,12 +154,38 @@ class WorkspaceService:
     def update(self, access: WorkspaceAccess, payload: WorkspaceUpdate) -> Workspace:
         _require(access, MAY_ADMINISTER)
 
+        # Read before the update, because "was" is the half of a change
+        # that cannot be recovered afterwards. Only the fields actually
+        # supplied: a PATCH that renamed a workspace should not leave an
+        # entry claiming its timezone was set to the value it already had.
+        changed = {
+            field: {"from": getattr(access.workspace, field), "to": value}
+            for field, value in (
+                ("name", payload.name),
+                ("timezone", payload.timezone),
+                ("default_currency", payload.default_currency),
+            )
+            if value is not None and value != getattr(access.workspace, field)
+        }
+
         self._workspaces.update(
             access.workspace,
             name=payload.name,
             timezone=payload.timezone,
             default_currency=payload.default_currency,
         )
+
+        if changed:
+            # Nothing recorded for a PATCH that changed nothing. An audit
+            # log full of entries saying somebody saved a form without
+            # editing it is one nobody reads.
+            self._audit.did(
+                access.workspace.id,
+                AuditEvent.WORKSPACE_UPDATED,
+                actor_user_id=access.membership.user_id,
+                meta={"changed": changed},
+            )
+
         self._session.commit()
 
         return access.workspace
@@ -200,11 +239,13 @@ def get_workspace_service(
     session: SessionDep,
     workspaces: WorkspaceRepositoryDep,
     memberships: WorkspaceMembershipRepositoryDep,
+    audit: AuditServiceDep,
 ) -> WorkspaceService:
     return WorkspaceService(
         session=session,
         workspaces=workspaces,
         memberships=memberships,
+        audit=audit,
     )
 
 
