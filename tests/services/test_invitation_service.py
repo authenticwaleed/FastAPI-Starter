@@ -34,7 +34,7 @@ from app.schemas.workspace import WorkspaceCreate
 from app.schemas.workspace_invitation import InvitationCreate
 from app.services.invitation_service import InvitationService
 from app.services.workspace_service import WorkspaceService
-from tests.support.services import put_on_plan, subscription_service
+from tests.support.services import audit_service, put_on_plan, subscription_service
 
 OWNER = WorkspaceRole.OWNER
 ADMIN = WorkspaceRole.ADMIN
@@ -52,6 +52,7 @@ def workspaces(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
 
 
@@ -70,6 +71,7 @@ def service(
         workspaces=workspace_repository,
         users=user_repository,
         subscriptions=subscription_service(db_session),
+        audit=audit_service(db_session),
     )
 
 
