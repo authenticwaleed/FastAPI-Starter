@@ -81,8 +81,15 @@ class Settings(BaseSettings):
     #   uv run python -c \
     #     "from app.core.encryption import generate_key as k; import sys; \
     #      sys.stdout.write(k())"
-    # Changing it makes every token already stored undecryptable.
     encryption_key: SecretStr | None = None
+
+    # The key this one replaced, kept readable while what it encrypted is
+    # rewritten. Everything is encrypted with `encryption_key` and
+    # decrypted with either, which is what turns rotating the key from a
+    # deployment where every stored token stops working into an ordinary
+    # one. Unset once nothing needs it -- see app/core/encryption.py for
+    # the order the four steps go in.
+    encryption_key_previous: SecretStr | None = None
 
     # Meta sends every workspace's webhooks to one callback URL, because
     # one Meta app serves all of them, so both of these are app-wide
@@ -275,6 +282,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "encryption_key",
+        "encryption_key_previous",
         "whatsapp_verify_token",
         "whatsapp_app_secret",
         "voyage_api_key",
