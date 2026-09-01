@@ -30,6 +30,7 @@ from app.integrations.embeddings.base import EmbeddingProvider
 from app.integrations.llm.base import ReplyWriter
 from app.integrations.messaging.base import MessagingProvider
 from app.repositories.ai_response_log_repository import AiResponseLogRepository
+from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_event_repository import (
     ConversationEventRepository,
@@ -50,6 +51,7 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.ai_response_service import AiResponseService
+from app.services.audit_service import AuditService
 from app.services.commerce_context import CommerceContextService
 from app.services.message_service import MessageService
 from app.services.notification_service import NotificationService
@@ -83,6 +85,17 @@ def get_session_source() -> SessionSource:
 SessionSourceDep = Annotated[SessionSource, Depends(get_session_source)]
 
 
+def build_audit_service(session: Session) -> AuditService:
+    """The audit log, assembled against one session.
+
+    Wanted here because the graphs below reach services that record
+    administrative acts. Nothing a background run does is itself an
+    audited act -- answering a customer is the work, not administration --
+    but the services it borrows write entries when a person uses them.
+    """
+    return AuditService(session=session, logs=AuditLogRepository(session))
+
+
 def build_usage_service(session: Session) -> UsageService:
     """The meter, assembled against one session.
 
@@ -110,6 +123,7 @@ def build_subscription_service(session: Session) -> SubscriptionService:
             memberships=WorkspaceMembershipRepository(session),
         ),
         usage=build_usage_service(session),
+        audit=build_audit_service(session),
     )
 
 
@@ -162,6 +176,7 @@ def build_ai_response_service(
                 session=session,
                 accounts=accounts,
                 provider=messaging,
+                audit=build_audit_service(session),
             ),
             notifications=notifications,
             usage=usage,

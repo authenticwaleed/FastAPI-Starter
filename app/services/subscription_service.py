@@ -23,9 +23,11 @@ from app.integrations.billing.base import (
     Checkout,
 )
 from app.integrations.billing.stripe import StripeProvider
+from app.models.audit_log import AuditEvent
 from app.models.notification import NotificationKind
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
@@ -96,12 +98,14 @@ class SubscriptionService:
         provider: BillingProvider,
         notifications: NotificationService,
         usage: UsageService,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._subscriptions = subscriptions
         self._provider = provider
         self._notifications = notifications
         self._usage = usage
+        self._audit = audit
 
     # --- what a workspace may do -------------------------------------------
 
@@ -241,6 +245,20 @@ class SubscriptionService:
             cancel_at_period_end=remote.cancel_at_period_end,
             current_period_end=remote.current_period_end,
         )
+        # With a person on it, unlike the webhook's echo of the same
+        # change a moment later. Who stopped paying for the product is a
+        # question a business asks about itself, and the provider's
+        # delivery cannot answer it.
+        self._audit.did(
+            workspace_id,
+            AuditEvent.SUBSCRIPTION_CHANGED,
+            actor_user_id=access.membership.user_id,
+            meta={
+                "plan": subscription.plan.value,
+                "status": subscription.status.value,
+                "cancel_at_period_end": subscription.cancel_at_period_end,
+            },
+        )
         self._session.commit()
 
         return subscription
@@ -303,6 +321,7 @@ class SubscriptionService:
             if event.kind is BillingEventKind.SUBSCRIPTION_ENDED
             else remote.status
         )
+        before = (subscription.plan, subscription.status)
 
         self._subscriptions.apply(
             subscription,
@@ -314,6 +333,25 @@ class SubscriptionService:
             current_period_end=remote.current_period_end,
             cancel_at_period_end=remote.cancel_at_period_end,
         )
+
+        if before != (subscription.plan, subscription.status):
+            # No actor: a payment provider changed this, and naming
+            # somebody would put an accusation in the record. Recorded
+            # only where the plan or the status actually moved, because a
+            # provider sends several events about one change and an audit
+            # log that repeats itself is one nobody reads.
+            self._audit.did(
+                subscription.workspace_id,
+                AuditEvent.SUBSCRIPTION_CHANGED,
+                meta={
+                    "plan": {"from": before[0].value, "to": subscription.plan.value},
+                    "status": {
+                        "from": before[1].value,
+                        "to": subscription.status.value,
+                    },
+                    "event_type": event.event_type,
+                },
+            )
 
         if status in {SubscriptionStatus.PAST_DUE, SubscriptionStatus.UNPAID}:
             # Told rather than switched off. The plan still applies while
@@ -355,6 +393,7 @@ def get_subscription_service(
     provider: BillingProviderDep,
     notifications: NotificationServiceDep,
     usage: UsageServiceDep,
+    audit: AuditServiceDep,
 ) -> SubscriptionService:
     return SubscriptionService(
         session=session,
@@ -362,6 +401,7 @@ def get_subscription_service(
         provider=provider,
         notifications=notifications,
         usage=usage,
+        audit=audit,
     )
 
 

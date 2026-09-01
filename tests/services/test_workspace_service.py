@@ -19,6 +19,7 @@ from app.repositories.workspace_membership_repository import (
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate
 from app.services.workspace_service import WorkspaceService
+from tests.support.services import audit_service
 
 
 @pytest.fixture
@@ -31,6 +32,7 @@ def service(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
 
 

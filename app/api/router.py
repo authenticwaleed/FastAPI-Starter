@@ -4,6 +4,7 @@ from app.api.routes import (
     account,
     ai,
     analytics,
+    audit,
     auth,
     automations,
     billing,
@@ -59,6 +60,9 @@ api_router.include_router(billing.router)
 # is allowed to do next.
 api_router.include_router(usage.router)
 api_router.include_router(analytics.router)
+# What the business did to itself, as opposed to what it did for its
+# customers. Administration, and only on a plan that includes it.
+api_router.include_router(audit.router)
 # Before the storefront routes, and this order is load-bearing. Both hang
 # off `/integrations/`, and the storefront ones take the provider as a
 # path parameter -- so `…/integrations/whatsapp` would match

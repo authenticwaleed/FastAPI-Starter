@@ -27,6 +27,7 @@ from app.integrations.embeddings.voyage import (
     MAX_BATCH,
     VoyageEmbeddingProvider,
 )
+from app.models.audit_log import AuditEvent
 from app.models.knowledge import (
     DocumentStatus,
     KnowledgeChunk,
@@ -36,6 +37,7 @@ from app.models.knowledge import (
 from app.models.notification import NotificationKind
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.schemas.knowledge import DocumentCreate, FaqCreate, SourceCreate
+from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
@@ -78,12 +80,14 @@ class KnowledgeService:
         embeddings: EmbeddingProvider,
         notifications: NotificationService,
         subscriptions: SubscriptionService,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._knowledge = knowledge
         self._embeddings = embeddings
         self._notifications = notifications
         self._subscriptions = subscriptions
+        self._audit = audit
 
     # --- sources -----------------------------------------------------------
 
@@ -249,7 +253,19 @@ class KnowledgeService:
 
     def delete_document(self, access: WorkspaceAccess, document_id: uuid.UUID) -> None:
         document = self.get_document(access, document_id)
+        title = document.title
+
         self._knowledge.delete_document(document)
+        # The title is read before the row goes, because this is the entry
+        # somebody comes looking for when the assistant stops being able
+        # to answer a question it used to answer -- and "document
+        # 4f2a-... was deleted" does not tell them which policy went.
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.KNOWLEDGE_DOCUMENT_DELETED,
+            actor_user_id=access.membership.user_id,
+            meta={"document_id": str(document_id), "title": title},
+        )
         self._session.commit()
 
     # --- the pipeline ------------------------------------------------------
@@ -301,6 +317,18 @@ class KnowledgeService:
                 meta=meta,
             )
             self._knowledge.set_document_status(document, DocumentStatus.PROCESSING)
+            # Recorded here, in the transaction that accepts the upload,
+            # rather than after the embedding finishes. The audited act is
+            # somebody putting a document into the business's knowledge
+            # base; whether the provider then managed to read it is the
+            # document's own status, and a crash mid-embedding should not
+            # lose the record of who uploaded it.
+            self._audit.did(
+                access.workspace.id,
+                AuditEvent.KNOWLEDGE_DOCUMENT_UPLOADED,
+                actor_user_id=access.membership.user_id,
+                meta={"document_id": str(document.id), "title": title},
+            )
             self._session.commit()
         except IntegrityError as exc:
             # Two uploads of the same file at once. The check above is not
@@ -494,6 +522,7 @@ def get_knowledge_service(
     embeddings: EmbeddingProviderDep,
     notifications: NotificationServiceDep,
     subscriptions: SubscriptionServiceDep,
+    audit: AuditServiceDep,
 ) -> KnowledgeService:
     return KnowledgeService(
         session=session,
@@ -501,6 +530,7 @@ def get_knowledge_service(
         embeddings=embeddings,
         notifications=notifications,
         subscriptions=subscriptions,
+        audit=audit,
     )
 
 

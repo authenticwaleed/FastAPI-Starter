@@ -32,7 +32,7 @@ from app.services.message_service import MessageService
 from app.services.whatsapp_service import WhatsAppService
 from app.services.workspace_service import WorkspaceService
 from tests.support.messaging import FakeMessagingProvider
-from tests.support.services import notification_service, usage_service
+from tests.support.services import audit_service, notification_service, usage_service
 
 NUMBER = "+923001234567"
 
@@ -47,6 +47,7 @@ def workspaces(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
 
 
@@ -64,6 +65,7 @@ def conversations(
         memberships=membership_repository,
         events=ConversationEventRepository(db_session),
         notifications=notification_service(db_session),
+        audit=audit_service(db_session),
     )
 
 
@@ -102,6 +104,7 @@ def service(
             session=db_session,
             accounts=whatsapp_accounts,
             provider=provider,
+            audit=audit_service(db_session),
         ),
         notifications=notification_service(db_session),
         usage=usage_service(db_session),

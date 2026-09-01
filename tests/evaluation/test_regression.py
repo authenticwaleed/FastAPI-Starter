@@ -28,6 +28,7 @@ from app.schemas.workspace import WorkspaceCreate
 from app.services.workspace_service import WorkspaceAccess, WorkspaceService
 from tests.support.knowledge import FakeEmbeddingProvider, FakeReplyWriter
 from tests.support.messaging import FakeMessagingProvider
+from tests.support.services import audit_service
 
 RETURNS = (
     "Returns are accepted within 14 days of delivery. The item must be "
@@ -53,6 +54,7 @@ def access(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
     workspace = workspaces.create(
         WorkspaceCreate(name="Acme Fashion", slug="acme-fashion"),
@@ -382,6 +384,7 @@ def test_a_case_from_one_run_cannot_see_another_workspaces_knowledge(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
     rival = workspaces.create(
         WorkspaceCreate(name="Rival", slug=f"rival-{uuid.uuid4().hex[:6]}"),

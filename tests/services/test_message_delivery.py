@@ -30,7 +30,7 @@ from app.services.message_service import MessageService
 from app.services.whatsapp_service import WhatsAppService
 from app.services.workspace_service import WorkspaceService
 from tests.support.messaging import FakeMessagingProvider
-from tests.support.services import notification_service, usage_service
+from tests.support.services import audit_service, notification_service, usage_service
 from tests.support.whatsapp import PHONE_NUMBER_ID
 
 CUSTOMER = "+923001234567"
@@ -68,6 +68,7 @@ class Setup:
             session=db_session,
             workspaces=workspace_repository,
             memberships=membership_repository,
+            audit=audit_service(db_session),
         )
         workspace = workspaces.create(
             WorkspaceCreate(name="Acme Fashion", slug="acme-fashion"),
@@ -88,6 +89,7 @@ class Setup:
             memberships=membership_repository,
             events=ConversationEventRepository(db_session),
             notifications=notification_service(db_session),
+            audit=audit_service(db_session),
         )
         self.conversation = self.conversations.create(
             self.access,
@@ -104,6 +106,7 @@ class Setup:
                 session=db_session,
                 accounts=accounts,
                 provider=provider,
+                audit=audit_service(db_session),
             ),
             notifications=notification_service(db_session),
             usage=usage_service(db_session),

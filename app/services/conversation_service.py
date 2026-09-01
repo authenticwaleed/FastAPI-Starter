@@ -14,6 +14,7 @@ from app.core.exceptions import (
     MembershipNotFoundError,
 )
 from app.db.session import SessionDep
+from app.models.audit_log import AuditEvent
 from app.models.contact import Contact
 from app.models.conversation import AiMode, Conversation, ConversationStatus
 from app.models.conversation_event import ConversationEvent, EventType
@@ -31,6 +32,7 @@ from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.schemas.conversation import ConversationCreate, ConversationUpdate
+from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.contact_service import ContactRepositoryDep
 from app.services.notification_service import (
     NotificationService,
@@ -58,6 +60,7 @@ class ConversationService:
         memberships: WorkspaceMembershipRepository,
         events: ConversationEventRepository,
         notifications: NotificationService,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._conversations = conversations
@@ -65,6 +68,7 @@ class ConversationService:
         self._memberships = memberships
         self._events = events
         self._notifications = notifications
+        self._audit = audit
 
     def create(
         self,
@@ -176,10 +180,13 @@ class ConversationService:
         conversation = self.get(access, conversation_id)
 
         if payload.ai_mode is not None:
+            was = conversation.ai_mode
             self._conversations.set_ai_mode(conversation, payload.ai_mode)
+            self._audit_ai_mode(access, conversation, was)
 
         if payload.status is not None and payload.status != conversation.status:
             self._apply_status(conversation, payload.status)
+            self._audit_status(access, conversation, payload.status)
 
         self._session.commit()
 
@@ -207,6 +214,18 @@ class ConversationService:
                 raise MembershipNotFoundError(access.workspace.id, user_id)
 
         self._conversations.set_assignee(conversation, user_id)
+        # Recorded whether a thread was handed to somebody or taken off
+        # them: `assigned_to` is null for the second, which is the same
+        # act and the one somebody asks about later.
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.CONVERSATION_ASSIGNED,
+            actor_user_id=access.membership.user_id,
+            meta={
+                "conversation_id": str(conversation.id),
+                "assigned_to": user_id,
+            },
+        )
 
         if user_id is not None and user_id != access.membership.user_id:
             # Told in the same transaction as the assignment, so the two
@@ -235,6 +254,7 @@ class ConversationService:
 
         if not conversation.is_closed:
             self._apply_status(conversation, ConversationStatus.CLOSED)
+            self._audit_status(access, conversation, ConversationStatus.CLOSED)
             self._session.commit()
 
         return self._row(access, conversation)
@@ -365,6 +385,54 @@ class ConversationService:
 
         return self._row(access, conversation)
 
+    def _audit_status(
+        self,
+        access: WorkspaceAccess,
+        conversation: Conversation,
+        status: ConversationStatus,
+    ) -> None:
+        """Record a thread being closed, and only that.
+
+        Reopening is not audited, because the plan names one direction and
+        it is the right one: closing is what takes a customer's thread out
+        of the queue everybody is working from, and a thread closed by
+        mistake is invisible until somebody goes looking for it.
+        """
+        if status != ConversationStatus.CLOSED:
+            return
+
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.CONVERSATION_CLOSED,
+            actor_user_id=access.membership.user_id,
+            meta={"conversation_id": str(conversation.id)},
+        )
+
+    def _audit_ai_mode(
+        self,
+        access: WorkspaceAccess,
+        conversation: Conversation,
+        was: AiMode,
+    ) -> None:
+        """Record the assistant being switched off on a thread.
+
+        One direction, which is the plan's vocabulary and defensible on
+        its own: switching the assistant off is what silently changes what
+        a customer gets back, and it is the state a business finds itself
+        in without remembering choosing it. What it was before is in the
+        entry, so the other direction is at least legible when the
+        vocabulary grows.
+        """
+        if conversation.ai_mode != AiMode.DISABLED or was == AiMode.DISABLED:
+            return
+
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.CONVERSATION_AI_DISABLED,
+            actor_user_id=access.membership.user_id,
+            meta={"conversation_id": str(conversation.id), "from": was.value},
+        )
+
     def _apply_status(
         self,
         conversation: Conversation,
@@ -438,6 +506,7 @@ def get_conversation_service(
     memberships: WorkspaceMembershipRepositoryDep,
     events: ConversationEventRepositoryDep,
     notifications: NotificationServiceDep,
+    audit: AuditServiceDep,
 ) -> ConversationService:
     return ConversationService(
         session=session,
@@ -446,6 +515,7 @@ def get_conversation_service(
         memberships=memberships,
         events=events,
         notifications=notifications,
+        audit=audit,
     )
 
 
