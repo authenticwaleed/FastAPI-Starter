@@ -4,8 +4,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # Two trailing spaces are a hard line break in Markdown, not stray
+      # whitespace. Stripping them silently reflows the paragraph, which
+      # is a documentation change nobody asked for and nobody reviews.
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: ^app/static/
+      # app/static holds third-party bundles at a pinned version. Their
+      # bytes should stay the CDN's bytes, so that what is served can be
+      # checked against what was published; a newline added on our side
+      # makes that comparison fail and proves nothing.
       - id: end-of-file-fixer
+        exclude: ^app/static/
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
