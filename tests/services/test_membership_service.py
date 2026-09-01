@@ -22,6 +22,7 @@ from app.repositories.workspace_repository import WorkspaceRepository
 from app.schemas.workspace import WorkspaceCreate
 from app.services.membership_service import MembershipService, may_manage
 from app.services.workspace_service import WorkspaceService
+from tests.support.services import audit_service
 
 OWNER = WorkspaceRole.OWNER
 ADMIN = WorkspaceRole.ADMIN
@@ -39,6 +40,7 @@ def workspaces(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
 
 
@@ -50,6 +52,7 @@ def service(
     return MembershipService(
         session=db_session,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
 
 
