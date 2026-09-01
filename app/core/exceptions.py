@@ -618,6 +618,23 @@ class OrderNotConfirmableError(AppError):
         self.status = status
 
 
+class MessageNotFoundError(AppError):
+    """No message with that id belongs to this workspace.
+
+    Reachable in practice only from a job, which carries an id written
+    minutes earlier and cannot assume the row is still there. Named rather
+    than left to an attribute error on None, because a queue whose
+    failures are stack traces is a queue nobody reads.
+    """
+
+    detail = "No such message"
+
+    def __init__(self, workspace_id: object, message_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} has no message {message_id}")
+        self.workspace_id = workspace_id
+        self.message_id = message_id
+
+
 class ConversationNotFoundError(AppError):
     """No conversation with that id exists in this workspace."""
 
