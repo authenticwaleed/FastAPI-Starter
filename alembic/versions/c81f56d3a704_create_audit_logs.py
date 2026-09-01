@@ -45,6 +45,7 @@ def upgrade() -> None:
     sa.Column('workspace_id', sa.Uuid(), nullable=False),
     sa.Column('event', sa.Enum(*AUDIT_EVENTS, name='audit_event', native_enum=False, create_constraint=True, length=32), nullable=False),
     sa.Column('actor_user_id', sa.Integer(), nullable=True),
+    sa.Column('actor_email', sa.String(length=255), nullable=True),
     sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'::jsonb"), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['actor_user_id'], ['users.id'], ondelete='SET NULL'),
