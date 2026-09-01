@@ -24,6 +24,7 @@ from types import FrameType
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core import context
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import get_engine, get_session_factory
@@ -98,6 +99,7 @@ def tick(session: Session, *, messaging: MessagingProvider) -> int:
 
     service.reclaim_stalled()
     plan(session, jobs, now=datetime.now(UTC))
+    _report_depth(jobs)
 
     ran = 0
 
@@ -108,6 +110,24 @@ def tick(session: Session, *, messaging: MessagingProvider) -> int:
         ran += 1
 
     return ran
+
+
+def _report_depth(jobs: JobRepository) -> None:
+    """Say how much is waiting, when anything is.
+
+    A gauge in the log stream rather than a counter behind a scrape
+    endpoint, for the reason every other measurement in this phase is one:
+    it lands beside the lines that explain it, and reading "the queue was
+    forty deep and every WhatsApp call took nine seconds" takes one query
+    rather than two systems.
+
+    Silent at zero, which is almost always. A worker that said "0" every
+    two seconds for ever would bury the pass where it said forty.
+    """
+    depth = jobs.depth(now=datetime.now(UTC))
+
+    if depth:
+        logger.info("Queue depth", extra={"depth": depth})
 
 
 def run_forever(stopping: Stopping | None = None) -> None:
@@ -131,7 +151,11 @@ def run_forever(stopping: Stopping | None = None) -> None:
     logger.info("Worker started")
 
     while not stopping.requested:
-        with sessions() as session:
+        # A request id per pass, so that the reclaim, the planning and
+        # every job the pass ran can be pulled out of the log together --
+        # the same thing the middleware does for a request, for the same
+        # reason. A job's own handler binds the workspace it is for.
+        with sessions() as session, context.bound(request_id=context.new_request_id()):
             ran = tick(session, messaging=messaging)
 
         if ran == 0 and not stopping.requested:
