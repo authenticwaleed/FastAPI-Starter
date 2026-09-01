@@ -20,6 +20,7 @@ from app.schemas.contact import ContactCreate, ContactUpdate
 from app.schemas.workspace import WorkspaceCreate
 from app.services.contact_service import ContactService
 from app.services.workspace_service import WorkspaceService
+from tests.support.services import audit_service
 
 NUMBER = "+923001234567"
 OTHER_NUMBER = "+923009876543"
@@ -35,6 +36,7 @@ def workspaces(
         session=db_session,
         workspaces=workspace_repository,
         memberships=membership_repository,
+        audit=audit_service(db_session),
     )
 
 
