@@ -2,10 +2,18 @@
 
 Pure ASGI rather than Starlette's BaseHTTPMiddleware, and the reason is
 context variables. BaseHTTPMiddleware runs the endpoint in a task of its
-own, so anything the endpoint binds -- the workspace, most usefully --
-never reaches the middleware that writes the summary line. Written this
-way, the request, its dependencies, its background tasks and this line all
-share one context, and the summary says which business the request was for.
+own, so anything bound during the request -- the workspace, most usefully
+-- never reaches the middleware that writes the summary line. Written this
+way they share one context, and the summary says which business the
+request was for.
+
+One caveat, because it is not obvious and it is easy to write code that
+looks like it works: this holds for anything bound in the request's own
+task, which means an asynchronous dependency. FastAPI runs a synchronous
+one in a worker thread with a copy of the context, and a binding made
+there is thrown away when the thread returns. See
+`app/api/dependencies/workspace.py`, where that is why the workspace is
+bound by a small async wrapper rather than by the resolver itself.
 """
 
 import logging
@@ -31,11 +39,16 @@ REQUEST_ID_HEADER = "x-request-id"
 # trail stops being evidence.
 _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
-# Paths that would otherwise be a line each, several times a minute, for
+# Routes that would otherwise be a line each, several times a minute, for
 # ever. A container orchestrator polls readiness far more often than
 # anybody reads it, and a log where nine lines in ten are health checks is
 # one nobody scrolls through.
-_QUIET = frozenset({"/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready"})
+#
+# Written without the `/api/v1` mount prefix, because that is what a
+# matched route's own template is: FastAPI keeps an included router nested
+# rather than flattening its paths onto the application, so what arrives
+# here is the path relative to where the router was mounted.
+_QUIET = frozenset({"/health", "/health/live", "/health/ready"})
 
 
 class RequestContext:
