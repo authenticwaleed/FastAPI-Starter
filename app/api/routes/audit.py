@@ -89,18 +89,25 @@ def _entry(entry: AuditLog, user: User | None) -> AuditEntry:
 def _actor(entry: AuditLog, user: User | None) -> AuditActor | None:
     """Whoever did it, as much as is still known.
 
-    Three states, and they are three different facts. Nobody did it: the
-    payment provider changed a subscription. Somebody did and is still
-    here: their name. Somebody did and their account is gone: the id
-    survives on the entry with no user behind it, which is the SET NULL
-    on the column doing its job -- an account being deleted must not take
-    the record of what it did with it.
+    Three states, and they are three different facts.
+
+    Nobody did it -- a payment provider changed a subscription -- and both
+    columns are null, so the whole actor is.
+
+    Somebody did and is still here: their name from the joined row, which
+    is current rather than copied, so a colleague who has since changed
+    their name reads as the person they are.
+
+    Somebody did and their account is gone. The foreign key nulled the id
+    when the row went, but the address written down at the time did not
+    go with it -- which is the difference between an audit log and a
+    record an administrator can erase themselves from.
     """
-    if entry.actor_user_id is None:
+    if entry.actor_user_id is None and entry.actor_email is None:
         return None
 
     return AuditActor(
         user_id=entry.actor_user_id,
         name=user.name if user else None,
-        email=user.email if user else None,
+        email=user.email if user else entry.actor_email,
     )
