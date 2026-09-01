@@ -16,14 +16,14 @@ from app.core.exceptions import (
 )
 from app.db.session import SessionDep
 from app.models.conversation import Conversation
+from app.models.job import JobKind
 from app.models.message import Direction, Message, MessageStatus, SenderType
 from app.models.notification import NotificationKind
-from app.models.job import JobKind
 from app.models.usage_record import UsageMetric
 from app.models.workspace import Workspace
 from app.repositories.contact_repository import ContactRepository
-from app.repositories.job_repository import JobRepository
 from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.job_repository import JobRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
@@ -31,11 +31,11 @@ from app.repositories.whatsapp_account_repository import (
 from app.schemas.message import MessageCreate
 from app.services.contact_service import ContactRepositoryDep
 from app.services.conversation_service import ConversationRepositoryDep
+from app.services.job_service import JobRepositoryDep
 from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
 )
-from app.services.job_service import JobRepositoryDep
 from app.services.usage_service import UsageService, UsageServiceDep
 from app.services.whatsapp_service import (
     WhatsAppAccountRepositoryDep,
