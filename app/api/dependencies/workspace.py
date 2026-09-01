@@ -30,20 +30,37 @@ def get_workspace_access(
     in one place, before any handler body runs -- which is the only version
     of it that cannot be forgotten in a route added later.
 
-    Also where the workspace joins the log context, and for the same
-    reason: this is the one place every tenant-scoped request goes
-    through, so binding here is what makes "which business was this" a
-    field on every line the request writes rather than something each of
-    them has to remember to say. Bound after the check, never before -- an
-    id somebody guessed at is not a workspace.
     """
-    access = service.access(workspace_id, user)
+    return service.access(workspace_id, user)
+
+
+async def bound_workspace_access(
+    access: Annotated[WorkspaceAccess, Depends(get_workspace_access)],
+) -> WorkspaceAccess:
+    """The same access, with the workspace added to the log context.
+
+    Its own dependency, and asynchronous, and both are the point.
+
+    FastAPI runs a synchronous dependency in a worker thread, which gets a
+    *copy* of the context: anything it binds is thrown away when the
+    thread returns, so binding inside the resolver above reaches nothing --
+    not the endpoint, not the summary line. An asynchronous one runs in
+    the request's own task, where a binding is visible to everything after
+    it and to the middleware that logs the request when it is over.
+
+    Resolved after the check above, never before. An id somebody guessed
+    at is not a workspace, and a log line saying it was would be worse
+    than no line at all.
+    """
     context.bind(workspace_id=access.workspace.id)
 
     return access
 
 
-WorkspaceAccessDep = Annotated[WorkspaceAccess, Depends(get_workspace_access)]
+# Every route hangs off the binding wrapper rather than the resolver, so
+# that reaching a workspace and saying which one was reached are the same
+# act and cannot come apart.
+WorkspaceAccessDep = Annotated[WorkspaceAccess, Depends(bound_workspace_access)]
 
 
 def require_workspace_role(
