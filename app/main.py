@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.api.docs import register_docs
 from app.api.errors import register_exception_handlers
 from app.api.middleware import RequestContext, SecurityHeaders
 from app.api.router import api_router
@@ -100,14 +101,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # internals to whoever triggered the error. The trace is more useful in
     # the log anyway, which is where handle_unexpected_error puts it.
     # settings.debug still controls SQL echo on the engine.
+
+    # Documentation is for the people building against this, not for
+    # anyone who finds the address. In production it is off, and the schema
+    # goes with it: withholding the pages while /openapi.json still answers
+    # withholds nothing, because the schema is the part that enumerates
+    # every route and the pages are only a reader for it.
+    documented = settings.environment != "production"
+
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
         lifespan=lifespan,
+        # Both are registered in app.api.docs instead, against assets this
+        # application serves itself. FastAPI's own pages load them from a
+        # CDN, which the security policy below forbids a browser to fetch.
+        docs_url=None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if documented else None,
     )
 
     _add_middleware(app, settings)
     register_exception_handlers(app)
+
+    if documented:
+        register_docs(app, title=settings.app_name)
 
     app.include_router(
         api_router,
