@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.exceptions import ReplyProviderError
+from app.core.observability import observed
 from app.integrations.llm.base import (
     Completion,
     Passage,
@@ -62,21 +63,27 @@ class ClaudeReplyWriter:
         client = anthropic.Anthropic(api_key=key.get_secret_value())
 
         try:
-            response = client.messages.parse(
-                model=settings.anthropic_model,
-                max_tokens=settings.anthropic_max_tokens,
-                system=instructions,
-                messages=_messages(turns, passages),
-                output_format=_Answer,
-                # Thinking is on by default on this model and left on: the
-                # judgement being asked for -- does this evidence actually
-                # answer the question -- is the part worth thinking about.
-                # Effort is what keeps a customer support reply quick;
-                # lowering it is the documented way to spend less than
-                # turning thinking off, which has failure modes of its own.
-                thinking={"type": "adaptive"},
-                output_config={"effort": "low"},
-            )
+            # Inside the try and around the call alone. The configuration
+            # checks above cost nothing, and folding them in would make a
+            # missing key look like a fast model; the conversion below is
+            # this application's own work and not the model's latency.
+            with observed("anthropic", "messages.parse"):
+                response = client.messages.parse(
+                    model=settings.anthropic_model,
+                    max_tokens=settings.anthropic_max_tokens,
+                    system=instructions,
+                    messages=_messages(turns, passages),
+                    output_format=_Answer,
+                    # Thinking is on by default on this model and left on:
+                    # the judgement being asked for -- does this evidence
+                    # actually answer the question -- is the part worth
+                    # thinking about. Effort is what keeps a customer
+                    # support reply quick; lowering it is the documented
+                    # way to spend less than turning thinking off, which
+                    # has failure modes of its own.
+                    thinking={"type": "adaptive"},
+                    output_config={"effort": "low"},
+                )
         except anthropic.APIError as exc:
             # Logged rather than raised onward. What the provider says can
             # name account, quota and model details that belong in a log

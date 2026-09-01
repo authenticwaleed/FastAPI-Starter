@@ -16,6 +16,7 @@ from typing import Annotated, Protocol
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.core import context
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.db.session import SessionDep
@@ -135,15 +136,22 @@ class JobService:
             return True
 
         try:
-            handler.run(
-                JobContext(
-                    session=self._session,
-                    jobs=self._jobs,
-                    messaging=messaging,
-                    now=now,
-                ),
-                job,
-            )
+            # Bound around the handler rather than inside each one, so
+            # that a job's own lines and the lines of every service it
+            # reaches say which business the work was for -- including the
+            # ones written by code that has no idea it is running in a
+            # worker. `operation` is the job's kind, which is the closest
+            # thing a background pass has to a route.
+            with context.bound(workspace_id=job.workspace_id, operation=job.kind.value):
+                handler.run(
+                    JobContext(
+                        session=self._session,
+                        jobs=self._jobs,
+                        messaging=messaging,
+                        now=now,
+                    ),
+                    job,
+                )
         except AppError as exc:
             # This application's own vocabulary for "something outside
             # said no", which is the class of failure worth trying again.

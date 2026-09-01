@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.api.dependencies.auth import CurrentUserDep
+from app.core import context
 from app.core.exceptions import InsufficientWorkspaceRoleError
 from app.models.workspace_membership import WorkspaceRole
 from app.services.workspace_service import (
@@ -28,11 +29,38 @@ def get_workspace_access(
     already established the caller may use. The tenant check happens once,
     in one place, before any handler body runs -- which is the only version
     of it that cannot be forgotten in a route added later.
+
     """
     return service.access(workspace_id, user)
 
 
-WorkspaceAccessDep = Annotated[WorkspaceAccess, Depends(get_workspace_access)]
+async def bound_workspace_access(
+    access: Annotated[WorkspaceAccess, Depends(get_workspace_access)],
+) -> WorkspaceAccess:
+    """The same access, with the workspace added to the log context.
+
+    Its own dependency, and asynchronous, and both are the point.
+
+    FastAPI runs a synchronous dependency in a worker thread, which gets a
+    *copy* of the context: anything it binds is thrown away when the
+    thread returns, so binding inside the resolver above reaches nothing --
+    not the endpoint, not the summary line. An asynchronous one runs in
+    the request's own task, where a binding is visible to everything after
+    it and to the middleware that logs the request when it is over.
+
+    Resolved after the check above, never before. An id somebody guessed
+    at is not a workspace, and a log line saying it was would be worse
+    than no line at all.
+    """
+    context.bind(workspace_id=access.workspace.id)
+
+    return access
+
+
+# Every route hangs off the binding wrapper rather than the resolver, so
+# that reaching a workspace and saying which one was reached are the same
+# act and cannot come apart.
+WorkspaceAccessDep = Annotated[WorkspaceAccess, Depends(bound_workspace_access)]
 
 
 def require_workspace_role(

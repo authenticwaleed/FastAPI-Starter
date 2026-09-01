@@ -2445,6 +2445,68 @@ handoff rate
 
 Add distributed tracing only if operational complexity requires it.
 
+## What was built
+
+The identifiers are a context variable bound at the edges and read by a
+filter on the log handler, so every line carries them -- including the
+ones uvicorn and SQLAlchemy write, which are exactly the lines worth
+knowing the request id of.
+
+```text
+request_id        the middleware, per request; the worker, per pass
+workspace_id      the dependency every tenant route already goes through
+conversation_id   the background dispatchers, so a reply says which thread
+integration       the outbound helper, for the length of one call
+operation         the same, and the job kind for background work
+```
+
+"Avoid sensitive contents by default" is the signature of `context.bind`:
+it takes those five and nothing else, so there is no argument to pass a
+message body or an access token as. A request logs its route's *template*
+rather than the path asked for, which is what keeps the invitation token
+that lives in a path out of the log, and an inbound `X-Request-ID` is
+replaced unless it looks like an identifier -- a newline from a stranger
+in the middle of a real line is how a trail stops being evidence.
+
+## Metrics, as events rather than counters
+
+Every measurement is a field on a log line: `duration_ms`, `outcome`,
+`status`, `route`, `depth`. That is the decision this phase makes, and the
+reason is that the lines already carry the request and the workspace, so
+one query answers "how slow is WhatsApp" *and* "how slow was WhatsApp for
+this customer on Tuesday" -- and the second is the question somebody
+actually asks. A counter answers only the first, and costs a dependency, a
+scrape endpoint and a second place to look.
+
+```text
+HTTP latency, error rate    the request line: route, status, duration_ms
+webhook failures            outcome=rejected / outcome=unreadable
+WhatsApp, LLM, embedding    the outbound line: integration, operation,
+                            duration_ms, outcome
+queue depth                 the worker, when there is any
+```
+
+The rest of the list is already in the database rather than in a metric,
+and querying it is better than counting it twice: AI responses and AI cost
+are `usage_records`, handoff rate is `ai_response_logs`, and both are
+already served by the analytics endpoints.
+
+## Acceptance criteria
+
+- [x] every line carries the request it belongs to
+- [x] a tenant request says which business it was for
+- [x] outbound calls are timed and their failures counted
+- [x] nothing but the five named identifiers can be bound
+- [x] no path secret, provider message or caller-supplied string reaches a line
+
+## Tracing, deliberately not
+
+The plan's own condition -- only if operational complexity requires it --
+is not met. There are two processes and one database; a request id already
+threads a webhook, the reply it produced and the model call it cost into
+one search. What would change it is a third hop this application does not
+have.
+
 ---
 
 # 39. Phase 30 — Production Security

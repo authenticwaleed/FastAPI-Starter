@@ -23,6 +23,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.core import context
 from app.core.exceptions import RateLimitExceededError
 from app.core.rate_limit import RateLimited, RateLimiter
 from app.db.session import get_session_factory
@@ -237,6 +238,35 @@ def answer_inbound(
     exists for. When it trips, the message is already stored and shows up
     unanswered in the inbox, which is what a person is for.
     """
+    # Bound for the whole run, so every line the assistant writes says
+    # which business and which thread it was about. The request id is
+    # already there and is not rebound: this work was scheduled by a
+    # webhook and inherits its context, which is what lets one search turn
+    # up the delivery, the reply it produced, and the model call it cost.
+    with context.bound(workspace_id=workspace_id, conversation_id=conversation_id):
+        _answer(
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            embeddings=embeddings,
+            writer=writer,
+            messaging=messaging,
+            session_source=session_source,
+            limiter=limiter,
+        )
+
+
+def _answer(
+    *,
+    workspace_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    embeddings: EmbeddingProvider,
+    writer: ReplyWriter,
+    messaging: MessagingProvider,
+    session_source: SessionSource,
+    limiter: RateLimiter | None,
+) -> None:
     try:
         if limiter is not None:
             limiter.spend(RateLimited.AI, str(workspace_id))

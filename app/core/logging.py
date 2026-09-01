@@ -3,7 +3,46 @@ import logging
 from logging.config import dictConfig
 from typing import Any
 
+from app.core import context
 from app.core.config import get_settings
+
+# What a record may carry beyond the identifiers: measurements, put there
+# by the observability helpers. Named here rather than accepted wholesale,
+# for the reason `context.bind` is keyword-only -- a formatter that
+# serialised every attribute somebody attached to a record would ship
+# whatever the next person passed as `extra`.
+MEASUREMENTS = ("duration_ms", "outcome", "status", "method", "route", "error", "depth")
+
+
+class ContextFilter(logging.Filter):
+    """Attach the ambient identifiers to every record that passes through.
+
+    A filter rather than an adapter, because it has to reach lines nobody
+    here wrote: uvicorn's, SQLAlchemy's, and whatever a library logs when
+    something goes wrong inside it. Those are exactly the lines worth
+    knowing the request id of.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        fields = dict(context.current())
+
+        for name in MEASUREMENTS:
+            value = getattr(record, name, None)
+
+            if value is not None:
+                fields[name] = value
+
+        record.fields = fields
+        # Rendered here rather than in the text formatter, because a
+        # format string cannot iterate. Empty when there is nothing to
+        # say, so an ordinary line looks exactly as it did before.
+        record.field_suffix = (
+            " " + " ".join(f"{key}={value}" for key, value in fields.items())
+            if fields
+            else ""
+        )
+
+        return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -21,6 +60,12 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        # Top-level rather than nested under a key, because that is what
+        # makes them queryable: an aggregator filters on `workspace_id`,
+        # not on `fields.workspace_id`. Merged last would let a stray
+        # field shadow the level or the message, so they go in first and
+        # the fixed four win.
+        payload = {**getattr(record, "fields", {}), **payload}
 
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
@@ -51,17 +96,30 @@ def configure_logging() -> None:
             "disable_existing_loggers": False,
             "formatters": {
                 "text": {
-                    "format": "%(asctime)s %(levelname)-8s %(name)s | %(message)s",
+                    "format": (
+                        "%(asctime)s %(levelname)-8s %(name)s | "
+                        "%(message)s%(field_suffix)s"
+                    ),
                     "datefmt": "%Y-%m-%dT%H:%M:%S%z",
                 },
                 "json": {
                     "()": "app.core.logging.JsonFormatter",
                 },
             },
+            "filters": {
+                "context": {
+                    "()": "app.core.logging.ContextFilter",
+                },
+            },
             "handlers": {
                 "console": {
                     "class": "logging.StreamHandler",
                     "formatter": settings.log_format,
+                    # On the handler rather than on a logger, so that every
+                    # line reaching this stream carries the identifiers --
+                    # including the ones written by libraries that know
+                    # nothing about them.
+                    "filters": ["context"],
                     # stdout rather than stderr: a container's log is one
                     # stream, and splitting across two makes the ordering of
                     # what you read back unreliable.

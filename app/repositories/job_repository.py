@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.job import Job, JobKind, JobStatus
@@ -155,6 +155,23 @@ class JobRepository:
         self._session.flush()
 
         return len(stalled)
+
+    def depth(self, *, now: datetime) -> int:
+        """How much work is waiting and already due.
+
+        Due rather than pending, and the difference is the whole value of
+        the number: a queue holding a hundred retries scheduled for the
+        next hour is idle, and counting them would have somebody paged for
+        a backlog that does not exist.
+        """
+        return (
+            self._session.scalar(
+                select(func.count())
+                .select_from(Job)
+                .where(Job.status == JobStatus.PENDING, Job.run_at <= now)
+            )
+            or 0
+        )
 
     def get(self, job_id: uuid.UUID) -> Job | None:
         return self._session.get(Job, job_id)
