@@ -17,6 +17,7 @@ from app.api.routes import (
     notifications,
     orders,
     products,
+    usage,
     webhooks,
     whatsapp,
     workspaces,
@@ -53,6 +54,10 @@ api_router.include_router(products.router)
 api_router.include_router(orders.router)
 api_router.include_router(automations.router)
 api_router.include_router(billing.router)
+# Beside the subscription rather than under analytics: the dashboard's
+# numbers are about the work a business did, and these are about what it
+# is allowed to do next.
+api_router.include_router(usage.router)
 api_router.include_router(analytics.router)
 # Before the storefront routes, and this order is load-bearing. Both hang
 # off `/integrations/`, and the storefront ones take the provider as a

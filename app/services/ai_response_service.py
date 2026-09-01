@@ -28,6 +28,7 @@ from app.models.conversation import AiMode, Conversation
 from app.models.conversation_event import EventType
 from app.models.message import Direction, Message, SenderType
 from app.models.notification import NotificationKind
+from app.models.usage_record import UsageMetric
 from app.models.workspace import Workspace
 from app.repositories.ai_response_log_repository import AiResponseLogRepository
 from app.repositories.conversation_event_repository import (
@@ -64,6 +65,7 @@ from app.services.subscription_service import (
     SubscriptionService,
     SubscriptionServiceDep,
 )
+from app.services.usage_service import UsageService, UsageServiceDep
 from app.services.workspace_service import MAY_HANDLE_CUSTOMERS
 
 logger = logging.getLogger(__name__)
@@ -131,6 +133,7 @@ class AiResponseService:
         events: ConversationEventRepository,
         notifications: NotificationService,
         subscriptions: SubscriptionService,
+        usage: UsageService,
     ) -> None:
         self._session = session
         self._conversations = conversations
@@ -143,6 +146,7 @@ class AiResponseService:
         self._events = events
         self._notifications = notifications
         self._subscriptions = subscriptions
+        self._usage = usage
 
     def generate_reply(
         self,
@@ -439,6 +443,7 @@ class AiResponseService:
             input_tokens=completion.input_tokens if completion else None,
             output_tokens=completion.output_tokens if completion else None,
         )
+        self._meter(log, completion)
         self._session.commit()
 
         if decision == AiDecision.HANDOFF and not conversation.is_with_a_human:
@@ -503,6 +508,49 @@ class AiResponseService:
             confidence=log.confidence,
             reason=log.reason,
             sources=list(log.retrieved_chunk_ids),
+        )
+
+    def _meter(self, log: AiResponseLog, completion: Completion | None) -> None:
+        """Charge for what was spent, in the same write as the record of it.
+
+        Only where the model was actually called. A decision reached
+        before that -- the assistant switched off, a thread somebody has
+        taken over, an allowance already used up -- costs nothing, and
+        counting it was the bug this phase exists to remove: a workspace
+        that turned the assistant off on twenty conversations used to
+        spend twenty of its monthly replies doing so.
+
+        Two metrics, deliberately not the same one. A reply counts as a
+        response only when the business got one; a handoff after a
+        completion produced no answer and still cost tokens, so it counts
+        in what it cost and not in what it delivered.
+        """
+        if completion is None:
+            return
+
+        # Resolved once for both rows. Two lookups would be one wasted
+        # query on the hottest path in the product, and -- at midnight on
+        # the first of the month -- two rows about one reply landing in
+        # two different periods.
+        period = self._usage.period(log.workspace_id)
+
+        if log.decision in {AiDecision.SUGGESTED, AiDecision.ANSWERED}:
+            self._usage.record(
+                log.workspace_id,
+                UsageMetric.AI_RESPONSES,
+                source_id=log.id,
+                period=period,
+            )
+
+        self._usage.record(
+            log.workspace_id,
+            UsageMetric.AI_TOKENS,
+            source_id=log.id,
+            period=period,
+            # Nothing is written for a provider that reported neither,
+            # which is what UsageService.record does with a quantity of
+            # nothing: silence is not zero.
+            quantity=(completion.input_tokens or 0) + (completion.output_tokens or 0),
         )
 
 
@@ -631,6 +679,7 @@ def get_ai_response_service(
     events: ConversationEventRepositoryDep,
     notifications: NotificationServiceDep,
     subscriptions: SubscriptionServiceDep,
+    usage: UsageServiceDep,
 ) -> AiResponseService:
     return AiResponseService(
         session=session,
@@ -644,6 +693,7 @@ def get_ai_response_service(
         events=events,
         notifications=notifications,
         subscriptions=subscriptions,
+        usage=usage,
     )
 
 

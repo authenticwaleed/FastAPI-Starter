@@ -181,7 +181,7 @@ def engine() -> Iterator[Engine]:
                 "TRUNCATE conversation_events, ai_response_logs, "
                 "knowledge_chunks, "
                 "knowledge_documents, knowledge_sources, "
-                "notifications, billing_events, subscriptions, "
+                "notifications, billing_events, usage_records, subscriptions, "
                 "automation_runs, automations, "
                 "product_variants, products, orders, "
                 "messages, conversations, contacts, "

@@ -14,15 +14,14 @@ from sqlalchemy.orm import Session
 from app.models.subscription import BillingProviderName, SubscriptionStatus
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.repositories.whatsapp_account_repository import (
-    WhatsAppAccountRepository,
-)
+from app.repositories.usage_repository import UsageRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.services.notification_service import NotificationService
 from app.services.plans import PlanTier
 from app.services.subscription_service import SubscriptionService
+from app.services.usage_service import UsageService
 from tests.support.billing import FakeBillingProvider
 
 
@@ -41,6 +40,16 @@ def notification_service(session: Session) -> NotificationService:
     )
 
 
+def usage_service(session: Session) -> UsageService:
+    """The meter, on a test's own session.
+
+    Real for the same reason the notifications are. What metering has to
+    get right is landing in the same transaction as the thing it meters,
+    and a stub would be a second implementation of exactly that.
+    """
+    return UsageService(usage=UsageRepository(session))
+
+
 def subscription_service(session: Session) -> SubscriptionService:
     """The capability checks, on a test's own session.
 
@@ -54,7 +63,7 @@ def subscription_service(session: Session) -> SubscriptionService:
         subscriptions=SubscriptionRepository(session),
         provider=FakeBillingProvider(),
         notifications=notification_service(session),
-        accounts=WhatsAppAccountRepository(session),
+        usage=usage_service(session),
     )
 
 

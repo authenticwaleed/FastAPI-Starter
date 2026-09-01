@@ -2211,9 +2211,9 @@ Do not calculate billing-critical usage from unreliable logs.
 
 ## Acceptance criteria
 
-- [ ] usage is workspace-scoped
-- [ ] period totals accurate
-- [ ] plan limits enforceable
+- [x] usage is workspace-scoped
+- [x] period totals accurate
+- [x] plan limits enforceable
 
 ---
 
@@ -2628,6 +2628,9 @@ Billing
 ├── POST /workspaces/{workspace_id}/subscription/checkout
 ├── POST /workspaces/{workspace_id}/subscription/cancel
 └── POST /webhooks/billing
+
+Usage
+└── GET /workspaces/{workspace_id}/usage
 
 Audit
 └── GET /workspaces/{workspace_id}/audit-logs
