@@ -78,5 +78,29 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # The same image as the API, with a different command. Sharing the image
+  # is what keeps a handler and the services it calls from ever being two
+  # versions apart -- a worker running last week's code against this
+  # week's rows is the failure mode a separate build invites.
+  #
+  # No ports and no health check: nothing connects to it, and what "healthy"
+  # would mean for a process whose job is to be idle most of the time is a
+  # question with no good answer. Whether it is working is visible in the
+  # jobs table.
+  #
+  # Scale it with `docker compose up --scale worker=3`. The claim is
+  # `FOR UPDATE SKIP LOCKED` and every enqueue is deduplicated, so more of
+  # these share the queue rather than duplicate it.
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   postgres-data:
