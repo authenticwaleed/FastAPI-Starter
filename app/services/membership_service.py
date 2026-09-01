@@ -9,6 +9,7 @@ from app.core.exceptions import (
     MembershipNotFoundError,
 )
 from app.db.session import SessionDep
+from app.models.audit_log import AuditEvent
 from app.models.user import User
 from app.models.workspace_membership import (
     MembershipStatus,
@@ -19,6 +20,7 @@ from app.models.workspace_membership import (
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
+from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.workspace_service import (
     MAY_ADMINISTER,
     WorkspaceAccess,
@@ -55,9 +57,11 @@ class MembershipService:
         self,
         session: Session,
         memberships: WorkspaceMembershipRepository,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._memberships = memberships
+        self._audit = audit
 
     def list_members(
         self,
@@ -89,7 +93,19 @@ class MembershipService:
 
         self._refuse_to_strand(access, membership, leaving=role != WorkspaceRole.OWNER)
 
+        was = membership.role
+
         self._memberships.set_role(membership, role)
+        # Both roles, because this is the entry a business will actually
+        # come looking for: who made whom an administrator, and what they
+        # were before. "Promoted to admin" without the rank they held is
+        # half an answer.
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.MEMBER_ROLE_CHANGED,
+            actor_user_id=access.membership.user_id,
+            meta={"user_id": user_id, "from": was.value, "to": role.value},
+        )
         self._session.commit()
 
         return membership, user
@@ -118,6 +134,15 @@ class MembershipService:
         self._refuse_to_strand(access, membership, leaving=True)
 
         self._memberships.set_status(membership, MembershipStatus.REMOVED)
+        # Whether they were taken off the team or walked out themselves,
+        # which is the same row and two different things: the actor is the
+        # same person as the subject in exactly one of those cases.
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.MEMBER_REMOVED,
+            actor_user_id=access.membership.user_id,
+            meta={"user_id": user_id, "role": membership.role.value},
+        )
         self._session.commit()
 
     def _member(
@@ -150,8 +175,13 @@ class MembershipService:
 def get_membership_service(
     session: SessionDep,
     memberships: WorkspaceMembershipRepositoryDep,
+    audit: AuditServiceDep,
 ) -> MembershipService:
-    return MembershipService(session=session, memberships=memberships)
+    return MembershipService(
+        session=session,
+        memberships=memberships,
+        audit=audit,
+    )
 
 
 MembershipServiceDep = Annotated[MembershipService, Depends(get_membership_service)]
