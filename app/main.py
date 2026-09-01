@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.errors import register_exception_handlers
+from app.api.middleware import RequestContext
 from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -51,20 +52,25 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
         allowed_hosts=settings.allowed_hosts,
     )
 
-    if not settings.cors_origins:
-        # No origins configured means no cross-origin access, rather than a
-        # convenient wildcard nobody remembers to close later.
-        return
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=settings.cors_allow_credentials,
+            # Named rather than "*". The API has five verbs and needs two
+            # headers; anything beyond that should be a deliberate addition.
+            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
+    # No origins configured means no cross-origin access, rather than a
+    # convenient wildcard nobody remembers to close later.
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=settings.cors_allow_credentials,
-        # Named rather than "*". The API has five verbs and needs two
-        # headers; anything beyond that should be a deliberate addition.
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
-    )
+    # Added last, which is what puts it outermost: `add_middleware` inserts
+    # at the front of the stack, so the last one added is the first one
+    # entered. Outermost is where this belongs -- a request refused by the
+    # host check above is still a request, and the line saying so should
+    # carry an id like every other.
+    app.add_middleware(RequestContext)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
