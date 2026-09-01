@@ -56,12 +56,12 @@ class AuditEvent(StrEnum):
 
     SUBSCRIPTION_CHANGED = "subscription.changed"
 
-    # The plan also lists api_key.created and api_key.revoked. They are
-    # not here because nothing issues an API key yet, and a vocabulary
-    # value nothing can write is a constraint that lies about what this
-    # table contains. The column is a CHECK constraint rather than a
-    # native enum precisely so that adding them with Phase 27 is an
-    # ordinary drop and recreate -- see app/db/types.py.
+    # Added with Phase 27, which is when something first issued a key.
+    # The column is a CHECK constraint rather than a native enum exactly
+    # so that this was an ordinary drop and recreate -- see
+    # app/db/types.py, which chose that trade for moments like this one.
+    API_KEY_CREATED = "api_key.created"
+    API_KEY_REVOKED = "api_key.revoked"
 
 
 class AuditLog(Base):
