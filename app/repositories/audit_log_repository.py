@@ -44,6 +44,7 @@ class AuditLogRepository:
             workspace_id=workspace_id,
             event=event,
             actor_user_id=actor_user_id,
+            actor_email=self._email_of(actor_user_id),
             meta=meta,
         )
 
@@ -51,6 +52,21 @@ class AuditLogRepository:
         self._session.flush()
 
         return entry
+
+    def _email_of(self, actor_user_id: int | None) -> str | None:
+        """Who this account is, right now, to be written down.
+
+        `Session.get` rather than a select, because the actor is almost
+        always the person whose request this is -- and the authentication
+        dependency has already loaded them, so this usually resolves in
+        the identity map without touching the database at all.
+        """
+        if actor_user_id is None:
+            return None
+
+        user = self._session.get(User, actor_user_id)
+
+        return user.email if user else None
 
     def list_for_workspace(
         self,
