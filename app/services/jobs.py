@@ -75,9 +75,15 @@ class DeliverMessage:
 class EraseWorkspace:
     """Destroy one closed workspace's data, once its date has passed.
 
-    The date is checked again here and not merely when the job was
-    queued. A job can sit in the queue through a restart, a reclaim, and
-    an administrator changing their mind -- and the one job in this system
+    The only job that names its workspace in the payload rather than in
+    `workspace_id`, and it has to: that column cascades, so a job owned by
+    the workspace it deletes deletes itself halfway through and leaves the
+    runner marking a row that is no longer there. This one job has to
+    outlive its subject.
+
+    The date is checked again here and not merely when the job was queued.
+    A job can sit in the queue through a restart, a reclaim, and an
+    administrator changing their mind -- and the one job in this system
     that cannot be undone is the one that must not act on a stale reason.
 
     Nothing is written to the audit log at this point, because there is
@@ -88,12 +94,14 @@ class EraseWorkspace:
     """
 
     def run(self, context: JobContext, job: Job) -> None:
-        workspace_id = job.workspace_id
+        named = job.payload.get("workspace_id")
 
-        if workspace_id is None:
+        if not named:
             logger.warning("An erasure job named no workspace")
 
             return
+
+        workspace_id = uuid.UUID(str(named))
 
         workspaces = WorkspaceRepository(context.session)
         workspace = workspaces.get(workspace_id)
@@ -179,8 +187,10 @@ class SweepErasures:
                 with context.session.begin_nested():
                     context.jobs.enqueue(
                         kind=JobKind.ERASE_WORKSPACE,
-                        workspace_id=workspace_id,
-                        payload={},
+                        # In the payload, not the column. See EraseWorkspace:
+                        # `workspace_id` cascades, and a job owned by what
+                        # it deletes deletes itself halfway through.
+                        payload={"workspace_id": str(workspace_id)},
                         # One per workspace, for ever. There is no second
                         # erasure of the same business, and a key without
                         # a window in it says so.
