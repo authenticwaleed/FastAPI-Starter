@@ -158,8 +158,25 @@ class WorkspaceRepository:
 
         return workspace
 
-    def set_status(self, workspace: Workspace, status: WorkspaceStatus) -> Workspace:
+    def set_status(
+        self,
+        workspace: Workspace,
+        status: WorkspaceStatus,
+        *,
+        erase_after: datetime | None = None,
+    ) -> Workspace:
+        """Move the status, and set the erasure date when one is given.
+
+        Together rather than as two calls, because they are one decision:
+        a workspace that is closed without a date is one whose data nobody
+        has decided anything about, and that is exactly the state a
+        retention policy exists to prevent.
+        """
         workspace.status = status
+
+        if erase_after is not None:
+            workspace.erase_after = erase_after
+
         self._session.flush()
 
         return workspace
