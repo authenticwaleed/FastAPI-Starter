@@ -28,6 +28,7 @@ from app.models.ecommerce_account import (
     EcommerceAccount,
     EcommerceAccountStatus,
 )
+from app.models.job import Job, JobKind, JobStatus
 from app.models.knowledge import (
     DocumentStatus,
     KnowledgeChunk,
@@ -99,6 +100,9 @@ __all__ = [
     "EcommerceAccount",
     "EcommerceAccountStatus",
     "EventType",
+    "Job",
+    "JobKind",
+    "JobStatus",
     "KnowledgeChunk",
     "KnowledgeDocument",
     "KnowledgeSource",
