@@ -103,6 +103,30 @@ class AutomationRepository:
             .order_by(Automation.kind)
         ).all()
 
+    def workspace_ids_with_enabled(
+        self,
+        trigger: AutomationTrigger,
+    ) -> Sequence[uuid.UUID]:
+        """Which businesses have this kind of automation switched on.
+
+        The one query in this file that is not workspace-scoped, and it is
+        deliberately narrow: it returns ids and nothing else, because what
+        asks it is the sweep deciding whom to plan work for. Everything it
+        then does is scoped to one of those ids at a time.
+
+        Distinct, because a workspace with two scheduled automations is
+        still one workspace to sweep -- the sweep looks at all of them.
+        """
+        return self._session.scalars(
+            select(Automation.workspace_id)
+            .where(
+                Automation.trigger_type == trigger,
+                Automation.status == AutomationStatus.ENABLED,
+            )
+            .distinct()
+            .order_by(Automation.workspace_id)
+        ).all()
+
     def update(
         self,
         automation: Automation,
