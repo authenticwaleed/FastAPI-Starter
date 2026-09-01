@@ -14,11 +14,13 @@ from app.core.exceptions import (
 from app.db.session import SessionDep
 from app.integrations.messaging.base import MessagingProvider, SentMessage
 from app.integrations.messaging.whatsapp import WhatsAppCloudProvider
+from app.models.audit_log import AuditEvent
 from app.models.whatsapp_account import WhatsAppAccount
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
 from app.schemas.whatsapp import WhatsAppConnect
+from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.workspace_service import WorkspaceAccess
 
 logger = logging.getLogger(__name__)
@@ -55,10 +57,12 @@ class WhatsAppService:
         session: Session,
         accounts: WhatsAppAccountRepository,
         provider: MessagingProvider,
+        audit: AuditService,
     ) -> None:
         self._session = session
         self._accounts = accounts
         self._provider = provider
+        self._audit = audit
 
     def connect(
         self,
@@ -81,6 +85,16 @@ class WhatsAppService:
                 # token never sits in an object that something else might
                 # serialise.
                 access_token_encrypted=encrypt(payload.access_token),
+            )
+            # The number, never the token. What is worth recording is
+            # which line the business's customers are now reaching, and
+            # who put it there; the credential itself belongs in one
+            # encrypted column and nowhere else.
+            self._audit.did(
+                workspace_id,
+                AuditEvent.WHATSAPP_CONNECTED,
+                actor_user_id=access.membership.user_id,
+                meta={"phone_number": account.phone_number},
             )
             self._session.commit()
         except IntegrityError as exc:
@@ -110,7 +124,20 @@ class WhatsAppService:
         a credential, and a revoked credential that is still in the table
         is a credential somebody can still read.
         """
-        self._accounts.delete(self.get(access))
+        account = self.get(access)
+        phone_number = account.phone_number
+
+        self._accounts.delete(account)
+        # Read off the row before it is deleted, because after this there
+        # is nothing left to say which number was disconnected -- and a
+        # business whose customers have stopped getting through needs
+        # exactly that, along with who did it.
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.WHATSAPP_DISCONNECTED,
+            actor_user_id=access.membership.user_id,
+            meta={"phone_number": phone_number},
+        )
         self._session.commit()
 
         logger.info("WhatsApp disconnected for workspace %s", access.workspace.id)
@@ -145,8 +172,14 @@ def get_whatsapp_service(
     session: SessionDep,
     accounts: WhatsAppAccountRepositoryDep,
     provider: MessagingProviderDep,
+    audit: AuditServiceDep,
 ) -> WhatsAppService:
-    return WhatsAppService(session=session, accounts=accounts, provider=provider)
+    return WhatsAppService(
+        session=session,
+        accounts=accounts,
+        provider=provider,
+        audit=audit,
+    )
 
 
 WhatsAppServiceDep = Annotated[WhatsAppService, Depends(get_whatsapp_service)]
