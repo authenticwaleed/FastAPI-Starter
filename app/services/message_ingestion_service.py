@@ -18,6 +18,7 @@ from app.integrations.messaging.base import (
 from app.models.contact import Contact, ContactStatus
 from app.models.conversation import Channel, Conversation, ConversationStatus
 from app.models.message import Direction, MessageStatus, SenderType
+from app.models.usage_record import UsageMetric
 from app.models.whatsapp_account import WhatsAppAccount
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -28,6 +29,7 @@ from app.repositories.whatsapp_account_repository import (
 from app.services.contact_service import ContactRepositoryDep
 from app.services.conversation_service import ConversationRepositoryDep
 from app.services.message_service import MessageRepositoryDep
+from app.services.usage_service import UsageService, UsageServiceDep
 from app.services.whatsapp_service import (
     MessagingProviderDep,
     WhatsAppAccountRepositoryDep,
@@ -80,6 +82,7 @@ class MessageIngestionService:
         conversations: ConversationRepository,
         messages: MessageRepository,
         provider: MessagingProvider,
+        usage: UsageService,
     ) -> None:
         self._session = session
         self._accounts = accounts
@@ -87,6 +90,7 @@ class MessageIngestionService:
         self._conversations = conversations
         self._messages = messages
         self._provider = provider
+        self._usage = usage
 
     def verify(self, *, payload: bytes, signature_header: str | None) -> None:
         if not signature_header or not self._provider.verify_signature(
@@ -177,6 +181,16 @@ class MessageIngestionService:
                 # -- an inbox where replying to somebody makes their thread
                 # look unattended is one whose badge nobody trusts.
                 unread=True,
+            )
+            # In the same transaction as the message, which is what makes
+            # the meter safe under a provider that redelivers: the
+            # duplicate check above is not a lock, and a delivery that
+            # loses the race at the unique index takes its usage row down
+            # with it rather than counting a message nobody stored.
+            self._usage.record(
+                workspace_id,
+                UsageMetric.WHATSAPP_MESSAGES,
+                source_id=message.id,
             )
             self._session.commit()
         except IntegrityError:
@@ -355,6 +369,7 @@ def get_message_ingestion_service(
     conversations: ConversationRepositoryDep,
     messages: MessageRepositoryDep,
     provider: MessagingProviderDep,
+    usage: UsageServiceDep,
 ) -> MessageIngestionService:
     return MessageIngestionService(
         session=session,
@@ -363,6 +378,7 @@ def get_message_ingestion_service(
         conversations=conversations,
         messages=messages,
         provider=provider,
+        usage=usage,
     )
 
 

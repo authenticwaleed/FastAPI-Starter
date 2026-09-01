@@ -32,7 +32,7 @@ from app.services.message_service import MessageService
 from app.services.whatsapp_service import WhatsAppService
 from app.services.workspace_service import WorkspaceService
 from tests.support.messaging import FakeMessagingProvider
-from tests.support.services import notification_service
+from tests.support.services import notification_service, usage_service
 
 NUMBER = "+923001234567"
 
@@ -104,6 +104,7 @@ def service(
             provider=provider,
         ),
         notifications=notification_service(db_session),
+        usage=usage_service(db_session),
     )
 
 

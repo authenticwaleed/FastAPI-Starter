@@ -25,6 +25,7 @@ from app.schemas.workspace import WorkspaceCreate
 from app.services.message_ingestion_service import MessageIngestionService
 from app.services.workspace_service import WorkspaceService
 from tests.support.messaging import FakeMessagingProvider
+from tests.support.services import usage_service
 from tests.support.whatsapp import (
     PHONE_NUMBER_ID,
     inbound_payload,
@@ -56,6 +57,7 @@ def service(
         conversations=conversation_repository,
         messages=message_repository,
         provider=provider,
+        usage=usage_service(db_session),
     )
 
 

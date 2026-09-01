@@ -41,6 +41,7 @@ from app.repositories.notification_repository import NotificationRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.repositories.usage_repository import UsageRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
 )
@@ -57,6 +58,7 @@ from app.services.subscription_service import (
     SubscriptionService,
     get_billing_provider,
 )
+from app.services.usage_service import UsageService
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
@@ -81,6 +83,16 @@ def get_session_source() -> SessionSource:
 SessionSourceDep = Annotated[SessionSource, Depends(get_session_source)]
 
 
+def build_usage_service(session: Session) -> UsageService:
+    """The meter, assembled against one session.
+
+    Wanted by every background graph, because the work they do is
+    precisely the work that costs something: a webhook that answered a
+    customer without metering it would be usage nothing charged for.
+    """
+    return UsageService(usage=UsageRepository(session))
+
+
 def build_subscription_service(session: Session) -> SubscriptionService:
     """The capability checks, assembled against one session.
 
@@ -88,8 +100,6 @@ def build_subscription_service(session: Session) -> SubscriptionService:
     checked before it drafts, and a run that skipped the check would let
     a webhook spend what a dashboard could not.
     """
-    accounts = WhatsAppAccountRepository(session)
-
     return SubscriptionService(
         session=session,
         subscriptions=SubscriptionRepository(session),
@@ -99,7 +109,7 @@ def build_subscription_service(session: Session) -> SubscriptionService:
             notifications=NotificationRepository(session),
             memberships=WorkspaceMembershipRepository(session),
         ),
-        accounts=accounts,
+        usage=build_usage_service(session),
     )
 
 
@@ -125,6 +135,7 @@ def build_ai_response_service(
         notifications=NotificationRepository(session),
         memberships=WorkspaceMembershipRepository(session),
     )
+    usage = build_usage_service(session)
 
     return AiResponseService(
         session=session,
@@ -140,6 +151,7 @@ def build_ai_response_service(
         events=ConversationEventRepository(session),
         notifications=notifications,
         subscriptions=build_subscription_service(session),
+        usage=usage,
         outbound=MessageService(
             session=session,
             messages=messages,
@@ -152,6 +164,7 @@ def build_ai_response_service(
                 provider=messaging,
             ),
             notifications=notifications,
+            usage=usage,
         ),
     )
 

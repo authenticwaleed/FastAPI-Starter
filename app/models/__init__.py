@@ -49,6 +49,7 @@ from app.models.subscription import (
     Subscription,
     SubscriptionStatus,
 )
+from app.models.usage_record import UsageMetric, UsageRecord
 from app.models.user import User
 from app.models.user_session import (
     RefreshToken,
@@ -114,6 +115,8 @@ __all__ = [
     "SourceType",
     "Subscription",
     "SubscriptionStatus",
+    "UsageMetric",
+    "UsageRecord",
     "User",
     "UserSession",
     "UserToken",

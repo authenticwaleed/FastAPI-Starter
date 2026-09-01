@@ -17,6 +17,7 @@ from app.db.session import SessionDep
 from app.models.conversation import Conversation
 from app.models.message import Direction, Message, MessageStatus, SenderType
 from app.models.notification import NotificationKind
+from app.models.usage_record import UsageMetric
 from app.models.workspace import Workspace
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -31,6 +32,7 @@ from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
 )
+from app.services.usage_service import UsageService, UsageServiceDep
 from app.services.whatsapp_service import (
     WhatsAppAccountRepositoryDep,
     WhatsAppService,
@@ -62,6 +64,7 @@ class MessageService:
         accounts: WhatsAppAccountRepository,
         whatsapp: WhatsAppService,
         notifications: NotificationService,
+        usage: UsageService,
     ) -> None:
         self._session = session
         self._messages = messages
@@ -70,6 +73,7 @@ class MessageService:
         self._accounts = accounts
         self._whatsapp = whatsapp
         self._notifications = notifications
+        self._usage = usage
 
     def list_for(
         self,
@@ -183,6 +187,16 @@ class MessageService:
         message.status = MessageStatus.SENT
         message.external_message_id = sent.external_message_id
         message.sent_at = datetime.now(UTC)
+        # Metered here rather than where the message was written, because
+        # this is the line where one actually went over WhatsApp. A reply
+        # queued for a business with no number connected, or one the
+        # provider refused, is not a message anybody should be charged
+        # for -- and both of those return before reaching this.
+        self._usage.record(
+            workspace_id,
+            UsageMetric.WHATSAPP_MESSAGES,
+            source_id=message.id,
+        )
         self._session.commit()
 
         return message
@@ -240,6 +254,7 @@ def get_message_service(
     accounts: WhatsAppAccountRepositoryDep,
     whatsapp: WhatsAppServiceDep,
     notifications: NotificationServiceDep,
+    usage: UsageServiceDep,
 ) -> MessageService:
     return MessageService(
         session=session,
@@ -249,6 +264,7 @@ def get_message_service(
         accounts=accounts,
         whatsapp=whatsapp,
         notifications=notifications,
+        usage=usage,
     )
 
 
