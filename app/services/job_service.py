@@ -71,7 +71,7 @@ def backoff(attempts: int) -> timedelta:
     Doubling, capped. Written as a function rather than a table because
     the only property that matters is that it grows and stops growing.
     """
-    delay = BACKOFF_BASE * (2 ** max(attempts - 1, 0))
+    delay: timedelta = BACKOFF_BASE * (2 ** max(attempts - 1, 0))
 
     return min(delay, BACKOFF_CEILING)
 
