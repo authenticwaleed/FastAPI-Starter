@@ -1,7 +1,7 @@
-# LeadPilot — AI WhatsApp Sales & Support SaaS
+# Baton — AI WhatsApp Sales & Support SaaS
 ## Product Specification and Implementation Plan
 
-> Working product name: **LeadPilot**  
+> Working product name: **Baton**  
 > Backend: **FastAPI + PostgreSQL + SQLAlchemy 2.x**  
 > Initial niche: **E-commerce businesses using WhatsApp for sales and customer support**  
 > Recommended first sub-niche: **Fashion / apparel e-commerce stores**
@@ -10,7 +10,7 @@
 
 # 1. Product Vision
 
-LeadPilot is a multi-tenant SaaS platform that helps e-commerce businesses manage and automate customer conversations on WhatsApp.
+Baton is a multi-tenant SaaS platform that helps e-commerce businesses manage and automate customer conversations on WhatsApp.
 
 The system should allow a business to:
 
@@ -2272,7 +2272,7 @@ is an ordinary migration.
 
 # 36. Phase 27 — API Keys
 
-Later, allow customers to integrate with LeadPilot.
+Later, allow customers to integrate with Baton.
 
 ## Endpoints
 

@@ -1,4 +1,4 @@
-# FastAPI Starter
+# Baton
 
 A small FastAPI service built the way a production one is: PostgreSQL behind
 SQLAlchemy 2, Alembic migrations, JWT authentication, and a layered
@@ -23,7 +23,7 @@ cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 uv sync
-createdb fastapi_starter
+createdb baton
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```

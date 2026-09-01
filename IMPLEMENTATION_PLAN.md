@@ -1,4 +1,4 @@
-# FastAPI Starter — Implementation Plan
+# Baton — Implementation Plan
 
 This document is the roadmap for evolving this project from a small FastAPI starter into a clean, production-ready backend while learning each concept step by step.
 
@@ -211,7 +211,7 @@ Replace temporary in-memory storage with PostgreSQL.
 ### Planned configuration
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_starter
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/baton
 ```
 
 ### New dependencies
@@ -1042,7 +1042,7 @@ The gaps are listed under each phase, and these are the ones that matter:
 - ~~The `/users` endpoints have no authorisation. Anyone can list, edit or
   delete any user. That is the largest single gap in the project~~ Closed.
   That surface is gone, replaced by a self-service `/account` API, in
-  Phase 1 of `leadpilot_implementation_plan.md`
+  Phase 1 of `baton_implementation_plan.md`
 - No refresh tokens and no revocation. A stolen token is valid until it
   expires, and there is no way to end a session early
 - No rate limiting on login, which makes password guessing free

@@ -3,7 +3,7 @@
 # up` fails outright rather than starting with a signing key from a file
 # that is in version control.
 x-api-environment: &api-environment
-  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-fastapi_starter}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-baton}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY before starting}
   # No default, like the signing key: an empty value is refused outright
   # in production, and connecting WhatsApp fails clearly without it.
@@ -27,7 +27,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-fastapi_starter}
+      POSTGRES_DB: ${POSTGRES_DB:-baton}
     volumes:
       # A named volume, so the data outlives `docker compose down` and only
       # goes away with an explicit `down -v`.

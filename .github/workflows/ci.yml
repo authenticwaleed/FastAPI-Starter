@@ -20,7 +20,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: fastapi_starter
+          POSTGRES_DB: baton
         ports:
           - 5432:5432
         # Without the health check the first test can start before the
@@ -32,9 +32,9 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_starter
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/baton
       # The suite creates this database itself if it is missing.
-      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_starter_test
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/baton_test
       # A throwaway value for CI. The real one is a deployment secret and
       # has never been in this repository.
       JWT_SECRET_KEY: ci-only-signing-key-not-used-for-anything-real

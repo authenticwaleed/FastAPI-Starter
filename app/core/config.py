@@ -9,7 +9,7 @@ _LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSE
 
 
 class Settings(BaseSettings):
-    app_name: str = "FastAPI Starter"
+    app_name: str = "Baton"
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = False
 
