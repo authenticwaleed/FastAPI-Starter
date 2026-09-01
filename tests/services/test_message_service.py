@@ -14,6 +14,7 @@ from app.repositories.conversation_event_repository import (
     ConversationEventRepository,
 )
 from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.job_repository import JobRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
@@ -108,6 +109,7 @@ def service(
         ),
         notifications=notification_service(db_session),
         usage=usage_service(db_session),
+        jobs=JobRepository(db_session),
     )
 
 

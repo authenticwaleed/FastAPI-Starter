@@ -2352,6 +2352,59 @@ FastAPI
 
 Choose the queue library when requirements are clear.
 
+## What was needed, and what was chosen
+
+The requirements became clear because three places in the code already
+named this phase as the thing they were waiting for:
+
+```text
+MessageService.send      a reply that did not go out, with nothing to retry it
+automations run-due      an endpoint standing in for a timer
+BackgroundTasks          work scheduled in-process, lost on restart
+```
+
+The queue is **PostgreSQL**, with no library, and the deciding requirement
+is transactional enqueue. Everything deferred in this application is
+written in the same transaction as the thing that caused it -- a
+notification, a usage record, an audit entry -- so that neither can exist
+without the other. A separate broker cannot have that: enqueued before the
+commit a job survives a rollback and schedules work for something that
+never happened, and enqueued after, it is lost in the gap.
+`SELECT ... FOR UPDATE SKIP LOCKED` is the rest of a queue.
+
+Redis stays out for the same reason the plan gives for the job system
+itself: it is a service to run, monitor and back up, and nothing yet needs
+it. What would change the decision is throughput -- a worker polling a
+table it shares with every application query is right at hundreds of jobs
+a minute and is not the shape for tens of thousands.
+
+## What runs on it
+
+```text
+deliver_message        a reply the provider refused, or one written before
+                       a number was connected
+sweep_automations      the timer, planned once per window by whichever
+                       worker gets there first
+run_due_automations    one per business, so one shop's broken automation
+                       does not stop the next shop's follow-ups
+```
+
+## Acceptance criteria
+
+- [x] a job is enqueued in the same transaction as the thing that caused it
+- [x] two workers cannot claim the same job
+- [x] a failure is retried with a growing delay, and a bug is not retried
+- [x] work abandoned by a dead worker returns to the queue
+- [x] every handler is safe to run twice
+- [x] `docker compose up` runs a worker beside the API
+
+Still on FastAPI's own BackgroundTasks, deliberately: answering a customer
+after a webhook, firing automations on an event, and sending an email. All
+three run immediately after a response that has already gone, and moving
+them would add a second of latency to a customer's reply in exchange for
+surviving a restart. Worth doing when a restart during a webhook is
+something that has actually cost somebody an answer.
+
 ---
 
 # 38. Phase 29 — Observability

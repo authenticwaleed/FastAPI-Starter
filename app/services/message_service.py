@@ -11,16 +11,19 @@ from app.core.exceptions import (
     ContactNotFoundError,
     ConversationClosedError,
     ConversationNotFoundError,
+    MessageNotFoundError,
     MessagingProviderError,
 )
 from app.db.session import SessionDep
 from app.models.conversation import Conversation
+from app.models.job import JobKind
 from app.models.message import Direction, Message, MessageStatus, SenderType
 from app.models.notification import NotificationKind
 from app.models.usage_record import UsageMetric
 from app.models.workspace import Workspace
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.job_repository import JobRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.whatsapp_account_repository import (
     WhatsAppAccountRepository,
@@ -28,6 +31,7 @@ from app.repositories.whatsapp_account_repository import (
 from app.schemas.message import MessageCreate
 from app.services.contact_service import ContactRepositoryDep
 from app.services.conversation_service import ConversationRepositoryDep
+from app.services.job_service import JobRepositoryDep
 from app.services.notification_service import (
     NotificationService,
     NotificationServiceDep,
@@ -41,6 +45,10 @@ from app.services.whatsapp_service import (
 from app.services.workspace_service import MAY_ADMINISTER
 
 logger = logging.getLogger(__name__)
+
+# The states a message is still waiting in. Anything else has been
+# accepted by the provider, and retrying it would send it twice.
+_UNDELIVERED = frozenset({MessageStatus.QUEUED, MessageStatus.FAILED})
 
 
 class MessageService:
@@ -65,6 +73,7 @@ class MessageService:
         whatsapp: WhatsAppService,
         notifications: NotificationService,
         usage: UsageService,
+        jobs: JobRepository,
     ) -> None:
         self._session = session
         self._messages = messages
@@ -74,6 +83,7 @@ class MessageService:
         self._whatsapp = whatsapp
         self._notifications = notifications
         self._usage = usage
+        self._jobs = jobs
 
     def list_for(
         self,
@@ -119,11 +129,13 @@ class MessageService:
         retries and a human can recover from; the other order loses the
         message, and nobody can tell that it existed.
 
-        A workspace with no number connected leaves the message `queued`.
-        Nothing drains that queue yet -- a retry worker is a later phase --
-        but a reply that is stored and undelivered is recoverable, where a
-        refusal at this point would make the inbox unusable for a business
-        that is still being set up.
+        A reply that does not go out now is queued for the worker rather
+        than abandoned -- which is what the comment here used to promise a
+        later phase would do. That covers both ways it can fail to go: a
+        provider that refused, and a workspace with no number connected
+        yet. The second is not really transient, and the job exhausting
+        its attempts is the honest outcome; what it leaves behind is the
+        same undelivered message in the inbox as before.
         """
         workspace_id = workspace.id
         conversation = self._conversation(workspace_id, conversation_id)
@@ -144,10 +156,81 @@ class MessageService:
         self._touch(conversation, message)
         self._session.commit()
 
+        try:
+            self._deliver(workspace_id, conversation, message)
+        except MessagingProviderError:
+            # The retry is enqueued in the same transaction as the failed
+            # status and the notification, which is the reason the queue
+            # is a table in this database: three facts about one event,
+            # written once. Then re-raised, because the agent who pressed
+            # send is still waiting and should be told.
+            self._schedule_retry(message)
+            self._session.commit()
+            raise
+
+        if message.status is MessageStatus.QUEUED:
+            self._schedule_retry(message)
+
+        self._session.commit()
+
+        return message
+
+    def deliver_pending(self, workspace: Workspace, message_id: uuid.UUID) -> Message:
+        """Try again to send something already written into a thread.
+
+        The worker's half of `send`, and the only caller that has no
+        person behind it. Nothing is created here: the message exists, and
+        what is being retried is the delivery of it.
+
+        A message that has since gone out is left alone rather than sent
+        again. A job can be delivered twice -- a worker killed after the
+        provider accepted a message but before the row was updated leaves
+        exactly that -- and a customer's phone buzzing twice with the same
+        sentence is the failure this guard exists for.
+        """
+        workspace_id = workspace.id
+        message = self._messages.get(workspace_id, message_id)
+
+        if message is None:
+            raise MessageNotFoundError(workspace_id, message_id)
+
+        if message.status not in _UNDELIVERED:
+            logger.info("Message %s has already gone out; not retrying", message_id)
+
+            return message
+
+        conversation = self._conversation(workspace_id, message.conversation_id)
+
+        try:
+            self._deliver(workspace_id, conversation, message)
+        finally:
+            # Whatever happened is worth keeping: a success, or the failed
+            # status and the notification that go with a refusal. The
+            # exception carries on to the job runner, which decides
+            # whether there is another attempt left.
+            self._session.commit()
+
+        return message
+
+    def _deliver(
+        self,
+        workspace_id: uuid.UUID,
+        conversation: Conversation,
+        message: Message,
+    ) -> None:
+        """Hand one written message to the provider, and record what happened.
+
+        Does not commit. Both callers have something else to write in the
+        same transaction -- a retry to enqueue, or a job to settle -- and
+        splitting that across two commits is how a message ends up marked
+        failed with nothing scheduled to try it again.
+        """
         account = self._accounts.get_for_workspace(workspace_id)
 
         if account is None:
-            return message
+            # Left `queued`. A refusal at this point would make the inbox
+            # unusable for a business that is still being set up.
+            return
 
         contact = self._contacts.get(workspace_id, conversation.contact_id)
 
@@ -161,7 +244,7 @@ class MessageService:
             sent = self._whatsapp.deliver(
                 account,
                 to=contact.phone_number,
-                text=payload.text,
+                text=message.text_body or "",
             )
         except MessagingProviderError as exc:
             # Recorded on the message and then re-raised. The agent is
@@ -181,7 +264,6 @@ class MessageService:
                 body=str(exc),
                 meta={"conversation_id": str(conversation.id)},
             )
-            self._session.commit()
             raise
 
         message.status = MessageStatus.SENT
@@ -191,15 +273,26 @@ class MessageService:
         # this is the line where one actually went over WhatsApp. A reply
         # queued for a business with no number connected, or one the
         # provider refused, is not a message anybody should be charged
-        # for -- and both of those return before reaching this.
+        # for -- and neither of those reaches this.
         self._usage.record(
             workspace_id,
             UsageMetric.WHATSAPP_MESSAGES,
             source_id=message.id,
         )
-        self._session.commit()
 
-        return message
+    def _schedule_retry(self, message: Message) -> None:
+        """Put the delivery in the queue, at most once per message.
+
+        The deduplication key is the message, so a reply that fails, is
+        retried, and fails again does not accumulate jobs -- the one job
+        already there carries its own attempts and its own backoff.
+        """
+        self._jobs.enqueue(
+            kind=JobKind.DELIVER_MESSAGE,
+            workspace_id=message.workspace_id,
+            payload={"message_id": str(message.id)},
+            dedupe_key=f"deliver_message:{message.id}",
+        )
 
     def _conversation(
         self,
@@ -255,6 +348,7 @@ def get_message_service(
     whatsapp: WhatsAppServiceDep,
     notifications: NotificationServiceDep,
     usage: UsageServiceDep,
+    jobs: JobRepositoryDep,
 ) -> MessageService:
     return MessageService(
         session=session,
@@ -265,6 +359,7 @@ def get_message_service(
         whatsapp=whatsapp,
         notifications=notifications,
         usage=usage,
+        jobs=jobs,
     )
 
 
