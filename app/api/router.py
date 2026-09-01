@@ -4,6 +4,7 @@ from app.api.routes import (
     account,
     ai,
     analytics,
+    api_keys,
     audit,
     auth,
     automations,
@@ -63,6 +64,11 @@ api_router.include_router(analytics.router)
 # What the business did to itself, as opposed to what it did for its
 # customers. Administration, and only on a plan that includes it.
 api_router.include_router(audit.router)
+api_router.include_router(api_keys.router)
+# Not under a workspace, unlike the three above it: this is the endpoint a
+# key answers about itself, and which workspace it addresses is what it
+# returns rather than what it is told.
+api_router.include_router(api_keys.current_router)
 # Before the storefront routes, and this order is load-bearing. Both hang
 # off `/integrations/`, and the storefront ones take the provider as a
 # path parameter -- so `…/integrations/whatsapp` would match
