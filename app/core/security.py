@@ -174,9 +174,9 @@ def generate_api_key() -> str:
     """A machine credential, in the only moment it exists in readable form.
 
     Built on the same 32 bytes of system randomness a link token uses, and
-    for the same reason: what is stored is the digest below, so this value
-    cannot be recovered from the database and has to be shown to whoever
-    asked for it exactly once.
+    for the same reason: what is stored is its SHA-256 digest, so this
+    value cannot be recovered from the database and has to be shown to
+    whoever asked for it exactly once.
     """
     return f"{API_KEY_PREFIX}{generate_token()}"
 
