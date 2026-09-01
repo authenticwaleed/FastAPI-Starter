@@ -20,6 +20,7 @@ from app.api.errors import (
     WORKSPACE_FORBIDDEN,
     WORKSPACE_NOT_FOUND,
 )
+from app.core.exceptions import UnreadableDocumentError
 from app.core.rate_limit import RateLimited
 from app.models.knowledge import DocumentStatus, KnowledgeDocument
 from app.schemas.knowledge import (
@@ -34,7 +35,11 @@ from app.schemas.knowledge import (
     SourcePage,
     SourceRead,
 )
-from app.services.knowledge_service import KnowledgeServiceDep
+from app.services.knowledge_service import (
+    MAX_FILE_BYTES,
+    TOO_LARGE,
+    KnowledgeServiceDep,
+)
 from app.services.retrieval_service import MIN_SCORE, RetrievalServiceDep
 from app.services.workspace_service import WorkspaceAccess
 
@@ -51,6 +56,48 @@ INGESTING = {
     **DOCUMENT_UNREADABLE,
     **EMBEDDING_UNAVAILABLE,
 }
+
+
+# Read in pieces this size. Small enough that the overshoot before the
+# limit is noticed is negligible, large enough not to make a syscall per
+# kilobyte of a file that is going to be accepted.
+_CHUNK_BYTES = 64 * 1024
+
+
+async def _read_within_limit(file: UploadFile) -> bytes:
+    """Read an upload, refusing it the moment it passes the limit.
+
+    The service checks the size too, and must: it is reached from places
+    that never saw a request. But by the time a value arrives there the
+    whole body is already `bytes` in memory, so that check on its own
+    bounds nothing -- somebody sending two gigabytes has two gigabytes
+    allocated before being told the limit is ten megabytes, and on a
+    process shared by every tenant that is one workspace deciding how much
+    memory the others get.
+
+    So the bound is applied while the body is still arriving. What a
+    request can cost is then the limit, rather than whatever the sender
+    chose to send.
+
+    `file.size` is the count the multipart parser already made, and it
+    turns the ordinary oversized upload away without reading any of it.
+    It is optional, though -- absent, the loop is what holds the bound.
+    """
+    if file.size is not None and file.size > MAX_FILE_BYTES:
+        raise UnreadableDocumentError(TOO_LARGE)
+
+    chunks: list[bytes] = []
+    read = 0
+
+    while chunk := await file.read(_CHUNK_BYTES):
+        read += len(chunk)
+
+        if read > MAX_FILE_BYTES:
+            raise UnreadableDocumentError(TOO_LARGE)
+
+        chunks.append(chunk)
+
+    return b"".join(chunks)
 
 
 def _document(
@@ -201,7 +248,7 @@ async def upload_document(
     thread for the duration. The ingestion below it is ordinary blocking
     work and runs where it is.
     """
-    data = await file.read()
+    data = await _read_within_limit(file)
 
     return _document(
         service,

@@ -6,18 +6,23 @@ What matters most here is the last acceptance criterion: chunks are
 workspace-isolated, and deleting a document takes them with it.
 """
 
+import asyncio
 import io
 import uuid
-from typing import Any
+from typing import Any, BinaryIO, cast
 
 import pypdf
 import pytest
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
+from app.api.routes.knowledge import _CHUNK_BYTES, _read_within_limit
+from app.core.exceptions import UnreadableDocumentError
 from app.models.workspace_membership import WorkspaceRole
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
+from app.services.knowledge_service import MAX_FILE_BYTES
 from tests.support.knowledge import FakeEmbeddingProvider
 
 PASSWORD = "correct horse battery staple"
@@ -587,3 +592,52 @@ def test_the_knowledge_base_requires_a_token(
 ) -> None:
     assert client.get(acme.path("/sources")).status_code == 401
     assert client.post(acme.path("/search"), json={"query": "x"}).status_code == 401
+
+
+def test_an_oversized_upload_is_refused(client: TestClient, acme: Business) -> None:
+    response = client.post(
+        acme.path("/documents/upload"),
+        data={"knowledge_source_id": acme.source()},
+        files={
+            "file": (
+                "huge.txt",
+                b"x" * (MAX_FILE_BYTES + 1),
+                "text/plain",
+            )
+        },
+        headers=acme.headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "unreadable_document"
+    assert "10MB" in response.json()["detail"]
+
+
+def test_an_oversized_upload_is_refused_before_it_is_all_in_memory() -> None:
+    """The limit has to bind while the body arrives, not after.
+
+    Checking `len(data)` once the read has finished bounds nothing: the
+    allocation the check is meant to prevent has already happened. So this
+    asserts on how much was read, not on the answer.
+    """
+    served = 0
+
+    class _Endless:
+        """A body that never ends, the shape of the thing being refused."""
+
+        def read(self, size: int = -1) -> bytes:
+            nonlocal served
+            chunk = b"x" * (65536 if size in (-1, 0) else size)
+            served += len(chunk)
+
+            return chunk
+
+    upload = UploadFile(filename="endless.txt", file=cast(BinaryIO, _Endless()))
+
+    # asyncio.run rather than a plugin: one coroutine does not earn a new
+    # test dependency.
+    with pytest.raises(UnreadableDocumentError):
+        asyncio.run(_read_within_limit(upload))
+
+    # Bounded by the limit rather than by what the sender chose to send.
+    assert served <= MAX_FILE_BYTES + _CHUNK_BYTES

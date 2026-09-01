@@ -60,6 +60,11 @@ TEXT_TYPES = frozenset(
 # what would take an API worker off the air for a minute.
 MAX_FILE_BYTES = 10 * 1024 * 1024
 
+# Said in one place because two say it: the route refuses an oversized
+# upload while it is still arriving, and this service refuses one that
+# reached it by some other road.
+TOO_LARGE = f"The file is larger than the {MAX_FILE_BYTES // (1024 * 1024)}MB limit"
+
 
 class KnowledgeService:
     """A workspace's knowledge, and the pipeline that makes it retrievable.
@@ -192,10 +197,11 @@ class KnowledgeService:
         content_type: str | None,
         data: bytes,
     ) -> KnowledgeDocument:
+        # Kept although the route now refuses an oversized upload before it
+        # is all in memory: this is also reached from places that never saw
+        # a request, and a rule enforced only at the edge is not a rule.
         if len(data) > MAX_FILE_BYTES:
-            raise UnreadableDocumentError(
-                f"The file is larger than the {MAX_FILE_BYTES // (1024 * 1024)}MB limit"
-            )
+            raise UnreadableDocumentError(TOO_LARGE)
 
         raw = _extract(filename=filename, content_type=content_type, data=data)
 
