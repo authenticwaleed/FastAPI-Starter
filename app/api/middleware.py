@@ -128,3 +128,78 @@ def _log(scope: Scope, *, status: int, started: float) -> None:
             "duration_ms": int((time.perf_counter() - started) * 1000),
         },
     )
+
+
+class SecurityHeaders:
+    """Tell a browser what it may do with this response.
+
+    An API, not a site, which decides most of what is here. Nothing served
+    from this application is meant to be rendered, framed, or sniffed for
+    a type it did not declare -- so the headers say so, and the ones that
+    only make sense for a page with markup in it are absent rather than
+    set to a value nobody thought about.
+
+    The edge is still what enforces HTTPS. A proxy terminates TLS and this
+    process usually never sees a scheme; what this adds is the instruction
+    that makes the *next* request go over TLS too, which is the half a
+    redirect cannot do.
+    """
+
+    def __init__(self, app: ASGIApp, *, hsts_max_age: int | None) -> None:
+        self._app = app
+        self._headers = _security_headers(hsts_max_age)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+
+            return
+
+        async def with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+
+                for name, value in self._headers:
+                    # setdefault, so a route that has thought about one of
+                    # these keeps its own answer. Nothing does today; the
+                    # first one that needs to should not have to edit this.
+                    headers.setdefault(name, value)
+
+            await send(message)
+
+        await self._app(scope, receive, with_headers)
+
+
+def _security_headers(hsts_max_age: int | None) -> tuple[tuple[str, str], ...]:
+    headers = [
+        # Content-Type is declared on every response this application
+        # sends. Without this a browser is free to disagree with the
+        # declaration, and an upload echoed back as JSON can be executed
+        # as something else entirely.
+        ("x-content-type-options", "nosniff"),
+        # Nothing here is meant to be framed, and an API in an iframe is
+        # somebody else's page borrowing a logged-in session.
+        ("x-frame-options", "DENY"),
+        # A workspace id in a path should not travel to another origin in
+        # a Referer header. `strict-origin-when-cross-origin` is the
+        # modern default and this pins it rather than inheriting it.
+        ("referrer-policy", "strict-origin-when-cross-origin"),
+        # No response from this API needs a camera, a microphone or a
+        # location, so none of it is granted -- which is what stops an
+        # error page that somehow renders from asking.
+        ("permissions-policy", "camera=(), microphone=(), geolocation=()"),
+        # This API returns JSON and never markup. `default-src 'none'`
+        # says a browser should load nothing at all on its behalf, which
+        # is the honest policy for a response nobody should be rendering.
+        ("content-security-policy", "default-src 'none'; frame-ancestors 'none'"),
+    ]
+
+    if hsts_max_age is not None:
+        headers.append(
+            (
+                "strict-transport-security",
+                f"max-age={hsts_max_age}; includeSubDomains",
+            )
+        )
+
+    return tuple(headers)

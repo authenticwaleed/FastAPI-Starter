@@ -75,19 +75,23 @@ def plan(session: Session, jobs: JobRepository, *, now: datetime) -> None:
     """
     window = int(now.timestamp()) // get_settings().worker_sweep_every_seconds
 
-    try:
-        with session.begin_nested():
-            jobs.enqueue(
-                kind=JobKind.SWEEP_AUTOMATIONS,
-                payload={},
-                dedupe_key=f"sweep_automations:{window}",
-                # One attempt: another window is along in a few minutes,
-                # and what this job does is enqueue more jobs.
-                max_attempts=1,
-            )
-    except IntegrityError:
-        # Another worker, or an earlier pass of this one, got there first.
-        session.rollback()
+    for kind in (JobKind.SWEEP_AUTOMATIONS, JobKind.SWEEP_ERASURES):
+        try:
+            # A savepoint each, so the second sweep is still planned when
+            # the first one is already there.
+            with session.begin_nested():
+                jobs.enqueue(
+                    kind=kind,
+                    payload={},
+                    dedupe_key=f"{kind.value}:{window}",
+                    # One attempt: another window is along in a few
+                    # minutes, and what these jobs do is enqueue more jobs.
+                    max_attempts=1,
+                )
+        except IntegrityError:
+            # Another worker, or an earlier pass of this one, got there
+            # first.
+            logger.debug("%s is already planned for this window", kind.value)
 
     session.commit()
 

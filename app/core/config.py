@@ -81,8 +81,15 @@ class Settings(BaseSettings):
     #   uv run python -c \
     #     "from app.core.encryption import generate_key as k; import sys; \
     #      sys.stdout.write(k())"
-    # Changing it makes every token already stored undecryptable.
     encryption_key: SecretStr | None = None
+
+    # The key this one replaced, kept readable while what it encrypted is
+    # rewritten. Everything is encrypted with `encryption_key` and
+    # decrypted with either, which is what turns rotating the key from a
+    # deployment where every stored token stops working into an ordinary
+    # one. Unset once nothing needs it -- see app/core/encryption.py for
+    # the order the four steps go in.
+    encryption_key_previous: SecretStr | None = None
 
     # Meta sends every workspace's webhooks to one callback URL, because
     # one Meta app serves all of them, so both of these are app-wide
@@ -235,6 +242,25 @@ class Settings(BaseSettings):
     # the default, but production has to say so explicitly.
     allowed_hosts: Annotated[list[str], NoDecode] = ["*"]
 
+    # How long a browser should refuse to talk to this host over plain
+    # HTTP once it has been told. Two years, which is what preload lists
+    # require and what makes the header worth sending: a short max-age
+    # leaves a window every time somebody's cache expires.
+    #
+    # Sent only in production. In development the API is on http://
+    # localhost, and a browser that has been told to upgrade this host for
+    # two years is one a developer cannot easily untell.
+    hsts_max_age_seconds: int = 63_072_000
+
+    # How long a closed workspace's data is kept before it is erased. The
+    # retention policy and the deletion workflow are the same number: a
+    # business that closes its account has its records destroyed on a date
+    # it can be told in advance, and has until then to change its mind.
+    #
+    # Thirty days, which is long enough to survive a mistake and a holiday
+    # and short enough to be an honest answer to "when will you delete it".
+    erasure_grace_days: int = 30
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
@@ -256,6 +282,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "encryption_key",
+        "encryption_key_previous",
         "whatsapp_verify_token",
         "whatsapp_app_secret",
         "voyage_api_key",

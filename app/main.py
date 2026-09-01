@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.errors import register_exception_handlers
-from app.api.middleware import RequestContext
+from app.api.middleware import RequestContext, SecurityHeaders
 from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -64,6 +64,17 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
         )
     # No origins configured means no cross-origin access, rather than a
     # convenient wildcard nobody remembers to close later.
+
+    # Inside the request context and outside everything else, so that a
+    # response refused by the host check carries them too: a browser
+    # should be told not to sniff a 400 as readily as a 200.
+    app.add_middleware(
+        SecurityHeaders,
+        # None outside production. A browser told to upgrade this host to
+        # HTTPS for two years is one a developer working against
+        # http://localhost cannot easily untell.
+        hsts_max_age=settings.hsts_max_age_seconds if settings.is_production else None,
+    )
 
     # Added last, which is what puts it outermost: `add_middleware` inserts
     # at the front of the stack, so the last one added is the first one

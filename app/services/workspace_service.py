@@ -1,12 +1,14 @@
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.exceptions import (
     InsufficientWorkspaceRoleError,
     SlugAlreadyExistsError,
@@ -190,19 +192,45 @@ class WorkspaceService:
 
         return access.workspace
 
-    def cancel(self, access: WorkspaceAccess) -> None:
-        """Close a workspace without destroying what it holds.
+    def cancel(self, access: WorkspaceAccess) -> Workspace:
+        """Close a workspace, and start the clock on its data.
 
-        The row stays and the status becomes `cancelled`, which takes it
-        out of every listing and makes every path to it answer 404. A
-        workspace is about to own contacts, conversations and message
-        history, and none of that should be destroyable by one DELETE.
-        Real erasure is a deliberate workflow, and a later phase.
+        Two things, and the second is what Phase 30 asks for. The row is
+        marked `cancelled`, which takes it out of every listing and makes
+        every path to it answer 404; and `erase_after` is set, which is
+        the date its records are destroyed.
+
+        Not destroyed now, deliberately. A deletion workflow has to do two
+        things that pull against each other -- actually delete, and not be
+        instant -- and a grace period is how both are true: somebody who
+        closes the wrong account on a Friday can say so on Monday, and a
+        customer who asks when their data goes gets a date rather than a
+        promise.
+
+        The date is recorded in the audit log as well as on the row,
+        because the log outlives the workspace and is the only thing that
+        will still say the erasure was asked for.
         """
         _require(access, MAY_CLOSE)
 
-        self._workspaces.set_status(access.workspace, WorkspaceStatus.CANCELLED)
+        erase_after = datetime.now(UTC) + timedelta(
+            days=get_settings().erasure_grace_days
+        )
+
+        self._workspaces.set_status(
+            access.workspace,
+            WorkspaceStatus.CANCELLED,
+            erase_after=erase_after,
+        )
+        self._audit.did(
+            access.workspace.id,
+            AuditEvent.WORKSPACE_CLOSED,
+            actor_user_id=access.membership.user_id,
+            meta={"erase_after": erase_after.isoformat()},
+        )
         self._session.commit()
+
+        return access.workspace
 
     def sole_owned_workspace_ids(self, user: User) -> list[uuid.UUID]:
         return self._memberships.sole_owned_workspace_ids(user.id)

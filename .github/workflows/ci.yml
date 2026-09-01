@@ -73,3 +73,18 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+      # Against the lock file rather than the installed environment, so
+      # what is checked is exactly what a deployment would install. `uvx`
+      # fetches the auditor without adding it to this project's own
+      # dependencies -- a security tool in the runtime image is one more
+      # thing in the runtime image.
+      #
+      # Runs after the tests on purpose. A red run should say "your code
+      # is broken" before it says "a dependency you did not touch has a
+      # new advisory", because only one of those is about this change.
+      - name: Dependency vulnerabilities
+        run: |
+          uv export --frozen --no-emit-project --format requirements-txt \
+            > /tmp/requirements.txt
+          uvx pip-audit --requirement /tmp/requirements.txt --strict

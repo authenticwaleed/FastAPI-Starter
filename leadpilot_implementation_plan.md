@@ -2534,6 +2534,76 @@ Before commercial launch:
 - privacy/data retention policy
 - customer data deletion workflow
 
+## Where each of these stands
+
+Most of the list was settled by the phase that introduced the thing being
+secured, which is the right place for it -- a webhook signature belongs
+with the webhook and not with a checklist read once before launch.
+
+```text
+already true, with tests
+
+  encrypt integration credentials   Fernet, app/core/encryption.py
+  configure rate limiting           app/core/rate_limit.py, per route class
+  enforce strict CORS               named origins, methods and headers;
+                                    a wildcard is refused in production
+  validate webhook signatures       WhatsApp, Stripe, Shopify, WooCommerce
+  secure billing webhooks           signed, and idempotent on the event id
+  set token expiration policies     access 15m, refresh 30d, invitations,
+                                    resets, and now API keys
+  limit upload size                 10MB, refused before anything is read
+  validate MIME types               an allowlist, not a denylist: PDF and
+                                    UTF-8 text, and everything else refused
+  sanitize file uploads             nothing is executed, rendered or
+                                    stored as a file; a PDF becomes text
+  ensure tenant isolation tests     tests/db/test_isolation.py, and a
+                                    cross-tenant case in every suite
+  access logging policy             Phase 29: one line per request, with
+                                    the route's template and never a path
+
+added by this phase
+
+  enforce HTTPS at deployment edge  HSTS in production, plus the headers
+                                    an API should send; the edge still
+                                    terminates TLS
+  rotate secrets                    two encryption keys, current and
+                                    previous, so a rotation is four
+                                    ordinary steps rather than an outage
+  dependency vulnerability scanning pip-audit over the exported lock file,
+                                    in CI, after the tests
+  privacy/data retention policy     a closed workspace has a date its data
+                                    goes, thirty days out
+  customer data deletion workflow   a sweep and one job per business; the
+                                    delete is a single statement because
+                                    every tenant table cascades
+
+deployment rather than code
+
+  configure backup policy           whoever runs the database
+  test database restore             a rehearsal, not a unit test
+  production secret manager         where DATABASE_URL and the keys come
+                                    from; this application only reads the
+                                    environment, which is what makes any
+                                    of them substitutable
+```
+
+## Acceptance criteria
+
+- [x] every response says what a browser may do with it
+- [x] HSTS in production and never in development
+- [x] a value written under the previous key still decrypts
+- [x] closing a workspace schedules erasure rather than performing it
+- [x] the erasure runs on its date, and stops if somebody changes their mind
+- [x] one business's erasure never touches another's data
+- [x] CI fails on a known vulnerability in the lock file
+
+`scan risky file types where appropriate` is answered by the allowlist
+rather than by a scanner: nothing this application accepts is ever
+executed, rendered, or written to disk as a file, so there is no risky
+type to scan for -- an upload is read for text and then it is chunks in a
+table. A scanner would be the right answer the day something is stored and
+handed back.
+
 ---
 
 # 40. Suggested Project Structure

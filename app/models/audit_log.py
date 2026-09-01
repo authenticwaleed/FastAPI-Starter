@@ -38,6 +38,11 @@ class AuditEvent(StrEnum):
 
     WORKSPACE_CREATED = "workspace.created"
     WORKSPACE_UPDATED = "workspace.updated"
+    # Closing a workspace is the act that schedules the destruction of a
+    # business's records, so it is the one entry somebody will need after
+    # those records are gone -- and the audit log survives them, because
+    # it is read from another workspace's history or from a backup.
+    WORKSPACE_CLOSED = "workspace.closed"
 
     MEMBER_INVITED = "member.invited"
     MEMBER_JOINED = "member.joined"

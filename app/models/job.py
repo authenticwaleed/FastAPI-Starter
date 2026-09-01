@@ -39,6 +39,16 @@ class JobKind(StrEnum):
     # failure is not every business's.
     SWEEP_AUTOMATIONS = "sweep_automations"
     RUN_DUE_AUTOMATIONS = "run_due_automations"
+    # The retention policy, as the two halves every scheduled thing here
+    # has: a sweep that finds what has come due, and one job per business
+    # so that each deletion is its own success or failure.
+    #
+    # ERASE_WORKSPACE is the one job in this list that cannot be undone,
+    # and the reason any of this is a job at all: erasure has to happen on
+    # a date rather than when somebody remembers, and a queue is the only
+    # part of this system that does anything on a date.
+    SWEEP_ERASURES = "sweep_erasures"
+    ERASE_WORKSPACE = "erase_workspace"
 
 
 class JobStatus(StrEnum):
