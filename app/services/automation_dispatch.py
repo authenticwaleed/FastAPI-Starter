@@ -19,6 +19,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.core import context
 from app.integrations.messaging.base import MessagingProvider
 from app.models.automation import AutomationTrigger
 from app.repositories.automation_repository import AutomationRepository
@@ -92,6 +93,28 @@ def fire_automations(
     is in automation_runs either way, which is the property that makes
     swallowing acceptable rather than lazy.
     """
+    with context.bound(workspace_id=workspace_id, conversation_id=conversation_id):
+        _fire(
+            workspace_id=workspace_id,
+            trigger_type=trigger_type,
+            messaging=messaging,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            order_id=order_id,
+            session_source=session_source,
+        )
+
+
+def _fire(
+    *,
+    workspace_id: uuid.UUID,
+    trigger_type: AutomationTrigger,
+    messaging: MessagingProvider,
+    conversation_id: uuid.UUID | None,
+    message_id: uuid.UUID | None,
+    order_id: uuid.UUID | None,
+    session_source: SessionSource,
+) -> None:
     try:
         with session_source() as session:
             workspace = WorkspaceRepository(session).get(workspace_id)
