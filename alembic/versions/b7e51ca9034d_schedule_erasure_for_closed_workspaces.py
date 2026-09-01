@@ -17,6 +17,26 @@ down_revision: Union[str, Sequence[str], None] = 'a92e7c40db85'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+AUDIT_EVENTS = (
+    'workspace.created',
+    'workspace.updated',
+    'workspace.closed',
+    'member.invited',
+    'member.joined',
+    'member.role_changed',
+    'member.removed',
+    'whatsapp.connected',
+    'whatsapp.disconnected',
+    'knowledge.document_uploaded',
+    'knowledge.document_deleted',
+    'conversation.assigned',
+    'conversation.closed',
+    'conversation.ai_disabled',
+    'subscription.changed',
+    'api_key.created',
+    'api_key.revoked',
+)
+
 JOB_KINDS = (
     'deliver_message',
     'sweep_automations',
@@ -46,6 +66,15 @@ def upgrade() -> None:
         sa.column('kind').in_(JOB_KINDS),
     )
 
+    # Closing a workspace is now an audited act, because it is the one
+    # that schedules the destruction of a business's records.
+    op.drop_constraint('audit_event', 'audit_logs', type_='check')
+    op.create_check_constraint(
+        'audit_event',
+        'audit_logs',
+        sa.column('event').in_(AUDIT_EVENTS),
+    )
+
 
 def downgrade() -> None:
     """Downgrade schema."""
@@ -53,6 +82,14 @@ def downgrade() -> None:
     # queued erasure goes first. Losing it is the safe direction: the
     # workspace keeps its data and its date, and the next sweep on an
     # upgraded deployment queues the job again.
+    op.execute("DELETE FROM audit_logs WHERE event = 'workspace.closed'")
+    op.drop_constraint('audit_event', 'audit_logs', type_='check')
+    op.create_check_constraint(
+        'audit_event',
+        'audit_logs',
+        sa.column('event').in_([e for e in AUDIT_EVENTS if e != 'workspace.closed']),
+    )
+
     op.execute("DELETE FROM jobs WHERE kind = 'erase_workspace'")
     op.drop_constraint('job_kind', 'jobs', type_='check')
     op.create_check_constraint(
