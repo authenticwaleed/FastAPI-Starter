@@ -495,6 +495,35 @@ class PlanLimitReachedError(AppError):
         self.ceiling = ceiling
 
 
+class ApiKeyNotFoundError(AppError):
+    """No key with that id belongs to this workspace.
+
+    The same answer for a key that never existed and one belonging to
+    somebody else, like every other scoped lookup here: the difference is
+    exactly what turns an id in a URL into a way of discovering what other
+    businesses have.
+    """
+
+    detail = "No such API key"
+
+    def __init__(self, workspace_id: object, key_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} has no API key {key_id}")
+        self.workspace_id = workspace_id
+        self.key_id = key_id
+
+
+class InvalidApiKeyError(AppError):
+    """The key presented is unknown, revoked, or past its expiry.
+
+    One error for all three on purpose. Telling a caller that their key is
+    real but revoked, rather than simply wrong, confirms that the key was
+    once valid -- which is information worth having to somebody who found
+    it in a log file and is trying to work out what they have.
+    """
+
+    detail = "That API key is not valid"
+
+
 class NotificationNotFoundError(AppError):
     """No notification with that id is addressed to this person.
 
