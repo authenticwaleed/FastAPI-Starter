@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limit import limit_by_staff
 from app.api.routes.admin import (
+    analytics,
     audit,
     billing,
     conversations,
@@ -65,6 +66,8 @@ admin_router.include_router(conversations.router)
 # Billing before lifecycle, like every other workspace-scoped router:
 # `/plan-override` is a literal that the bare `/workspaces/{id}` prefix
 # below would otherwise be free to shadow.
+# Analytics: aggregates only, and no route here takes a workspace id.
+admin_router.include_router(analytics.router)
 # Operations: the queue, the refused deliveries, and the health page
 # a person reads rather than an orchestrator.
 admin_router.include_router(operations.router)
