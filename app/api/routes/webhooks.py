@@ -18,7 +18,7 @@ from app.api.dependencies.rate_limit import RateLimiterDep, client_address
 from app.api.errors import RATE_LIMITED
 from app.core.config import get_settings
 from app.core.exceptions import InvalidWebhookError
-from app.core.rate_limit import RateLimited
+from app.core.rate_limit import RateLimited, RateLimiter
 from app.integrations.ecommerce.base import (
     EcommerceProviderName,
     WebhookEvent,
@@ -26,6 +26,7 @@ from app.integrations.ecommerce.base import (
 )
 from app.models.automation import AutomationTrigger
 from app.models.ecommerce_account import EcommerceAccountStatus
+from app.models.webhook_failure import WebhookRefusal
 from app.services.ai_dispatch import SessionSourceDep, answer_inbound
 from app.services.ai_response_service import ReplyWriterDep
 from app.services.automation_dispatch import fire_automations
@@ -44,9 +45,44 @@ from app.services.subscription_service import (
     BillingProviderDep,
     SubscriptionServiceDep,
 )
+from app.services.webhook_failure_service import (
+    WebhookFailureService,
+    WebhookFailureServiceDep,
+)
 from app.services.whatsapp_service import MessagingProviderDep
 
 logger = logging.getLogger(__name__)
+
+
+def _refused(
+    request: Request,
+    limiter: RateLimiter,
+    failures: WebhookFailureService,
+    *,
+    provider: str,
+    reason: WebhookRefusal,
+) -> None:
+    """Charge the sender for a refusal, and write down that it happened.
+
+    Both together, at every point that turns a delivery away, because
+    they answer the two halves of the same question: the limiter stops
+    somebody hammering the endpoint, and the row is how anybody finds out
+    that a customer's storefront secret is wrong.
+
+    Without the row this is the one failure in the system that reaches
+    nobody -- the provider gets a status code, the sender is a machine,
+    and the customer notices their orders stopped arriving days later.
+    """
+    sender = client_address(request)
+
+    limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+    failures.note(
+        provider=provider,
+        reason=reason,
+        path=request.url.path,
+        ip_address=sender,
+    )
+
 
 router = APIRouter(
     prefix="/webhooks",
@@ -105,6 +141,7 @@ async def receive_whatsapp_webhook(
     messaging: MessagingProviderDep,
     session_source: SessionSourceDep,
     limiter: RateLimiterDep,
+    failures: WebhookFailureServiceDep,
     signature: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
 ) -> dict[str, str]:
     """Take delivery of whatever WhatsApp is telling us.
@@ -144,7 +181,13 @@ async def receive_whatsapp_webhook(
     try:
         service.verify(payload=body, signature_header=signature)
     except InvalidWebhookError:
-        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        _refused(
+            request,
+            limiter,
+            failures,
+            provider="whatsapp",
+            reason=WebhookRefusal.BAD_SIGNATURE,
+        )
         raise
 
     try:
@@ -155,7 +198,13 @@ async def receive_whatsapp_webhook(
             "A signed WhatsApp delivery was not JSON",
             extra={"outcome": "unreadable"},
         )
-        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        _refused(
+            request,
+            limiter,
+            failures,
+            provider="whatsapp",
+            reason=WebhookRefusal.MALFORMED,
+        )
         raise InvalidWebhookError from exc
 
     if not isinstance(payload, dict):
@@ -218,6 +267,7 @@ async def receive_billing_webhook(
     provider: BillingProviderDep,
     subscriptions: SubscriptionServiceDep,
     limiter: RateLimiterDep,
+    failures: WebhookFailureServiceDep,
     signature: Annotated[str | None, Header(alias="Stripe-Signature")] = None,
 ) -> dict[str, str]:
     """Take delivery of whatever the payment provider is telling us.
@@ -241,7 +291,13 @@ async def receive_billing_webhook(
     body = await request.body()
 
     if not provider.verify_webhook(payload=body, signature=signature):
-        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        _refused(
+            request,
+            limiter,
+            failures,
+            provider="billing",
+            reason=WebhookRefusal.BAD_SIGNATURE,
+        )
         logger.warning(
             "A billing delivery did not verify",
             extra={"outcome": "rejected"},
@@ -255,7 +311,13 @@ async def receive_billing_webhook(
             "A signed billing delivery was not JSON",
             extra={"outcome": "unreadable"},
         )
-        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        _refused(
+            request,
+            limiter,
+            failures,
+            provider="billing",
+            reason=WebhookRefusal.MALFORMED,
+        )
         raise InvalidWebhookError from exc
 
     if not isinstance(payload, dict):
@@ -282,6 +344,7 @@ async def receive_storefront_webhook(
     messaging: MessagingProviderDep,
     session_source: SessionSourceDep,
     limiter: RateLimiterDep,
+    failures: WebhookFailureServiceDep,
     shopify_signature: Annotated[
         str | None, Header(alias="X-Shopify-Hmac-Sha256")
     ] = None,
@@ -330,7 +393,13 @@ async def receive_storefront_webhook(
     body = await request.body()
 
     if not adapter.verify_webhook(payload=body, signature=signature):
-        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        _refused(
+            request,
+            limiter,
+            failures,
+            provider=provider.value,
+            reason=WebhookRefusal.BAD_SIGNATURE,
+        )
         logger.warning(
             "A %s delivery did not verify",
             provider.value,
@@ -346,7 +415,13 @@ async def receive_storefront_webhook(
             provider.value,
             extra={"outcome": "unreadable"},
         )
-        limiter.spend(RateLimited.WEBHOOK_REJECTIONS, sender)
+        _refused(
+            request,
+            limiter,
+            failures,
+            provider=provider.value,
+            reason=WebhookRefusal.MALFORMED,
+        )
         raise InvalidWebhookError from exc
 
     if not isinstance(payload, dict):
