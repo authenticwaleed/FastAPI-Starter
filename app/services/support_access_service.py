@@ -158,7 +158,8 @@ class SupportAccessService:
         self._tenant_audit.did(
             row.workspace.id,
             AuditEvent.SUPPORT_ACCESS_GRANTED,
-            meta=_told_to_the_customer(actor, grant),
+            by_staff=actor.user.email,
+            meta=_told_to_the_customer(grant),
         )
         self._admin_audit.did(
             actor.logged,
@@ -199,7 +200,8 @@ class SupportAccessService:
         self._tenant_audit.did(
             row.workspace.id,
             AuditEvent.SUPPORT_ACCESS_ENDED,
-            meta=_told_to_the_customer(actor, grant),
+            by_staff=actor.user.email,
+            meta=_told_to_the_customer(grant),
         )
         self._admin_audit.did(
             actor.logged,
@@ -373,23 +375,19 @@ class SupportAccessService:
         self._session.commit()
 
 
-def _told_to_the_customer(
-    actor: StaffActor,
-    grant: SupportGrant,
-) -> dict[str, object]:
+def _told_to_the_customer(grant: SupportGrant) -> dict[str, object]:
     """What the business's own log says about a support grant.
 
-    Enough to be an answer rather than an alarm: who, why, and until
-    when. "A staff member read your account" is frightening on its own;
-    with the reason they gave and the hour it ends, it is something a
-    customer can hold somebody to.
+    Enough to be an answer rather than an alarm: why, and until when. Who
+    is not in here -- it is `by_staff`, alongside every other entry this
+    application writes on a staff member's behalf, so a customer reading
+    their history has one place to look rather than two conventions.
 
-    The address rather than an id, because the reader is the customer and
-    the id means nothing to them -- and because this entry has no actor
-    of its own, on purpose.
+    "A staff member read your account" is frightening on its own; with
+    the reason they gave and the hour it ends, it is something a customer
+    can hold somebody to.
     """
     return {
-        "staff_email": actor.user.email,
         "reason": grant.reason,
         "expires_at": grant.expires_at.isoformat(),
     }
