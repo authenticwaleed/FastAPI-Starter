@@ -1084,3 +1084,60 @@ class SupportAccessAlreadyGrantedError(AppError):
     def __init__(self, workspace_id: object) -> None:
         super().__init__(f"A live support grant already exists for {workspace_id}")
         self.workspace_id = workspace_id
+
+
+class WorkspaceSuspendedError(AppError):
+    """The workspace is frozen: it can be read, and not changed.
+
+    Its own error rather than a role refusal, because it is not about who
+    is asking. A suspension is reachable and read-only on purpose -- a
+    business that has not paid should be able to look at its own history
+    and settle the bill, not be locked out of its records over an invoice.
+    Telling them their role is insufficient would send them to an
+    administrator who cannot help.
+    """
+
+    detail = "This workspace is suspended. It can be read but not changed"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} is suspended")
+        self.workspace_id = workspace_id
+
+
+class WorkspaceLifecycleError(AppError):
+    """A lifecycle move that does not apply from where the workspace is.
+
+    One class carrying its own sentence rather than five near-identical
+    ones, like InvalidDateRangeError. Suspending what is already
+    suspended, restoring what was never closed, restoring after the
+    erasure date has passed: each is a different sentence and the same
+    kind of refusal, and a client's only useful response to any of them
+    is to read it.
+    """
+
+    detail = "That is not possible from this workspace's current state"
+
+    def __init__(self, workspace_id: object, reason: str) -> None:
+        super().__init__(f"Workspace {workspace_id}: {reason}", detail=reason)
+        self.workspace_id = workspace_id
+        self.reason = reason
+
+
+class ConfirmationMismatchError(AppError):
+    """A destructive call did not name its subject correctly.
+
+    The plan's rule for the operations that cannot be undone: deleting
+    takes the workspace's slug in the body, not just its id in the path.
+    An id is copied from a list and a slug has to be read and typed, and
+    the difference between those two acts is the whole safeguard.
+
+    The attempt is audited before this is raised. Somebody typing the
+    wrong slug into an erasure is either tired or in the wrong window,
+    and both are worth a row.
+    """
+
+    detail = "The confirmation does not match this workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Confirmation did not match workspace {workspace_id}")
+        self.workspace_id = workspace_id
