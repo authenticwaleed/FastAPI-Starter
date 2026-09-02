@@ -61,10 +61,23 @@ def acme(
     return Tenant(client, user_repository, membership_repository, "acme-fashion")
 
 
+def _a_conversation(tenant: Tenant) -> str:
+    """One real thread, so the messages route has something to open."""
+    response = tenant.client.post(
+        tenant.path("conversations"),
+        json={"contact_id": tenant.contact()},
+        headers=tenant.owner_headers,
+    )
+    assert response.status_code == 201, response.text
+
+    return str(response.json()["id"])
+
+
 def _calls(
     console: Console,
     colleague: int,
     workspace_id: str,
+    conversation_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -145,6 +158,38 @@ def _calls(
             lambda: console.get(f"/users/{colleague}"),
             AdminAction.USER_READ,
         ),
+        # Support access, and the two reads it opens. In this order
+        # because the reads need the grant the first of them asks for,
+        # and the last of them ends it.
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/support-access",
+                {"reason": "Investigating a reported delivery failure"},
+            ),
+            AdminAction.SUPPORT_ACCESS_GRANTED,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/conversations"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/conversations"),
+            AdminAction.CONVERSATIONS_READ,
+        ),
+        (
+            "GET",
+            f"{ADMIN}/workspaces/{{workspace_id}}/conversations"
+            "/{conversation_id}/messages",
+        ): (
+            lambda: console.get(
+                f"/workspaces/{workspace_id}/conversations/{conversation_id}/messages"
+            ),
+            AdminAction.MESSAGES_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/support-access"),
+            AdminAction.SUPPORT_ACCESS_LISTED,
+        ),
+        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"): (
+            lambda: console.delete(f"/workspaces/{workspace_id}/support-access"),
+            AdminAction.SUPPORT_ACCESS_REVOKED,
+        ),
     }
 
 
@@ -162,7 +207,10 @@ def test_every_published_route_has_a_case(
     # going unaudited in the test below.
     colleague = a_colleague(client, db_session, "colleague@example.com")
 
-    assert sorted(_calls(owner, colleague, acme.workspace_id)) == operations()
+    assert (
+        sorted(_calls(owner, colleague, acme.workspace_id, _a_conversation(acme)))
+        == operations()
+    )
 
 
 def test_every_route_writes_exactly_one_entry(
@@ -184,6 +232,7 @@ def test_every_route_writes_exactly_one_entry(
         owner,
         colleague,
         acme.workspace_id,
+        _a_conversation(acme),
     ).items():
         before = len(entries(db_session))
 
