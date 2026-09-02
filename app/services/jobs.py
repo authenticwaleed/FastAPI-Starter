@@ -15,13 +15,17 @@ import logging
 import uuid
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.audit_log import AuditEvent
 from app.models.automation import AutomationTrigger
 from app.models.job import Job, JobKind
+from app.models.user import User
 from app.repositories.automation_repository import AutomationRepository
+from app.repositories.support_grant_repository import SupportGrantRepository
 from app.repositories.workspace_repository import WorkspaceRepository
-from app.services.ai_dispatch import build_message_service
+from app.services.ai_dispatch import build_audit_service, build_message_service
 from app.services.automation_dispatch import build_automation_service
 from app.services.job_service import JobContext, JobHandler
 
@@ -203,6 +207,59 @@ class SweepErasures:
         context.session.commit()
 
 
+class SweepSupportGrants:
+    """Close the support grants whose hour has passed, and tell the customer.
+
+    What this is *not*: the thing that makes a grant stop working. That
+    happens on its own -- an expired grant stops matching the lookup that
+    opens the door, with nothing scheduled and nothing to fail.
+
+    What it is for is the other half, and it is a real gap without it: a
+    customer's audit log would show support access granted and never show
+    it end. Somebody reading their own history a month later would find a
+    grant with no closing entry and no way to tell whether it is still
+    open.
+
+    So this stamps `revoked_at` and writes `support.access_ended` in the
+    business's own log, which is the same pair of writes ending one by
+    hand does. Safe to run twice: a grant stamped by the first pass is
+    not lapsed any more, so the second finds nothing.
+    """
+
+    def run(self, context: JobContext, job: Job) -> None:
+        grants = SupportGrantRepository(context.session)
+        audit = build_audit_service(context.session)
+        lapsed = grants.lapsed(context.now)
+
+        for grant in lapsed:
+            grants.revoke(grant, context.now)
+            audit.did(
+                grant.workspace_id,
+                AuditEvent.SUPPORT_ACCESS_ENDED,
+                by_staff=_who(context.session, grant.staff_user_id),
+                meta={"reason": grant.reason, "ended": "expired"},
+            )
+
+        context.session.commit()
+
+        if lapsed:
+            logger.info("Closed %d support grants that had expired", len(lapsed))
+
+
+def _who(session: Session, staff_user_id: int) -> str:
+    """The address to name in the customer's log.
+
+    Looked up rather than carried on the grant, because the entry is read
+    by the customer and an id means nothing to them. A deleted account
+    leaves a grant behind -- the foreign key cascades, so in practice
+    this always finds somebody -- and the fallback says what happened
+    rather than naming the wrong person.
+    """
+    user = session.get(User, staff_user_id)
+
+    return user.email if user else "a former staff member"
+
+
 class RunDueAutomations:
     """Run one workspace's scheduled automations.
 
@@ -241,5 +298,6 @@ CATALOGUE: dict[JobKind, JobHandler] = {
     JobKind.SWEEP_AUTOMATIONS: SweepAutomations(),
     JobKind.RUN_DUE_AUTOMATIONS: RunDueAutomations(),
     JobKind.SWEEP_ERASURES: SweepErasures(),
+    JobKind.SWEEP_SUPPORT_GRANTS: SweepSupportGrants(),
     JobKind.ERASE_WORKSPACE: EraseWorkspace(),
 }
