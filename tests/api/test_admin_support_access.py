@@ -307,7 +307,7 @@ def test_the_customer_sees_the_access_in_their_own_log(
     (entry,) = _tenant_log(db_session, AuditEvent.SUPPORT_ACCESS_GRANTED)
 
     assert entry.workspace_id == uuid.UUID(acme.workspace_id)
-    assert entry.meta["staff_email"] == "support@example.com"
+    assert entry.meta["by_staff"] == "support@example.com"
     assert entry.meta["reason"] == REASON
     assert entry.meta["expires_at"]
 
@@ -342,7 +342,7 @@ def test_the_customer_sees_it_end(
 
     (ended,) = _tenant_log(db_session, AuditEvent.SUPPORT_ACCESS_ENDED)
 
-    assert ended.meta["staff_email"] == "support@example.com"
+    assert ended.meta["by_staff"] == "support@example.com"
 
 
 def test_the_customer_can_read_those_entries_on_their_own_surface(
