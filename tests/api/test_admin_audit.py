@@ -78,6 +78,7 @@ def _calls(
     colleague: int,
     workspace_id: str,
     conversation_id: str,
+    slug: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -190,6 +191,61 @@ def _calls(
             lambda: console.delete(f"/workspaces/{workspace_id}/support-access"),
             AdminAction.SUPPORT_ACCESS_REVOKED,
         ),
+        # Lifecycle. In an order that leaves the workspace usable for the
+        # ones after it, and with the erasure last -- because after it
+        # there is no workspace for anything else to name.
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/suspend"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/suspend",
+                {"reason": "The invoice of 3 March is sixty days overdue"},
+            ),
+            AdminAction.WORKSPACE_SUSPENDED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/unsuspend"): (
+            lambda: console.post(f"/workspaces/{workspace_id}/unsuspend", {}),
+            AdminAction.WORKSPACE_UNSUSPENDED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/cancel"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/cancel",
+                {"confirm_slug": slug},
+            ),
+            AdminAction.WORKSPACE_CANCELLED,
+        ),
+        ("PATCH", f"{ADMIN}/workspaces/{{workspace_id}}/erase-after"): (
+            lambda: console.patch(
+                f"/workspaces/{workspace_id}/erase-after",
+                {"erase_after": (datetime.now(UTC) + timedelta(days=3)).isoformat()},
+            ),
+            AdminAction.WORKSPACE_ERASE_AFTER_CHANGED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/restore"): (
+            lambda: console.post(f"/workspaces/{workspace_id}/restore", {}),
+            AdminAction.WORKSPACE_RESTORED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/deactivate"): (
+            lambda: console.post(f"/users/{colleague}/deactivate", {}),
+            AdminAction.USER_DEACTIVATED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/activate"): (
+            lambda: console.post(f"/users/{colleague}/activate", {}),
+            AdminAction.USER_ACTIVATED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/sessions/revoke"): (
+            lambda: console.post(f"/users/{colleague}/sessions/revoke", {}),
+            AdminAction.USER_SESSIONS_REVOKED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/verify-email"): (
+            lambda: console.post(f"/users/{colleague}/verify-email", {}),
+            AdminAction.USER_EMAIL_VERIFIED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/erase-now",
+                {"confirm_slug": slug},
+            ),
+            AdminAction.WORKSPACE_ERASED,
+        ),
     }
 
 
@@ -233,6 +289,7 @@ def test_every_route_writes_exactly_one_entry(
         colleague,
         acme.workspace_id,
         _a_conversation(acme),
+        "acme-fashion",
     ).items():
         before = len(entries(db_session))
 
