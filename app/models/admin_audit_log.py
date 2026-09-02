@@ -118,6 +118,19 @@ class AdminAction(StrEnum):
     BILLING_EVENTS_READ = "billing.events_read"
     BILLING_EVENT_REPLAYED = "billing.event_replayed"
 
+    # Operations. Where "why did this not work" gets answered without a
+    # database console, which is the point of the phase -- and the reason
+    # the reads are recorded like every other: a job payload names a
+    # workspace, so reading the queue is reading which customers had
+    # trouble.
+    JOBS_SEARCHED = "ops.jobs_searched"
+    JOB_READ = "ops.job_read"
+    JOB_RETRIED = "ops.job_retried"
+    JOB_CANCELLED = "ops.job_cancelled"
+    WEBHOOK_FAILURES_READ = "ops.webhook_failures_read"
+    WHATSAPP_HEALTH_READ = "ops.whatsapp_health_read"
+    HEALTH_READ = "ops.health_read"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.
