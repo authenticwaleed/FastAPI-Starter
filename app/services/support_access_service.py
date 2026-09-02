@@ -40,6 +40,7 @@ never appears in the customer's member list, in their seat count, or in
 what they are billed for.
 """
 
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
@@ -78,6 +79,8 @@ from app.services.conversation_service import (
 from app.services.message_service import MessageService, MessageServiceDep
 from app.services.staff_service import StaffActor
 from app.services.workspace_service import WorkspaceAccess
+
+logger = logging.getLogger(__name__)
 
 
 class SupportAccessService:
@@ -173,6 +176,8 @@ class SupportAccessService:
             },
         )
         self._session.commit()
+
+        _notice_the_hour(actor, row, grant)
 
         return grant
 
@@ -373,6 +378,43 @@ class SupportAccessService:
             meta=dict(meta),
         )
         self._session.commit()
+
+
+def _notice_the_hour(
+    actor: StaffActor,
+    row: WorkspaceRow,
+    grant: SupportGrant,
+) -> None:
+    """Say something when a grant is asked for outside working hours.
+
+    Not a refusal. Incidents do not keep office hours, and a console that
+    could not be used at three in the morning would be a console somebody
+    works around by keeping a standing grant -- which is the thing this
+    whole design replaces.
+
+    A warning line instead, in the stream operations already watches.
+    That is what "alert on unusual patterns" comes to in a system whose
+    alerting channel is its log: the pattern is noticed, a person
+    decides, and nobody is blocked at the moment they are most needed.
+    """
+    hour = datetime.now(UTC).hour
+
+    if hour in get_settings().admin_working_hours_utc:
+        return
+
+    logger.warning(
+        "Support access granted outside working hours",
+        extra={
+            "admin_actor": actor.user.email,
+            "admin_workspace": row.workspace.slug,
+            "admin_hour_utc": hour,
+            "admin_grant_hours": round(
+                (grant.expires_at - grant.created_at).total_seconds() / 3600, 1
+            )
+            if grant.created_at
+            else None,
+        },
+    )
 
 
 def _told_to_the_customer(grant: SupportGrant) -> dict[str, object]:
