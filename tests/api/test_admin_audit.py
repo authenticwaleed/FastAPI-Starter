@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.job import JobKind
 from app.models.staff_member import StaffRole
@@ -41,13 +42,26 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.admin_audit_service import AdminActor, AdminAuditService
-from tests.support.staff import ADMIN, Console, a_colleague, entries, operations
+from tests.support.staff import (
+    ADMIN,
+    Console,
+    a_colleague,
+    entries,
+    operations,
+    seconded,
+)
 from tests.support.tenants import Tenant, sign_up
 
 
 @pytest.fixture
 def owner(client: TestClient, db_session: Session) -> Console:
     return Console(client, db_session, "platform-owner@example.com", StaffRole.OWNER)
+
+
+@pytest.fixture
+def seconder(client: TestClient, db_session: Session) -> Console:
+    """A second staff member, because the approval control needs one."""
+    return Console(client, db_session, "seconder@example.com", StaffRole.ADMIN)
 
 
 @pytest.fixture
@@ -63,6 +77,25 @@ def acme(
     stops the log filling with entries about ids that never existed.
     """
     return Tenant(client, user_repository, membership_repository, "acme-fashion")
+
+
+def _an_approved_erasure(
+    requester: Console,
+    approver: Console,
+    workspace_id: str,
+) -> str:
+    """One approval for erasing this workspace, already agreed to.
+
+    Raised outside the case table because the table's own POST case
+    raises another: this one is the approval the erasure at the end of
+    the table spends, and it has to exist before the loop starts.
+    """
+    return seconded(
+        requester,
+        approver,
+        action=ApprovableAction.ERASE_WORKSPACE,
+        subject=workspace_id,
+    )
 
 
 def _a_job(session: Session) -> str:
@@ -121,6 +154,8 @@ def _calls(
     slug: str,
     billing_event_id: str,
     job_id: str,
+    seconder: Console,
+    approval_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -336,6 +371,32 @@ def _calls(
             lambda: console.get("/health"),
             AdminAction.HEALTH_READ,
         ),
+        # Hardening. The approval is raised and agreed to by two
+        # different consoles, which is the control -- so the case table
+        # needs a second one.
+        ("POST", f"{ADMIN}/approvals"): (
+            lambda: console.post(
+                "/approvals",
+                {
+                    "action": "erase_workspace",
+                    "subject": workspace_id,
+                    "reason": "Agreed in the incident channel first",
+                },
+            ),
+            AdminAction.APPROVAL_REQUESTED,
+        ),
+        ("POST", f"{ADMIN}/approvals/{{approval_id}}/approve"): (
+            lambda: seconder.post(f"/approvals/{approval_id}/approve", {}),
+            AdminAction.APPROVAL_GRANTED,
+        ),
+        ("GET", f"{ADMIN}/approvals"): (
+            lambda: console.get("/approvals"),
+            AdminAction.APPROVALS_READ,
+        ),
+        ("GET", f"{ADMIN}/alerts"): (
+            lambda: console.get("/alerts"),
+            AdminAction.ALERTS_READ,
+        ),
         # Analytics. Aggregates, recorded like everything else.
         ("GET", f"{ADMIN}/analytics/overview"): (
             lambda: console.get("/analytics/overview"),
@@ -356,7 +417,7 @@ def _calls(
         ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
             lambda: console.post(
                 f"/workspaces/{workspace_id}/erase-now",
-                {"confirm_slug": slug},
+                {"confirm_slug": slug, "approval_id": approval_id},
             ),
             AdminAction.WORKSPACE_ERASED,
         ),
@@ -368,6 +429,7 @@ def _calls(
 
 def test_every_published_route_has_a_case(
     owner: Console,
+    seconder: Console,
     acme: Tenant,
     client: TestClient,
     db_session: Session,
@@ -387,6 +449,8 @@ def test_every_published_route_has_a_case(
                 "acme-fashion",
                 _a_billing_delivery(db_session),
                 _a_job(db_session),
+                seconder,
+                _an_approved_erasure(owner, seconder, acme.workspace_id),
             )
         )
         == operations()
@@ -395,6 +459,7 @@ def test_every_published_route_has_a_case(
 
 def test_every_route_writes_exactly_one_entry(
     owner: Console,
+    seconder: Console,
     acme: Tenant,
     client: TestClient,
     db_session: Session,
@@ -416,6 +481,8 @@ def test_every_route_writes_exactly_one_entry(
         "acme-fashion",
         _a_billing_delivery(db_session),
         _a_job(db_session),
+        seconder,
+        _an_approved_erasure(owner, seconder, acme.workspace_id),
     ).items():
         before = len(entries(db_session))
 
