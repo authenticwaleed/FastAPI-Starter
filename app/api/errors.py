@@ -703,3 +703,12 @@ STAFF_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "That account already has access, or it is the last staff owner",
 )
+# On this surface a 404 means one thing: no such row. The tenant version
+# above covers three refusals with one answer so that an id cannot be used
+# to discover which businesses have accounts -- a distinction nobody
+# reaching /admin needs, since they are authenticated staff and already
+# being recorded. A cancelled workspace is found here, not hidden.
+ADMIN_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No workspace or account exists with that id",
+)
