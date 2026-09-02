@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends
 from sqlalchemy import select
@@ -22,6 +22,7 @@ from app.integrations.billing.base import (
     BillingEventPayload,
     BillingProvider,
     Checkout,
+    RemoteSubscription,
 )
 from app.integrations.billing.stripe import StripeProvider
 from app.models.audit_log import AuditEvent
@@ -312,6 +313,10 @@ class SubscriptionService:
                 provider=self._provider.name,
                 provider_event_id=event.event_id,
                 event_type=event.event_type,
+                # Kept so this delivery can be re-applied later. A row
+                # saying something happened, with nothing saying what, is
+                # not something an operations console can act on.
+                payload=_stored(event),
             )
             self._session.commit()
         except IntegrityError:
@@ -320,6 +325,24 @@ class SubscriptionService:
 
             return False
 
+        return self.apply_remote(event)
+
+    def apply_remote(self, event: BillingEventPayload) -> bool:
+        """Bring the provider's word onto the subscription, without claiming it.
+
+        The half of `apply_event` after the dedupe, split out so a
+        deliberate replay can run it again. That split is what makes the
+        plan's rule keepable: the claim is what stops a *retry* being
+        applied twice, and a replay is not a retry -- it is somebody
+        deciding to re-apply a delivery that was recorded and, for
+        whatever reason, not acted on.
+
+        Idempotent by nature rather than by a guard, which is the reason
+        it is safe to expose. Everything here is an overwrite from the
+        provider's own snapshot of the subscription, so applying it twice
+        lands on the same values -- and the audit entry below is written
+        only where something actually moved.
+        """
         remote = event.subscription
 
         if remote is None:
@@ -448,3 +471,70 @@ SubscriptionServiceDep = Annotated[
     SubscriptionService,
     Depends(get_subscription_service),
 ]
+
+
+def _stored(event: BillingEventPayload) -> dict[str, Any]:
+    """A delivery, flattened into something JSON can hold and code can read back.
+
+    This application's own words rather than the provider's wire format.
+    What is kept is exactly what `apply_remote` needs, which means a
+    replay applies what was applied the first time rather than a
+    re-interpretation of a body some later version of the adapter would
+    read differently.
+    """
+    remote = event.subscription
+
+    return {
+        "event_id": event.event_id,
+        "event_type": event.event_type,
+        "kind": event.kind.value if event.kind else None,
+        "subscription": None
+        if remote is None
+        else {
+            "provider_subscription_id": remote.provider_subscription_id,
+            "provider_customer_id": remote.provider_customer_id,
+            "plan": remote.plan.value if remote.plan else None,
+            "status": remote.status.value,
+            "current_period_start": _iso(remote.current_period_start),
+            "current_period_end": _iso(remote.current_period_end),
+            "cancel_at_period_end": remote.cancel_at_period_end,
+        },
+    }
+
+
+def restored(payload: dict[str, Any]) -> BillingEventPayload | None:
+    """A stored delivery, read back into the value the service acts on.
+
+    Returns None for a payload nothing can be done with -- an empty one
+    from before deliveries were kept, or one naming no subscription. The
+    console says so rather than pretending a replay happened.
+    """
+    if not payload or not payload.get("event_id"):
+        return None
+
+    remote = payload.get("subscription")
+
+    return BillingEventPayload(
+        event_id=str(payload["event_id"]),
+        event_type=str(payload.get("event_type", "")),
+        kind=BillingEventKind(payload["kind"]) if payload.get("kind") else None,
+        subscription=None
+        if not remote
+        else RemoteSubscription(
+            provider_subscription_id=str(remote["provider_subscription_id"]),
+            provider_customer_id=remote.get("provider_customer_id"),
+            plan=PlanTier(remote["plan"]) if remote.get("plan") else None,
+            status=SubscriptionStatus(remote["status"]),
+            current_period_start=_at(remote.get("current_period_start")),
+            current_period_end=_at(remote.get("current_period_end")),
+            cancel_at_period_end=bool(remote.get("cancel_at_period_end")),
+        ),
+    )
+
+
+def _iso(moment: datetime | None) -> str | None:
+    return moment.isoformat() if moment else None
+
+
+def _at(value: object) -> datetime | None:
+    return datetime.fromisoformat(str(value)) if value else None
