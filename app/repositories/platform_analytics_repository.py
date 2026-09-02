@@ -251,8 +251,16 @@ class PlatformAnalyticsRepository:
         `date_trunc` in the database rather than bucketing in Python: the
         alternative is fetching every row to count them, which is a chart
         that stops loading in the year the platform succeeds.
+
+        Converted to UTC first, and that is not decoration.
+        `date_trunc('day', ts)` on a `timestamptz` truncates in the
+        *database session's* timezone, so a signup at 23:30 UTC lands on
+        the next day wherever the server is set to Asia/Karachi and on
+        the same day where it is set to UTC. Two deployments would draw
+        different charts from identical data, and neither would look
+        wrong.
         """
-        day = func.date_trunc("day", column).label("day")
+        day = func.date_trunc("day", func.timezone("UTC", column)).label("day")
         conditions: list[ColumnElement[bool]] = [column >= since]
 
         if where is not None:
