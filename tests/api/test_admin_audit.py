@@ -32,10 +32,13 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.workspace_membership_repository import (
+    WorkspaceMembershipRepository,
+)
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.admin_audit_service import AdminActor, AdminAuditService
 from tests.support.staff import ADMIN, Console, a_colleague, entries, operations
-from tests.support.tenants import sign_up
+from tests.support.tenants import Tenant, sign_up
 
 
 @pytest.fixture
@@ -43,9 +46,25 @@ def owner(client: TestClient, db_session: Session) -> Console:
     return Console(client, db_session, "platform-owner@example.com", StaffRole.OWNER)
 
 
+@pytest.fixture
+def acme(
+    client: TestClient,
+    user_repository: UserRepository,
+    membership_repository: WorkspaceMembershipRepository,
+) -> Tenant:
+    """A business for the console's routes to be pointed at.
+
+    The read-only routes need a real workspace, because every one of them
+    proves it exists before recording that it was read -- which is what
+    stops the log filling with entries about ids that never existed.
+    """
+    return Tenant(client, user_repository, membership_repository, "acme-fashion")
+
+
 def _calls(
     console: Console,
     colleague: int,
+    workspace_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -87,6 +106,45 @@ def _calls(
             lambda: console.get("/audit"),
             AdminAction.AUDIT_READ,
         ),
+        # The read-only console. Nine reads, and every one of them
+        # recorded -- which is the rule this surface is built on and the
+        # thing a list of only writes would fail to answer.
+        ("GET", f"{ADMIN}/workspaces"): (
+            lambda: console.get("/workspaces"),
+            AdminAction.WORKSPACES_SEARCHED,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}"): (
+            lambda: console.get(f"/workspaces/{workspace_id}"),
+            AdminAction.WORKSPACE_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/members"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/members"),
+            AdminAction.WORKSPACE_MEMBERS_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/subscription"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/subscription"),
+            AdminAction.WORKSPACE_SUBSCRIPTION_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/usage"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/usage"),
+            AdminAction.WORKSPACE_USAGE_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/integrations"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/integrations"),
+            AdminAction.WORKSPACE_INTEGRATIONS_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/audit"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/audit"),
+            AdminAction.WORKSPACE_AUDIT_READ,
+        ),
+        ("GET", f"{ADMIN}/users"): (
+            lambda: console.get("/users"),
+            AdminAction.USERS_SEARCHED,
+        ),
+        ("GET", f"{ADMIN}/users/{{user_id}}"): (
+            lambda: console.get(f"/users/{colleague}"),
+            AdminAction.USER_READ,
+        ),
     }
 
 
@@ -95,6 +153,7 @@ def _calls(
 
 def test_every_published_route_has_a_case(
     owner: Console,
+    acme: Tenant,
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -103,11 +162,12 @@ def test_every_published_route_has_a_case(
     # going unaudited in the test below.
     colleague = a_colleague(client, db_session, "colleague@example.com")
 
-    assert sorted(_calls(owner, colleague)) == operations()
+    assert sorted(_calls(owner, colleague, acme.workspace_id)) == operations()
 
 
 def test_every_route_writes_exactly_one_entry(
     owner: Console,
+    acme: Tenant,
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -120,7 +180,11 @@ def test_every_route_writes_exactly_one_entry(
     """
     colleague = a_colleague(client, db_session, "colleague@example.com")
 
-    for (method, path), (call, expected) in _calls(owner, colleague).items():
+    for (method, path), (call, expected) in _calls(
+        owner,
+        colleague,
+        acme.workspace_id,
+    ).items():
         before = len(entries(db_session))
 
         response = call()
