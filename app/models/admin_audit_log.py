@@ -71,6 +71,20 @@ class AdminAction(StrEnum):
     USERS_SEARCHED = "users.searched"
     USER_READ = "user.read"
 
+    # Support access, and the two reads it opens. These are the entries
+    # that matter most in this table: everything above is metadata about
+    # a business, and these are somebody reading the messages its
+    # customers sent it.
+    #
+    # The reads are recorded per request rather than once per grant. A
+    # grant says somebody was allowed to look; these say what they
+    # actually opened, which is the question asked afterwards.
+    SUPPORT_ACCESS_GRANTED = "support_access.granted"
+    SUPPORT_ACCESS_REVOKED = "support_access.revoked"
+    SUPPORT_ACCESS_LISTED = "support_access.listed"
+    CONVERSATIONS_READ = "workspace.conversations_read"
+    MESSAGES_READ = "workspace.messages_read"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.
