@@ -432,12 +432,18 @@ def test_the_staff_list_keeps_revoked_rows(
 
 
 def test_the_platform_is_not_a_way_to_create_accounts(owner: Console) -> None:
-    # There is no endpoint here that makes a user, on purpose: staff are
-    # ordinary accounts that have been promoted, which is what keeps one
-    # password and one way back in for everybody.
-    paths = {path for _, path in operations()}
-
-    assert not any(path.endswith("/users") for path in paths)
+    # No endpoint here makes a user, on purpose: staff are ordinary
+    # accounts that have been promoted, which is what keeps one password
+    # and one way back in for everybody.
+    #
+    # Written against the verb rather than the path, because a later
+    # phase does add a read-only `/admin/users` for support to search --
+    # and refusing that would be this test outliving its own point.
+    assert not [
+        (method, path)
+        for method, path in operations()
+        if method == "POST" and path.endswith("/users")
+    ]
 
 
 def test_deleting_a_staff_account_takes_the_staff_row_with_it(
