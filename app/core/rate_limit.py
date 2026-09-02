@@ -48,6 +48,11 @@ class RateLimited(StrEnum):
     SEARCH = "search"
     UPLOADS = "uploads"
     WEBHOOK_REJECTIONS = "webhook_rejections"
+    # The platform console, keyed on the staff member rather than the
+    # workspace: this surface belongs to no workspace, and what a runaway
+    # console costs is rows in the platform's own audit log, which is
+    # written on reads as well as writes.
+    ADMIN = "admin"
 
 
 @dataclass(frozen=True)

@@ -40,6 +40,7 @@ Interactive documentation is then at http://localhost:8000/docs.
 | Type check | `uv run mypy` |
 | Lint, format and types together | `uv run pre-commit run --all-files` |
 | Evaluate the assistant | `uv run python -m app.evaluation` |
+| Grant the first platform owner | `uv run python -m app.staff_cli grant you@example.com` |
 
 The evaluation is not part of the test suite and not part of CI: it calls
 the embedding provider and the model for real, which costs money and gives
@@ -165,6 +166,12 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `/api/v1/webhooks/whatsapp` | Meta's deliveries |
 | POST | `/api/v1/webhooks/{provider}` | A storefront's deliveries |
 | POST | `/api/v1/webhooks/billing` | The payment provider's deliveries |
+| GET | `/api/v1/admin/me` | Who you are on the platform |
+| GET | `/api/v1/admin/staff` | Everybody who runs it, revoked included |
+| POST | `/api/v1/admin/staff` | Promote an existing account |
+| PATCH | `/api/v1/admin/staff/{user_id}` | Move somebody up or down |
+| DELETE | `/api/v1/admin/staff/{user_id}` | Take platform access away |
+| GET | `/api/v1/admin/audit` | What staff have done |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -839,6 +846,72 @@ meaningless zero when tracking is off, and WooCommerce sends
 `stock_quantity: null` with `manage_stock: false`. Either way a shop that
 has never counted arrives as "not tracked" rather than as "out of stock".
 
+### Platform administration
+
+Everything above is **tenant** administration: a customer running their
+own business here, where `WorkspaceAdminDep` separates an owner from an
+agent. `/api/v1/admin` is the other kind — the people who operate Baton,
+who have to answer a support email about a workspace they are not a
+member of.
+
+The two have opposite defaults, which is why they are two surfaces rather
+than one with a wider role. A tenant sees one workspace; staff see every
+one. The tenant boundary answers "no such workspace" to three different
+refusals on purpose, so that an id cannot be used to discover which
+businesses have accounts; `/admin` says what actually happened, because
+everybody reaching it is already authenticated as staff and already being
+recorded. And on the tenant surface a read is ordinary, while here it is
+the sensitive act.
+
+**Staff are ordinary accounts, promoted.** There is no separate login and
+no endpoint here that creates a user: somebody joining the team registers
+the way a customer does and is granted access afterwards, so they keep one
+password, one session list and one way back in when they forget it. What
+differs is the window — `ADMIN_SESSION_IDLE_MINUTES`, an hour against the
+tenant side's thirty days. A session left sitting is refused by the
+console and keeps working everywhere else.
+
+Three ranks, cumulative: **support** reads the console, **admin** adds
+lifecycle and billing, **owner** adds granting and revoking. Granting is
+owner-only because it is the one act that creates more of this surface.
+The last live owner cannot be demoted or revoked — only an owner may
+grant, so a platform without one is a console nobody can be added to
+again.
+
+**Every route writes to `admin_audit_logs`, reads included.** That is the
+point of the table rather than an excess of caution: what has to be
+answerable afterwards is who looked at a customer's account, and a log of
+only the writes answers a different question. Its rows are append-only —
+there is no update or delete on the repository, and no route at any rank
+— and they carry the actor's address copied at the time, so closing your
+own account does not remove you from the record.
+
+The workspace reference on that table is nullable and **does not
+cascade**, which is the one schema decision worth reading the file for.
+When a closed workspace is finally erased its own audit log goes with it,
+correctly: the customer asked to be forgotten. What must not go with it is
+the row saying a staff member read that workspace two days beforehand, so
+the id is nulled and the slug — copied alongside — still names the
+account.
+
+The first owner comes from a terminal on the deployment:
+
+```bash
+uv run python -m app.staff_cli grant you@example.com
+```
+
+A command rather than a migration, deliberately: a migration would put a
+privileged account in version control, identical everywhere, granted to
+an address chosen by whoever wrote the file. And granting is the only
+thing the command line can do — changing a rank or taking access away
+goes through the console, where there is a named actor to record.
+
+The router is mounted separately from the tenant one in `app/main.py`, so
+that no `include_router` added to the wrong file can put an admin path
+behind a tenant guard. Same process today; a separate deployment would
+let the network keep this surface off the public internet entirely, and
+nothing above the mount would change for it.
+
 ## Configuration
 
 All configuration is read from the environment, with `.env` as a convenience
@@ -856,6 +929,7 @@ production.
 | `JWT_ALGORITHM` | `HS256` | |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Short: it is sent with every request |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Idle timeout. Every refresh pushes it out |
+| `ADMIN_SESSION_IDLE_MINUTES` | `60` | The same session, refused by `/admin` alone |
 | `CORS_ORIGINS` | empty | Comma separated. Empty means no cross-origin access |
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |
@@ -877,6 +951,7 @@ production.
 | `RATE_LIMIT_SEARCH_PER_MINUTE` | `60` | Per workspace |
 | `RATE_LIMIT_UPLOADS_PER_HOUR` | `120` | Per workspace |
 | `RATE_LIMIT_WEBHOOK_REJECTIONS_PER_MINUTE` | `30` | Per address, failures only |
+| `RATE_LIMIT_ADMIN_PER_MINUTE` | `120` | Per staff member. The platform console |
 | `API_BASE_URL` | unset | Where this API answers. Needed for OAuth |
 | `SHOPIFY_API_KEY` | unset | Without it, no storefront can be installed |
 | `SHOPIFY_API_SECRET` | unset | Signs the OAuth callback and every webhook |
@@ -1127,9 +1202,11 @@ app/
 ├── main.py             application factory, lifespan, middleware
 ├── api/
 │   ├── router.py       assembles the versioned router
+│   ├── admin_router.py the platform surface, assembled apart from it
 │   ├── errors.py       domain errors -> HTTP responses, in one place
 │   ├── dependencies/   reusable request-scoped dependencies
 │   └── routes/         HTTP concerns only
+│       └── admin/      the routes scoped to no workspace at all
 ├── core/               settings, security, logging, domain exceptions
 │                       plus text chunking and vector arithmetic
 ├── db/                 engine, session factory, declarative base

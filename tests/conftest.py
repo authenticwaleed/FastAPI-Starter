@@ -182,6 +182,12 @@ def engine() -> Iterator[Engine]:
                 "knowledge_chunks, "
                 "knowledge_documents, knowledge_sources, "
                 "notifications, audit_logs, api_keys, jobs, "
+                # The platform tables. Named like everything else here
+                # rather than left to CASCADE from users, because a table
+                # that stops referencing users would quietly stop being
+                # cleaned -- and admin_audit_logs is arranged precisely
+                # so that deleting its subjects does not delete it.
+                "admin_audit_logs, staff_members, "
                 "billing_events, usage_records, subscriptions, "
                 "automation_runs, automations, "
                 "product_variants, products, orders, "

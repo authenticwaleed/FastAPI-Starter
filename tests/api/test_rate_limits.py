@@ -9,10 +9,13 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.api.dependencies.rate_limit import limits_from
 from app.core.config import get_settings
 from app.core.rate_limit import Limit, RateLimited, RateLimiter
+from app.models.staff_member import StaffRole
+from tests.support.staff import Console
 from tests.support.whatsapp import inbound_payload, sign
 
 EMAIL = "ada@example.com"
@@ -327,3 +330,63 @@ def test_only_a_forgery_is_charged_for(client: TestClient) -> None:
     # address stop being answered at all.
     assert _deliver(client, secret="not the app secret").status_code == 403
     assert _deliver(client).status_code == 429
+
+
+# --- the platform console ---------------------------------------------------
+#
+# Counted per staff member rather than per workspace, because this
+# surface belongs to no workspace. The allowance is declared once for the
+# whole router rather than route by route -- every path here writes to
+# the platform's audit log, reads included, so there is no unlimited
+# route to leave out and nothing to forget.
+
+
+def test_the_console_is_limited(client: TestClient, db_session: Session) -> None:
+    console = Console(client, db_session, "platform-owner@example.com", StaffRole.OWNER)
+
+    assert console.get("/me").status_code == 200
+    assert console.get("/me").status_code == 200
+
+    refused = console.get("/me")
+
+    assert refused.status_code == 429
+    assert refused.json()["code"] == "rate_limit_exceeded"
+
+
+def test_one_staff_member_cannot_spend_anothers_allowance(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    # The reason it is keyed on the person and not the address: a whole
+    # office behind one address would be one bucket, and the first
+    # colleague through it would shut out the rest.
+    first = Console(client, db_session, "first@example.com", StaffRole.OWNER)
+    second = Console(client, db_session, "second@example.com", StaffRole.ADMIN)
+
+    for _ in range(2):
+        assert first.get("/me").status_code == 200
+
+    assert first.get("/me").status_code == 429
+    assert second.get("/me").status_code == 200
+
+
+def test_a_stranger_is_refused_before_the_console_is_counted(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    """Access is established before anything is spent.
+
+    Two things fall out of the order, and both matter. Somebody who is
+    not staff cannot empty a colleague's bucket, and cannot learn
+    anything from the difference between a 403 and a 429 either.
+    """
+    console = Console(client, db_session, "platform-owner@example.com", StaffRole.OWNER)
+
+    _register(client, "stranger@example.com")
+    stranger = _login(client, "stranger@example.com")
+    headers = _bearer(stranger.json()["access_token"])
+
+    for _ in range(5):
+        assert client.get("/api/v1/admin/me", headers=headers).status_code == 403
+
+    assert console.get("/me").status_code == 200

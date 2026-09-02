@@ -4,6 +4,7 @@ Importing this package registers every table on `Base.metadata`, which is
 what Alembic autogenerate needs in order to see the full schema.
 """
 
+from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.ai_response_log import AiDecision, AiResponseLog
 from app.models.api_key import ApiKey
 from app.models.audit_log import AuditEvent, AuditLog
@@ -46,6 +47,7 @@ from app.models.message import (
 from app.models.notification import Notification, NotificationKind
 from app.models.order import Order, OrderStatus
 from app.models.product import Product, ProductStatus, ProductVariant
+from app.models.staff_member import StaffMember, StaffRole
 from app.models.subscription import (
     BillingEvent,
     BillingProviderName,
@@ -74,6 +76,8 @@ from app.models.workspace_membership import (
 )
 
 __all__ = [
+    "AdminAction",
+    "AdminAuditLog",
     "AiDecision",
     "AiMode",
     "AiResponseLog",
@@ -122,6 +126,8 @@ __all__ = [
     "SenderType",
     "SessionEndReason",
     "SourceType",
+    "StaffMember",
+    "StaffRole",
     "Subscription",
     "SubscriptionStatus",
     "UsageMetric",

@@ -908,3 +908,106 @@ class InvalidDateRangeError(AppError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason, detail=reason)
         self.reason = reason
+
+
+class NotStaffError(AppError):
+    """The caller is signed in, and does not run this platform.
+
+    A 403 rather than the 404 the tenant boundary would give, and the
+    difference is deliberate. A tenant 404 hides whether a workspace
+    exists, because the person asking might be a stranger. Nobody reaches
+    this without a valid session, and pretending `/admin` is not there
+    would only puzzle a colleague whose access was revoked this morning.
+    """
+
+    detail = "This account does not have platform access"
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"User {user_id} is not a staff member")
+        self.user_id = user_id
+
+
+class AdminSessionExpiredError(AppError):
+    """The session is live, and too old to be trusted with the console.
+
+    Staff sign in through the ordinary login and get an ordinary session,
+    which is what keeps one account and one password. What differs is how
+    long a gap this surface will accept: a tenant session survives weeks
+    of neglect, and a console that can read any customer's account should
+    not still be open on an unattended laptop after lunch.
+
+    A 401 rather than a 403, because signing in again fixes it -- which is
+    exactly what a 401 tells a client to do. The tenant surface is
+    untouched: the same session keeps working there.
+    """
+
+    detail = "This session has been idle too long for the admin console"
+
+    def __init__(self, session_id: object) -> None:
+        super().__init__(f"Session {session_id} is too old for the admin console")
+        self.session_id = session_id
+
+
+class InsufficientStaffRoleError(AppError):
+    """A staff member whose role does not reach this route.
+
+    Named apart from the tenant version so the two can never be confused
+    in a handler, a log line, or a response code table -- one is about a
+    role inside a customer's workspace, the other about a rank in the
+    business that operates the product.
+    """
+
+    detail = "Your staff role does not permit this action"
+
+    def __init__(self, role: object, needed: object) -> None:
+        super().__init__(f"Staff role {role} may not act where {needed} is needed")
+        self.role = role
+        self.needed = needed
+
+
+class StaffMemberNotFoundError(AppError):
+    """No staff row for that account, live or revoked.
+
+    Safe to distinguish from every other refusal, because whoever is
+    asking has already proved they administer this platform. Being told
+    that a colleague was never granted access reveals nothing they could
+    not read from the list beside it.
+    """
+
+    detail = "That account is not a staff member"
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"No staff member for user {user_id}")
+        self.user_id = user_id
+
+
+class AlreadyStaffError(AppError):
+    """That account already has live platform access.
+
+    Refused rather than quietly changing the role, because the two are
+    different acts and only one of them is what somebody typing a POST
+    meant. Changing what a colleague may do is a PATCH, and it is the
+    request that gets recorded as a change of rank.
+    """
+
+    detail = "That account already has platform access"
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"User {user_id} is already a staff member")
+        self.user_id = user_id
+
+
+class LastStaffOwnerError(AppError):
+    """The platform would be left with nobody able to grant access.
+
+    The same rule the tenant side applies to a workspace's last owner,
+    and it bites harder here: only an owner may promote anyone, so a
+    platform without one is a console nobody can ever be added to again
+    without a database client and a deployment.
+    """
+
+    detail = "The platform must keep at least one staff owner"
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"User {user_id} is the last staff owner")
+        self.user_id = user_id
