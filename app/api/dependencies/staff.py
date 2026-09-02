@@ -18,7 +18,11 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from app.api.dependencies.auth import AuthenticatedDep
-from app.core.exceptions import InsufficientStaffRoleError
+from app.core.config import get_settings
+from app.core.exceptions import (
+    AddressNotAllowedError,
+    InsufficientStaffRoleError,
+)
 from app.models.staff_member import StaffRole, permits
 from app.services.staff_service import (
     MAY_ADMINISTER,
@@ -50,12 +54,42 @@ def get_staff_actor(
     that had to be handed a Request would be a service that could only be
     called by a route.
     """
+    address = request.client.host if request.client else None
+
+    _from_an_allowed_address(address)
+
     return service.access(
         authenticated.user,
         authenticated.session,
-        ip_address=request.client.host if request.client else None,
+        ip_address=address,
         user_agent=_trimmed(request.headers.get("user-agent")),
     )
+
+
+def _from_an_allowed_address(address: str | None) -> None:
+    """Refuse the console from an address nobody put on the list.
+
+    Off unless configured, and it has to be: a deployment shipping with
+    an allowlist would lock its own operator out on the first day.
+
+    Where it earns its place is a console reachable from the public
+    internet, where an address is a second factor that costs nothing and
+    cannot be phished. It is checked before the staff row is even looked
+    up, so a stolen session on the wrong network learns nothing about
+    whether the account it holds is staff.
+
+    Exact addresses rather than ranges. A CIDR matcher here would be a
+    small parser nobody tests against a range that matters, and a
+    deployment that needs one has a firewall in front of this that is
+    better at it.
+    """
+    allowed = get_settings().admin_ip_allowlist
+
+    if not allowed:
+        return
+
+    if address is None or address not in allowed:
+        raise AddressNotAllowedError(address)
 
 
 # Any live staff member, whatever their rank: the check is being staff at
