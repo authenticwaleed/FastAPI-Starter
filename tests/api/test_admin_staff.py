@@ -20,44 +20,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.main import create_app
 from app.models.admin_audit_log import AdminAction
 from app.models.staff_member import StaffMember, StaffRole
 from app.models.user import User
 from app.models.user_session import UserSession
 from app.repositories.user_repository import UserRepository
-from tests.support.staff import ADMIN, Console, a_colleague, entries
+from tests.support.staff import (
+    ADMIN,
+    Console,
+    a_colleague,
+    entries,
+    operations,
+)
 from tests.support.tenants import sign_up
 
 OWNER = StaffRole.OWNER
 ADMIN_ROLE = StaffRole.ADMIN
 SUPPORT = StaffRole.SUPPORT
-
-
-def _operations() -> list[tuple[str, str]]:
-    """Every operation the platform router publishes, as method and path.
-
-    Read from the application rather than listed here, which is the whole
-    point of the tests that use it: the day somebody adds a route and
-    forgets to guard it, this list already contains it.
-    """
-    spec = create_app().openapi()
-
-    found = sorted(
-        (method.upper(), path)
-        for path, operations in spec["paths"].items()
-        if path.startswith(ADMIN)
-        for method in operations
-    )
-
-    # An empty list would make pytest skip every test built on this, and
-    # a skipped guard test reads exactly like a passing one in the
-    # summary. Failing here is the only outcome somebody notices.
-    assert found, (
-        "no admin routes found: the introspection is looking in the wrong place"
-    )
-
-    return found
 
 
 def _addressable(path: str) -> str:
@@ -78,7 +57,7 @@ def owner(client: TestClient, db_session: Session) -> Console:
 # --- the door ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("method", "path"), _operations())
+@pytest.mark.parametrize(("method", "path"), operations())
 def test_a_signed_in_stranger_is_refused_by_every_admin_route(
     client: TestClient,
     method: str,
@@ -96,7 +75,7 @@ def test_a_signed_in_stranger_is_refused_by_every_admin_route(
     assert response.json()["code"] == "not_staff"
 
 
-@pytest.mark.parametrize(("method", "path"), _operations())
+@pytest.mark.parametrize(("method", "path"), operations())
 def test_an_unauthenticated_caller_is_refused_by_every_admin_route(
     client: TestClient,
     method: str,
@@ -456,7 +435,7 @@ def test_the_platform_is_not_a_way_to_create_accounts(owner: Console) -> None:
     # There is no endpoint here that makes a user, on purpose: staff are
     # ordinary accounts that have been promoted, which is what keeps one
     # password and one way back in for everybody.
-    paths = {path for _, path in _operations()}
+    paths = {path for _, path in operations()}
 
     assert not any(path.endswith("/users") for path in paths)
 
