@@ -13,6 +13,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from app.api.dependencies.staff import StaffActorDep
 from app.api.dependencies.workspace import WorkspaceAccessDep
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import Limit, RateLimited, RateLimiter
@@ -34,6 +35,7 @@ def limits_from(settings: Settings) -> dict[RateLimited, Limit]:
             settings.rate_limit_webhook_rejections_per_minute,
             60,
         ),
+        RateLimited.ADMIN: Limit(settings.rate_limit_admin_per_minute, 60),
     }
 
 
@@ -91,5 +93,25 @@ def limit_by_workspace(scope: RateLimited) -> Callable[..., None]:
 
     def dependency(access: WorkspaceAccessDep, limiter: RateLimiterDep) -> None:
         limiter.spend(scope, str(access.workspace.id))
+
+    return dependency
+
+
+def limit_by_staff(scope: RateLimited) -> Callable[..., None]:
+    """Count this route's requests against the staff member making them.
+
+    Depends on StaffActorDep, so platform access is established before
+    anything is counted -- a signed-in stranger cannot spend a
+    colleague's allowance, and cannot learn anything from being refused
+    either, because they are refused before the limiter is consulted.
+
+    Against the person rather than the address, unlike the
+    unauthenticated endpoints: there is an account here to count, and
+    counting on the address instead would put a whole office behind one
+    bucket.
+    """
+
+    def dependency(actor: StaffActorDep, limiter: RateLimiterDep) -> None:
+        limiter.spend(scope, str(actor.user.id))
 
     return dependency
