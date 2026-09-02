@@ -33,6 +33,7 @@ from app.models.admin_audit_log import AdminAction
 from app.models.staff_member import StaffMember, StaffRole, permits
 from app.models.user import User
 from app.models.user_session import UserSession
+from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
 from app.repositories.staff_repository import StaffRepository
 from app.repositories.user_repository import UserRepository
 from app.services.admin_audit_service import (
@@ -259,6 +260,63 @@ class StaffService:
 
         return member, user
 
+    def seed(self, user: User, role: StaffRole) -> StaffMember:
+        """Grant access when there is nobody to grant it.
+
+        The one method here that takes no actor, and the only way the
+        first owner can exist: granting is owner-only, so a platform with
+        no owner cannot produce one through the console. It has exactly
+        one caller, `app/staff_cli.py`, which is a terminal on the
+        deployment rather than a route.
+
+        It still writes to the log, with a null actor, which is the case
+        `AdminActor`'s empty default exists for. An entry naming a person
+        would be an accusation; no entry at all would mean the platform's
+        history began with somebody already holding the keys.
+
+        Deliberately the only thing the command line can do. Everything
+        else -- changing a rank, taking access away -- goes through the
+        console, where there is a named actor to record. A shell can
+        always add an owner and then act as one, which is the version of
+        that power that leaves a trail.
+        """
+        existing = self._staff.get_for_user(user.id)
+
+        if existing is not None and existing.is_live:
+            raise AlreadyStaffError(user.id)
+
+        if existing is None:
+            member = self._staff.create(
+                user_id=user.id,
+                role=role,
+                granted_by_user_id=None,
+            )
+        else:
+            member = self._staff.reinstate(
+                existing,
+                role=role,
+                granted_by_user_id=None,
+                at=datetime.now(UTC),
+            )
+
+        self._audit.did(
+            AdminActor(),
+            AdminAction.STAFF_GRANTED,
+            target_user_id=user.id,
+            meta={
+                "email": user.email,
+                "role": role.value,
+                "reinstated": existing is not None,
+                # So a reader can tell this from a grant made by a
+                # colleague, which is the difference between a
+                # deployment being set up and somebody being promoted.
+                "via": "cli",
+            },
+        )
+        self._session.commit()
+
+        return member
+
     def change_role(
         self,
         actor: StaffActor,
@@ -384,6 +442,22 @@ class StaffService:
 
         if self._staff.count_live_owners() <= 1:
             raise LastStaffOwnerError(member.user_id)
+
+
+def build_staff_service(session: Session) -> StaffService:
+    """The service, assembled against one session, without FastAPI.
+
+    For the command line, which has no request to resolve dependencies
+    from. The same graph the dependency below builds, in one place, so
+    that a constructor growing an argument is one edit rather than two
+    that can drift.
+    """
+    return StaffService(
+        session=session,
+        staff=StaffRepository(session),
+        users=UserRepository(session),
+        audit=AdminAuditService(session, AdminAuditLogRepository(session)),
+    )
 
 
 def get_staff_repository(session: SessionDep) -> StaffRepository:
