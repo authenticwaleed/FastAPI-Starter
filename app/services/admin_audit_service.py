@@ -12,6 +12,7 @@ all an entry is made of -- and which is what stops the service every
 writer imports from importing the service that resolves them.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,6 +25,8 @@ from app.db.session import SessionDep
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.user import User
 from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -88,7 +91,7 @@ class AdminAuditService:
         workspace is erased, and the slug is what still says whose
         account the entry was about.
         """
-        return self._logs.record(
+        entry = self._logs.record(
             actor_user_id=actor.user_id,
             actor_email=actor.email,
             action=action,
@@ -99,6 +102,35 @@ class AdminAuditService:
             ip_address=actor.ip_address,
             user_agent=actor.user_agent,
         )
+
+        # And into the log stream, which is the plan's "load /admin/audit
+        # into whatever log store operations already uses" -- done by
+        # writing it there rather than by shipping the table, because the
+        # log stream is already collected, already searchable, and
+        # already the thing somebody has open during an incident.
+        #
+        # The row is the record and this line is a copy: if they ever
+        # disagree, the table is right. What the copy buys is that a
+        # question like "who touched this workspace on Tuesday" can be
+        # asked in the same place as every other question that day,
+        # without a console and without database access.
+        #
+        # No `meta`, deliberately. It is the field that carries whatever
+        # a caller put in it, and a log line is exactly where an address
+        # or a reason gets copied, shipped and kept longest.
+        logger.info(
+            "Platform: %s by %s",
+            action.value,
+            actor.email or "the command line",
+            extra={
+                "admin_action": action.value,
+                "admin_actor": actor.email,
+                "admin_workspace": workspace_slug,
+                "admin_target_user_id": target_user_id,
+            },
+        )
+
+        return entry
 
     # --- reading -----------------------------------------------------------
 
