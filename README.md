@@ -196,6 +196,26 @@ test is rolled back afterwards, so it never touches application data. Set
 | POST | `/api/v1/admin/users/{user_id}/activate` | Turn it back on |
 | POST | `…/users/{user_id}/sessions/revoke` | Sign out everywhere, stay active |
 | POST | `…/users/{user_id}/verify-email` | Confirm an address delivery cannot reach |
+| GET | `/api/v1/admin/billing/subscriptions` | What the provider says is being paid |
+| GET | `/api/v1/admin/billing/events` | Its deliveries, newest first |
+| POST | `…/billing/events/{event_id}/replay` | Re-apply a stored delivery |
+| POST | `…/{workspace_id}/plan-override` | Grant a plan nobody is paying for |
+| DELETE | `…/{workspace_id}/plan-override` | Take it away again |
+| GET | `/api/v1/admin/jobs` | The queue, by kind, status, workspace |
+| GET | `/api/v1/admin/jobs/{job_id}` | One job, payload redacted by kind |
+| POST | `/api/v1/admin/jobs/{job_id}/retry` | Requeue it, attempts forgiven |
+| POST | `/api/v1/admin/jobs/{job_id}/cancel` | Stop one that has not started |
+| GET | `/api/v1/admin/webhooks/failures` | Deliveries that did not verify |
+| GET | `/api/v1/admin/integrations/whatsapp` | Every number, and whose it is |
+| GET | `/api/v1/admin/health` | Queue depth, oldest job, configuration |
+| GET | `/api/v1/admin/analytics/overview` | Workspaces by status and plan |
+| GET | `/api/v1/admin/analytics/growth` | Signups, closures, real activity |
+| GET | `/api/v1/admin/analytics/revenue` | Subscriptions by status and plan |
+| GET | `/api/v1/admin/analytics/ai` | Token spend across every tenant |
+| POST | `/api/v1/admin/approvals` | Ask a colleague to agree to one act |
+| POST | `…/approvals/{approval_id}/approve` | Agree to somebody else's |
+| GET | `/api/v1/admin/approvals` | Who agreed to what |
+| GET | `/api/v1/admin/alerts` | Who has been reading many accounts |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -1063,6 +1083,98 @@ close uses, so the grace period and the erasure job behave identically. A
 second closing path that set the date differently is how a business ends
 up erased on a day nobody told them about.
 
+#### Granting a plan the provider disagrees with
+
+`Subscription.plan` is a copy of what the payment provider said, kept
+current by webhooks — so a tier written into it by hand survives until
+the next delivery and then reverts, **silently**. A `plan_overrides` row
+is the fix: the provider owns its column, the platform owns this one, and
+resolution is **override → subscription → free** in one function.
+
+Nothing reads `subscription.plan` to decide what a workspace may do.
+`SubscriptionService.plan_for` answers it one workspace at a time and
+`entitled_plan()` answers it for every workspace at once in SQL; they
+share `ENTITLING` and `FREE_PLAN.tier`, and a parametrised test holds the
+two side by side on every combination that matters.
+
+An override with no end date is **warned about, not refused** — comps
+somebody negotiated are real, and requiring a date would mean inventing
+one. An expired one stops applying with nothing having to run.
+
+Replaying a billing delivery **does not touch the dedupe row**. That row
+stops a provider *retry* being applied twice; a replay is somebody
+deliberately re-applying a delivery that was recorded and not acted on,
+and it is idempotent by nature because what it applies is the provider's
+own snapshot.
+
+#### Operations, and what a console may not read
+
+A job payload is **redacted by kind on a safe-list**. A deny-list would
+leak a new field until somebody noticed; this hides anything not named
+for the kind, so the day a message's text lands in a `deliver_message`
+payload to save a lookup, it stays out. An operations console is not a
+licence to read messages.
+
+Retrying is refused while a job is running — the worker holding it does
+not check back, so requeueing would let a second worker claim the same
+work. `dedupe_key` is left untouched, which is what stops a twin being
+enqueued while it waits.
+
+`webhook_failures` records deliveries this application turned away, which
+is otherwise the one failure that reaches nobody: the provider gets a
+status code, the sender is a machine, and the customer whose storefront
+secret was mistyped notices days later. **No body is ever stored** — a
+delivery that failed to verify came from somebody unproven.
+
+`/admin/health` is distinct from `/api/v1/health`: that one answers an
+orchestrator and stays cheap and public, and this one is for a person and
+gives the two numbers an orchestrator has no use for — queue depth and
+the age of the oldest waiting job. Either alone cannot tell a busy
+afternoon from a stopped worker. It reports whether integrations are
+**configured**, not whether they are reachable; dialling four providers
+on every load would be slow and would report an outage whenever one had a
+slow minute.
+
+#### Analytics, and hardening
+
+Every analytics figure is an aggregate and **no route there takes a
+workspace id** — asserted over the published paths, because a dashboard
+is exactly where somebody would later add "and show me which
+workspaces". AI spend is in **tokens rather than money**: what a token
+costs is a contract that changes without a redeploy and differs per
+model.
+
+Two acts need **two people**: erasing a workspace, and granting `owner`.
+The rule is that the *performer* may not be the approver — "two staff
+members were involved at some point" is a form, not a control. An
+approval names one subject, is spent once, expires in
+`ADMIN_APPROVAL_EXPIRE_MINUTES`, and carries the rank so an agreement
+given for `admin` cannot be spent granting `owner`. Only those two acts,
+because requiring a colleague for every support engineer would mean
+nobody could be added on a Friday.
+
+`ADMIN_IP_ALLOWLIST` is empty by default and has to be — a deployment
+shipping with one would lock its own operator out on day one. It is
+checked before the staff row is looked up, so a stolen session on the
+wrong network learns nothing.
+
+`/admin/alerts` **refuses nothing**. Support access outside working hours
+and one person reading many accounts are both ordinary during an
+incident, and a control that blocked them would be worked around by
+whoever was on call. Out-of-hours grants are a warning line; the reading
+count is a page, built from the platform's own audit log — which is the
+return on having audited reads at all.
+
+A scheduled sweep closes support grants whose hour has passed and writes
+the closing entry in the **customer's** log. Expiry never depended on it
+— an expired grant already fails the lookup — but without it a business
+would see access granted and never see it end.
+
+Every platform entry is also written to the log stream, which is what
+"load `/admin/audit` into the log store" comes to when the log store is
+already collected and already open during an incident. The row is the
+record; the line is a copy, and carries no `meta`.
+
 ## Configuration
 
 All configuration is read from the environment, with `.env` as a convenience
@@ -1083,6 +1195,10 @@ production.
 | `ADMIN_SESSION_IDLE_MINUTES` | `60` | The same session, refused by `/admin` alone |
 | `ADMIN_SUPPORT_GRANT_HOURS` | `4` | How long support access lasts by default |
 | `ADMIN_SUPPORT_GRANT_MAX_HOURS` | `24` | Longer is refused, not shortened |
+| `ADMIN_APPROVAL_EXPIRE_MINUTES` | `30` | How long a colleague's agreement lasts |
+| `ADMIN_IP_ALLOWLIST` | empty | Empty means anywhere. Exact addresses only |
+| `ADMIN_WORKING_HOURS_UTC` | `6`–`18` | Grants outside these are logged, not refused |
+| `ADMIN_WORKSPACE_READS_PER_HOUR` | `20` | Above this, `/admin/alerts` says so |
 | `CORS_ORIGINS` | empty | Comma separated. Empty means no cross-origin access |
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |
