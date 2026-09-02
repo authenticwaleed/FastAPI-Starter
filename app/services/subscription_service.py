@@ -257,7 +257,7 @@ class SubscriptionService:
         self._audit.did(
             workspace_id,
             AuditEvent.SUBSCRIPTION_CHANGED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={
                 "plan": subscription.plan.value,
                 "status": subscription.status.value,

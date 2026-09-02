@@ -83,7 +83,7 @@ class ApiKeyService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.API_KEY_CREATED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={
                 "api_key_id": str(key.id),
                 "name": key.name,
@@ -117,7 +117,7 @@ class ApiKeyService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.API_KEY_REVOKED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={
                 "api_key_id": str(key.id),
                 "name": key.name,

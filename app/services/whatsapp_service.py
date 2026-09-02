@@ -93,7 +93,7 @@ class WhatsAppService:
             self._audit.did(
                 workspace_id,
                 AuditEvent.WHATSAPP_CONNECTED,
-                actor_user_id=access.membership.user_id,
+                actor_user_id=access.actor_user_id,
                 meta={"phone_number": account.phone_number},
             )
             self._session.commit()
@@ -135,7 +135,7 @@ class WhatsAppService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.WHATSAPP_DISCONNECTED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"phone_number": phone_number},
         )
         self._session.commit()

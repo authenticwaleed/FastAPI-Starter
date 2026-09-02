@@ -86,7 +86,7 @@ def _assignee(access: WorkspaceAccess, assigned_to: str | None) -> int | None:
         return None
 
     if assigned_to == "me":
-        return access.membership.user_id
+        return access.actor_user_id
 
     return int(assigned_to)
 

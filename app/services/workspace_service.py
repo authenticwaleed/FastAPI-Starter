@@ -12,10 +12,12 @@ from app.core.config import get_settings
 from app.core.exceptions import (
     InsufficientWorkspaceRoleError,
     SlugAlreadyExistsError,
+    StaffCannotActAsTenantError,
     WorkspaceNotFoundError,
 )
 from app.db.session import SessionDep
 from app.models.audit_log import AuditEvent
+from app.models.staff_member import StaffMember
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.models.workspace_membership import (
@@ -46,20 +48,80 @@ MAY_HANDLE_CUSTOMERS = frozenset(
 
 @dataclass(frozen=True)
 class WorkspaceAccess:
-    """A workspace together with the membership that permitted reaching it.
+    """A workspace, and whatever it was that permitted reaching it.
 
-    Nothing hands out a Workspace on its own. Carrying the membership with
-    it means every later decision -- may this person rename it, close it,
-    read its contacts -- is answered from a role that was already proved,
+    Nothing hands out a Workspace on its own. Carrying the proof with it
+    means every later decision -- may this person rename it, close it,
+    read its contacts -- is answered from something already established,
     rather than from a second lookup somebody could forget to do.
+
+    Two kinds of proof, and exactly one of them per instance.
+
+    A **membership** is the ordinary case: somebody on the customer's own
+    team, with a role that says what they may do.
+
+    A **staff actor** is a platform support engineer holding a live,
+    time-boxed grant. They have no membership, and giving them one --
+    even a fabricated one that never reaches the database -- was the
+    tempting mistake this shape exists to refuse. It would put them in
+    the customer's member list, in their seat count, and in their audit
+    log as an ordinary colleague, which is the one property this feature
+    must never have.
     """
 
     workspace: Workspace
-    membership: WorkspaceMembership
+    membership: WorkspaceMembership | None = None
+    staff_actor: StaffMember | None = None
+
+    def __post_init__(self) -> None:
+        """Exactly one proof, checked where it cannot be skipped.
+
+        Neither would be a workspace nobody proved they could reach.
+        Both would be a staff member wearing a customer's role, which is
+        the thing the whole arrangement is arranged against -- and it is
+        worth being unable to construct rather than merely discouraged.
+        """
+        if (self.membership is None) == (self.staff_actor is None):
+            raise ValueError(
+                "workspace access needs a membership or a staff actor, not both"
+            )
 
     @property
     def role(self) -> WorkspaceRole:
+        """What the holder may do inside this workspace.
+
+        A staff actor reads, whatever their rank on the platform: a
+        support grant is permission to look at a customer's account, not
+        permission to act as the customer. `VIEWER` is exactly that --
+        "reads and nothing else" -- so every existing role check refuses
+        them from writing without any of those checks having to learn
+        that staff exist.
+        """
+        if self.membership is None:
+            return WorkspaceRole.VIEWER
+
         return self.membership.role
+
+    @property
+    def actor_user_id(self) -> int:
+        """Whose id belongs on this workspace's own audit entry.
+
+        Raises for a staff actor rather than answering, and the raise is
+        the point rather than an inconvenience. An entry in a customer's
+        log naming a support engineer among their own people is precisely
+        what this design exists to prevent, and returning their id -- or
+        a bare `None`, which reads as "a payment provider did it" -- would
+        write exactly that.
+
+        Unreachable in practice: a staff actor is a viewer, and every
+        path that records something first requires a role a viewer does
+        not have. This is where it stops if one ever does not, rather
+        than where it quietly lies.
+        """
+        if self.membership is None:
+            raise StaffCannotActAsTenantError(self.workspace.id)
+
+        return self.membership.user_id
 
 
 class WorkspaceService:
@@ -184,7 +246,7 @@ class WorkspaceService:
             self._audit.did(
                 access.workspace.id,
                 AuditEvent.WORKSPACE_UPDATED,
-                actor_user_id=access.membership.user_id,
+                actor_user_id=access.actor_user_id,
                 meta={"changed": changed},
             )
 
@@ -225,7 +287,7 @@ class WorkspaceService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.WORKSPACE_CLOSED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"erase_after": erase_after.isoformat()},
         )
         self._session.commit()

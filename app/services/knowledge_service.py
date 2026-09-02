@@ -269,7 +269,7 @@ class KnowledgeService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.KNOWLEDGE_DOCUMENT_DELETED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"document_id": str(document_id), "title": title},
         )
         self._session.commit()
@@ -332,7 +332,7 @@ class KnowledgeService:
             self._audit.did(
                 access.workspace.id,
                 AuditEvent.KNOWLEDGE_DOCUMENT_UPLOADED,
-                actor_user_id=access.membership.user_id,
+                actor_user_id=access.actor_user_id,
                 meta={"document_id": str(document.id), "title": title},
             )
             self._session.commit()
