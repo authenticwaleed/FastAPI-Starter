@@ -68,6 +68,19 @@ class AuditEvent(StrEnum):
     API_KEY_CREATED = "api_key.created"
     API_KEY_REVOKED = "api_key.revoked"
 
+    # The only two entries in this log that are not about the business's
+    # own people, and they are here because principle four of the admin
+    # plan says a tenant can always see that staff touched their
+    # workspace. Written when a support grant starts and when it ends,
+    # with the staff member's address and their stated reason in `meta`.
+    #
+    # Their own events rather than ordinary ones with an odd actor, and
+    # that is the whole point: an entry has to say a staff member did
+    # this, and must never be able to look like one of the customer's own
+    # colleagues. A name settles that where an actor field could not.
+    SUPPORT_ACCESS_GRANTED = "support.access_granted"
+    SUPPORT_ACCESS_ENDED = "support.access_ended"
+
 
 class AuditLog(Base):
     """One administrative act, kept.
