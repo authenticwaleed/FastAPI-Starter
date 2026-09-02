@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import select
@@ -95,6 +96,24 @@ class SupportGrantRepository:
         ).all()
 
         return [(grant, user) for grant, user in rows]
+
+    def lapsed(self, now: datetime) -> Sequence[SupportGrant]:
+        """Grants whose hour has passed and which nobody ended by hand.
+
+        Not what makes them stop working: an expired grant already fails
+        the lookup in `live_for`, with nothing having to run. What this
+        finds is the grants nobody has told the *customer* about ending
+        -- their audit log shows access granted and, without a sweep,
+        never shows it end.
+        """
+        return self._session.scalars(
+            select(SupportGrant)
+            .where(
+                SupportGrant.revoked_at.is_(None),
+                SupportGrant.expires_at <= now,
+            )
+            .order_by(SupportGrant.expires_at)
+        ).all()
 
     def revoke(self, grant: SupportGrant, at: datetime) -> SupportGrant:
         """End a grant early, keeping the row that says it existed."""
