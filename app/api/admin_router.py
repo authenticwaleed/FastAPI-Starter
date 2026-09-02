@@ -16,6 +16,7 @@ from app.api.dependencies.rate_limit import limit_by_staff
 from app.api.routes.admin import (
     audit,
     conversations,
+    lifecycle,
     staff,
     support_access,
     users,
@@ -54,3 +55,9 @@ admin_router.include_router(users.router)
 # which is a reason not to.
 admin_router.include_router(support_access.router)
 admin_router.include_router(conversations.router)
+# Lifecycle last of the workspace routers, and the order does matter here
+# for once: its prefix is bare `/workspaces/{workspace_id}`, so it would
+# match the literals above -- `/members`, `/usage`, `/support-access` --
+# if it were registered first and had a route shaped like them. It does
+# not today, and registering it last means it never can by accident.
+admin_router.include_router(lifecycle.router)
