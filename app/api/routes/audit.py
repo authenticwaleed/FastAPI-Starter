@@ -69,14 +69,21 @@ def list_audit_logs(
     )
 
     return AuditPage(
-        items=[_entry(entry, user) for entry, user in entries],
+        items=[entry_of(log, user) for log, user in entries],
         total=total,
         page=page,
         page_size=page_size,
     )
 
 
-def _entry(entry: AuditLog, user: User | None) -> AuditEntry:
+def entry_of(entry: AuditLog, user: User | None) -> AuditEntry:
+    """One row of a workspace's history, as the API renders it.
+
+    Public, and shared with the platform console, which serves this same
+    log to support. Two renderers would eventually be two shapes, and the
+    entry a support engineer reads back to a customer has to be the entry
+    that customer can see for themselves.
+    """
     return AuditEntry(
         id=entry.id,
         event=entry.event,
