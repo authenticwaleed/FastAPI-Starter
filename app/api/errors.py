@@ -9,11 +9,13 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import (
+    AddressNotAllowedError,
     AdminSessionExpiredError,
     AlreadyAMemberError,
     AlreadyStaffError,
     ApiKeyNotFoundError,
     AppError,
+    ApprovalRequiredError,
     AutomationAlreadyExistsError,
     AutomationNotFoundError,
     BillingProviderError,
@@ -433,6 +435,17 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "confirmation_mismatch",
     ),
+    # Both 403, and both about the caller rather than the request. An
+    # address that is not on the list and a decision that has not been
+    # seconded are refusals a client cannot fix by changing what it sent.
+    AddressNotAllowedError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "address_not_allowed",
+    ),
+    ApprovalRequiredError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "approval_required",
+    ),
     JobNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "job_not_found"),
     JobNotRetryableError: _Answer(status.HTTP_409_CONFLICT, "job_not_retryable"),
 }
@@ -801,4 +814,9 @@ JOB_NOT_FOUND = _documented(status.HTTP_404_NOT_FOUND, "No job has that id")
 JOB_CONFLICT = _documented(
     status.HTTP_409_CONFLICT,
     "That job cannot be retried or cancelled from its current state",
+)
+
+APPROVAL_REQUIRED = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "This action needs an approval from a second staff member",
 )

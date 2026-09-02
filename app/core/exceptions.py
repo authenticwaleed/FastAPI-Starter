@@ -1177,3 +1177,38 @@ class JobNotRetryableError(AppError):
         )
         self.job_id = job_id
         self.reason = reason
+
+
+class AddressNotAllowedError(AppError):
+    """The platform console is not reachable from this address.
+
+    A 403 rather than a 404, and it says which address was refused in the
+    log line but not in the response. Whoever is holding a staff session
+    on the wrong network needs to know it is the network; whoever stole
+    one does not need confirmation that the allowlist exists and what is
+    on it.
+    """
+
+    detail = "The platform console is not available from this address"
+
+    def __init__(self, address: object) -> None:
+        super().__init__(f"Address {address} is not on the admin allowlist")
+        self.address = address
+
+
+class ApprovalRequiredError(AppError):
+    """This act needs a second person, and does not have one.
+
+    Covers a missing approval, one that has expired, one already spent,
+    one for a different act, and one approved by the person trying to use
+    it. All the same answer, because all of them mean the same thing:
+    find a colleague.
+    """
+
+    detail = "This action needs an approval from a second staff member"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"Approval refused: {reason}", detail=f"Approval refused: {reason}"
+        )
+        self.reason = reason
