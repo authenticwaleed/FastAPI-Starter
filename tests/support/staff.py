@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.main import create_app
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.staff_member import StaffMember, StaffRole
 from app.repositories.staff_repository import StaffRepository
@@ -26,6 +27,31 @@ from app.repositories.user_repository import UserRepository
 from tests.support.tenants import sign_up
 
 ADMIN = "/api/v1/admin"
+
+
+def operations() -> list[tuple[str, str]]:
+    """Every operation the platform router publishes, as method and path.
+
+    Read from the application rather than listed in a test, which is the
+    point of the tests that use it: the day somebody adds a route and
+    forgets to guard it, or forgets to audit it, this already contains
+    it and the test already fails.
+    """
+    spec = create_app().openapi()
+
+    found = sorted(
+        (method.upper(), path)
+        for path, published in spec["paths"].items()
+        if path.startswith(ADMIN)
+        for method in published
+    )
+
+    # An empty list would make pytest skip every test parametrised on
+    # this, and a skipped guard reads exactly like a passing one in the
+    # summary. Failing here is the only outcome somebody notices.
+    assert found, "no admin routes found: this is looking in the wrong place"
+
+    return found
 
 
 class Console:
