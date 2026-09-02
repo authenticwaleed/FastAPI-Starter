@@ -138,6 +138,15 @@ class AdminAction(StrEnum):
     # it.
     ANALYTICS_READ = "analytics.read"
 
+    # Two-person approval. Four entries for what is one decision, and
+    # that is the point: who asked, who agreed, who spent it, and who
+    # went looking at the list afterwards. A control whose own history
+    # were thinner than the act it guards would be decoration.
+    APPROVAL_REQUESTED = "approval.requested"
+    APPROVAL_GRANTED = "approval.granted"
+    APPROVAL_SPENT = "approval.spent"
+    APPROVALS_READ = "approval.listed"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.
