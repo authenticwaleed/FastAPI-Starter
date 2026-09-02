@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.encryption import encrypt
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.audit_log import AuditEvent, AuditLog
 from app.models.message import Direction, Message
@@ -38,7 +39,7 @@ from app.schemas.workspace import WorkspaceCreate
 from app.services.plans import PlanTier
 from app.services.workspace_service import WorkspaceService
 from tests.support.services import audit_service
-from tests.support.staff import Console, entries
+from tests.support.staff import Console, entries, seconded
 from tests.support.tenants import PASSWORD, Tenant, sign_up
 from tests.support.whatsapp import PHONE_NUMBER_ID, inbound_payload, sign
 
@@ -54,6 +55,26 @@ def admin(client: TestClient, db_session: Session) -> Console:
 @pytest.fixture
 def owner(client: TestClient, db_session: Session) -> Console:
     return Console(client, db_session, "platform-owner@example.com", StaffRole.OWNER)
+
+
+@pytest.fixture
+def colleague(client: TestClient, db_session: Session) -> Console:
+    """A second staff member, because erasing now needs one.
+
+    Phase A8 put a two-person approval in front of the erasure, so every
+    test of it involves two people -- which is the control working rather
+    than test noise.
+    """
+    return Console(client, db_session, "platform-second@example.com", StaffRole.ADMIN)
+
+
+def _approved_erasure(owner: Console, colleague: Console, workspace_id: str) -> str:
+    return seconded(
+        owner,
+        colleague,
+        action=ApprovableAction.ERASE_WORKSPACE,
+        subject=workspace_id,
+    )
 
 
 @pytest.fixture
@@ -324,9 +345,11 @@ def test_the_erasure_date_moves_both_ways(
 
 
 def test_only_an_owner_may_erase(admin: Console, acme: Tenant) -> None:
+    # Refused on the rank before the approval is even looked at, which is
+    # the order that keeps an admin from discovering whether one exists.
     response = admin.post(
         f"/workspaces/{acme.workspace_id}/erase-now",
-        {"confirm_slug": "acme-fashion"},
+        {"confirm_slug": "acme-fashion", "approval_id": str(uuid.uuid4())},
     )
 
     assert response.status_code == 403
@@ -335,6 +358,7 @@ def test_only_an_owner_may_erase(admin: Console, acme: Tenant) -> None:
 
 def test_erasing_with_the_wrong_slug_is_refused_and_recorded(
     owner: Console,
+    colleague: Console,
     acme: Tenant,
     db_session: Session,
 ) -> None:
@@ -344,9 +368,10 @@ def test_erasing_with_the_wrong_slug_is_refused_and_recorded(
     Somebody typing the wrong name into an erasure is either tired or in
     the wrong window, and both are worth a row.
     """
+    approval_id = _approved_erasure(owner, colleague, acme.workspace_id)
     refused = owner.post(
         f"/workspaces/{acme.workspace_id}/erase-now",
-        {"confirm_slug": "acme"},
+        {"confirm_slug": "acme", "approval_id": approval_id},
     )
 
     assert refused.status_code == 422
@@ -360,6 +385,7 @@ def test_erasing_with_the_wrong_slug_is_refused_and_recorded(
 
 def test_erasing_destroys_the_workspace_and_leaves_the_record(
     owner: Console,
+    colleague: Console,
     acme: Tenant,
     db_session: Session,
 ) -> None:
@@ -372,9 +398,10 @@ def test_erasing_destroys_the_workspace_and_leaves_the_record(
     acme.contact("+923001234567")
     workspace_id = uuid.UUID(acme.workspace_id)
 
+    approval_id = _approved_erasure(owner, colleague, acme.workspace_id)
     response = owner.post(
         f"/workspaces/{acme.workspace_id}/erase-now",
-        {"confirm_slug": "acme-fashion"},
+        {"confirm_slug": "acme-fashion", "approval_id": approval_id},
     )
 
     assert response.status_code == 204
@@ -392,15 +419,17 @@ def test_erasing_destroys_the_workspace_and_leaves_the_record(
 
 def test_the_erasure_entry_is_written_before_the_delete(
     owner: Console,
+    colleague: Console,
     acme: Tenant,
     db_session: Session,
 ) -> None:
     # Not an ordering detail: afterwards there is no workspace to write
     # about. If the entry were written after, a crash in between would
     # destroy an account with nothing saying who did it.
+    approval_id = _approved_erasure(owner, colleague, acme.workspace_id)
     owner.post(
         f"/workspaces/{acme.workspace_id}/erase-now",
-        {"confirm_slug": "acme-fashion"},
+        {"confirm_slug": "acme-fashion", "approval_id": approval_id},
     )
 
     db_session.expire_all()
