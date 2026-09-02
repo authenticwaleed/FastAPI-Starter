@@ -17,6 +17,7 @@ from app.core.exceptions import (
     AutomationAlreadyExistsError,
     AutomationNotFoundError,
     BillingProviderError,
+    ConfirmationMismatchError,
     ContactAlreadyExistsError,
     ContactNotFoundError,
     ConversationAlreadyOpenError,
@@ -79,8 +80,10 @@ from app.core.exceptions import (
     UserNotFoundError,
     WhatsAppAlreadyConnectedError,
     WhatsAppNotConnectedError,
+    WorkspaceLifecycleError,
     WorkspaceNotFoundError,
     WorkspaceOwnershipError,
+    WorkspaceSuspendedError,
 )
 from app.schemas.errors import ErrorResponse
 
@@ -407,6 +410,26 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     StaffCannotActAsTenantError: _Answer(
         status.HTTP_403_FORBIDDEN,
         "staff_cannot_act_as_tenant",
+    ),
+    # Lifecycle. 403 rather than 402 for a suspension: the plan is not
+    # what is in the way, an operational decision is, and the difference
+    # matters to whoever reads the message. A suspended workspace can
+    # still be read, so this only ever answers a write.
+    WorkspaceSuspendedError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "workspace_suspended",
+    ),
+    WorkspaceLifecycleError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "workspace_lifecycle",
+    ),
+    # 422 rather than 400: the request was well formed and the value in
+    # it did not match the workspace it was aimed at, which is the
+    # distinction that tells somebody to check what they typed rather
+    # than how they called it.
+    ConfirmationMismatchError: _Answer(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "confirmation_mismatch",
     ),
 }
 
@@ -755,4 +778,17 @@ SUPPORT_GRANT_CONFLICT = _documented(
 BAD_GRANT_DURATION = _documented(
     status.HTTP_422_UNPROCESSABLE_CONTENT,
     "That support grant is longer than the maximum allowed",
+)
+
+WORKSPACE_FROZEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Inactive user, your role does not permit this, or the workspace is suspended",
+)
+LIFECYCLE_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That is not possible from this workspace's current state",
+)
+BAD_CONFIRMATION = _documented(
+    status.HTTP_422_UNPROCESSABLE_CONTENT,
+    "The confirmation does not name this workspace",
 )
