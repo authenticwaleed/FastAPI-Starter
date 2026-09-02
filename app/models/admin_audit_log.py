@@ -107,6 +107,17 @@ class AdminAction(StrEnum):
     USER_SESSIONS_REVOKED = "user.sessions_revoked"
     USER_EMAIL_VERIFIED = "user.email_verified"
 
+    # Billing and entitlements. This surface reads what the provider says
+    # and grants what the provider does not know about; it never moves
+    # money, which is why there is no refund action here and will not be
+    # one -- that belongs in the provider's dashboard, which is better at
+    # it and is already the system of record.
+    SUBSCRIPTIONS_SEARCHED = "billing.subscriptions_searched"
+    PLAN_OVERRIDE_GRANTED = "billing.plan_override_granted"
+    PLAN_OVERRIDE_REMOVED = "billing.plan_override_removed"
+    BILLING_EVENTS_READ = "billing.events_read"
+    BILLING_EVENT_REPLAYED = "billing.event_replayed"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.
