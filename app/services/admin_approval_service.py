@@ -12,6 +12,12 @@ What is deliberately *not* required is that the requester and the
 performer differ. Asking a colleague to agree and then doing it yourself
 is the ordinary shape of this: one person is acting and another has
 looked at it, which is what the control is for.
+
+Nothing here takes the resolved staff actor, and that is not a style
+choice: `StaffService` needs this module -- granting `owner` is one of
+the two acts it guards -- so a parameter of that type would be a cycle.
+It speaks in `AdminActor` instead, which is ids and an address, exactly
+as `AuditService` does and for exactly the same reason.
 """
 
 import uuid
@@ -28,8 +34,11 @@ from app.models.admin_approval import AdminApproval, ApprovableAction
 from app.models.admin_audit_log import AdminAction
 from app.models.user import User
 from app.repositories.admin_approval_repository import AdminApprovalRepository
-from app.services.admin_audit_service import AdminAuditService, AdminAuditServiceDep
-from app.services.staff_service import StaffActor
+from app.services.admin_audit_service import (
+    AdminActor,
+    AdminAuditService,
+    AdminAuditServiceDep,
+)
 
 
 class AdminApprovalService:
@@ -47,7 +56,7 @@ class AdminApprovalService:
 
     def request(
         self,
-        actor: StaffActor,
+        actor: AdminActor,
         *,
         action: ApprovableAction,
         subject: str,
@@ -65,7 +74,7 @@ class AdminApprovalService:
             action=action,
             subject=subject,
             reason=reason,
-            requested_by_user_id=actor.user.id,
+            requested_by_user_id=_who(actor),
             expires_at=datetime.now(UTC)
             + timedelta(minutes=get_settings().admin_approval_expire_minutes),
             meta=meta or {},
@@ -75,7 +84,7 @@ class AdminApprovalService:
 
         return approval
 
-    def approve(self, actor: StaffActor, approval_id: uuid.UUID) -> AdminApproval:
+    def approve(self, actor: AdminActor, approval_id: uuid.UUID) -> AdminApproval:
         """Agree to somebody else's request.
 
         Refused on your own request, which is the whole control: an
@@ -84,7 +93,7 @@ class AdminApprovalService:
         """
         approval = self._approval(approval_id)
 
-        if approval.requested_by_user_id == actor.user.id:
+        if approval.requested_by_user_id == _who(actor):
             raise ApprovalRequiredError("you cannot approve your own request")
 
         if approval.approved_at is not None:
@@ -95,7 +104,7 @@ class AdminApprovalService:
 
         self._approvals.approve(
             approval,
-            by_user_id=actor.user.id,
+            by_user_id=_who(actor),
             at=datetime.now(UTC),
         )
         self._record(actor, AdminAction.APPROVAL_GRANTED, approval)
@@ -104,7 +113,7 @@ class AdminApprovalService:
 
     def spend(
         self,
-        actor: StaffActor,
+        actor: AdminActor,
         approval_id: uuid.UUID | None,
         *,
         action: ApprovableAction,
@@ -136,7 +145,7 @@ class AdminApprovalService:
         if not approval.usable_at(now):
             raise ApprovalRequiredError(_why(approval, now))
 
-        if approval.approved_by_user_id == actor.user.id:
+        if approval.approved_by_user_id == _who(actor):
             # The rule this whole module exists for.
             raise ApprovalRequiredError("it was approved by you")
 
@@ -151,7 +160,7 @@ class AdminApprovalService:
 
     def listed(
         self,
-        actor: StaffActor,
+        actor: AdminActor,
         *,
         page: int = 1,
         page_size: int = 50,
@@ -169,7 +178,7 @@ class AdminApprovalService:
         total = self._approvals.count()
 
         self._admin_audit.did(
-            actor.logged,
+            actor,
             AdminAction.APPROVALS_READ,
             meta={"results": total},
         )
@@ -187,12 +196,12 @@ class AdminApprovalService:
 
     def _record(
         self,
-        actor: StaffActor,
+        actor: AdminActor,
         action: AdminAction,
         approval: AdminApproval,
     ) -> None:
         self._admin_audit.did(
-            actor.logged,
+            actor,
             action,
             meta={
                 "approval_id": str(approval.id),
@@ -250,3 +259,17 @@ AdminApprovalServiceDep = Annotated[
     AdminApprovalService,
     Depends(get_admin_approval_service),
 ]
+
+
+def _who(actor: AdminActor) -> int:
+    """The account behind an approval, which must be a real one.
+
+    `AdminActor` allows no id because one caller has none -- the command
+    line seeding the first owner. That caller never reaches an approval:
+    there is nobody to approve when nobody is staff yet, and a request
+    with no requester could never be refused for being your own.
+    """
+    if actor.user_id is None:
+        raise ApprovalRequiredError("approvals need a signed-in staff member")
+
+    return actor.user_id

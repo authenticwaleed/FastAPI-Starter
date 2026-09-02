@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -35,6 +36,18 @@ class ConfirmSlugRequest(BaseModel):
     """
 
     confirm_slug: ConfirmSlug
+
+
+class EraseNowRequest(ConfirmSlugRequest):
+    """The slug, and a colleague who agreed to this erasure.
+
+    Its own body rather than an optional field on the one above, because
+    closing an account and destroying one are not the same act with a
+    different flag: closing is reversible for thirty days and needs one
+    person, and this is neither.
+    """
+
+    approval_id: UUID
 
 
 class EraseAfterRequest(BaseModel):
