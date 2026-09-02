@@ -181,6 +181,11 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `…/{workspace_id}/audit` | Its own history, read by staff |
 | GET | `/api/v1/admin/users` | Find an account by address or name |
 | GET | `/api/v1/admin/users/{user_id}` | One account, its workspaces, its sessions |
+| POST | `…/{workspace_id}/support-access` | Ask to read this customer's data |
+| DELETE | `…/{workspace_id}/support-access` | End your own access early |
+| GET | `…/{workspace_id}/support-access` | Who has had access, when, and why |
+| GET | `…/{workspace_id}/conversations` | Their inbox. Needs a live grant |
+| GET | `…/conversations/{conversation_id}/messages` | One thread. Needs a live grant |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -963,6 +968,47 @@ One route ignores the customer's plan on purpose: audit logs are a paid
 feature for a business, and whether support can answer a ticket about
 that business is not a decision its plan gets to make.
 
+#### Support access, and the door through that line
+
+Reading a customer's actual messages needs a **support grant**: a row
+naming one staff member, one workspace, a reason, and an hour it ends.
+Nobody has standing access. Four properties hold it up, and they only
+work as a set:
+
+- **It ends by itself.** `expires_at` is not nullable — a grant with no
+  end is not a grant — and nothing has to run for one to lapse. It simply
+  stops matching the lookup that opens the door. Four hours by default
+  (`ADMIN_SUPPORT_GRANT_HOURS`), hard-capped at
+  `ADMIN_SUPPORT_GRANT_MAX_HOURS`. A request for longer is **refused, not
+  shortened**: somebody who believes they have two days and has four
+  hours finds out mid-incident.
+- **The customer sees it.** Starting and ending a grant each write to the
+  business's own audit log, carrying the staff member's address and their
+  stated reason — which is what turns "a staff member read your account"
+  into an answer. They are their own events (`support.access_granted`,
+  `support.access_ended`) rather than ordinary ones with an odd actor,
+  because such an entry must never be able to look like one of the
+  customer's own colleagues.
+- **It reads and cannot write.** The access carries a `staff_actor`
+  instead of a membership, which makes its role `viewer`; this surface
+  publishes no route that writes tenant data, asserted over the whole
+  router by a test; and any service that did write would raise on
+  `actor_user_id` rather than record a staff member among the customer's
+  own people.
+- **It is not a membership.** No row is written, so a grant never appears
+  in the member list, the seat count, or the bill.
+
+Asking for access is `support` and reviewing who has had it is `admin` —
+the rank that answers tickets is not the rank that oversees whether it
+should have. Every read through a grant is recorded separately from the
+grant itself: the grant says somebody was allowed to look, and the
+entries say what they actually opened.
+
+**One gap worth knowing.** Reading a tenant audit log is a paid feature,
+so a business on the free plan holds those entries without being able to
+read them today. Ungating that is a customer-facing decision about the
+plan's shape and deliberately not made here.
+
 ## Configuration
 
 All configuration is read from the environment, with `.env` as a convenience
@@ -981,6 +1027,8 @@ production.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Short: it is sent with every request |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Idle timeout. Every refresh pushes it out |
 | `ADMIN_SESSION_IDLE_MINUTES` | `60` | The same session, refused by `/admin` alone |
+| `ADMIN_SUPPORT_GRANT_HOURS` | `4` | How long support access lasts by default |
+| `ADMIN_SUPPORT_GRANT_MAX_HOURS` | `24` | Longer is refused, not shortened |
 | `CORS_ORIGINS` | empty | Comma separated. Empty means no cross-origin access |
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |
