@@ -81,6 +81,19 @@ class AuditEvent(StrEnum):
     SUPPORT_ACCESS_GRANTED = "support.access_granted"
     SUPPORT_ACCESS_ENDED = "support.access_ended"
 
+    # Three more acts a business did not do to itself. The platform can
+    # freeze an account, unfreeze it, and bring a closed one back, and a
+    # customer finding any of those out from a support reply rather than
+    # from their own history is the "silent power" the plan forbids.
+    #
+    # Closing is not in this list, because the customer can already close
+    # their own account and `workspace.closed` already records it. When
+    # staff do it the entry carries `by_staff` instead of an actor --
+    # see AuditService.did, which is where that rule lives.
+    WORKSPACE_SUSPENDED = "workspace.suspended"
+    WORKSPACE_UNSUSPENDED = "workspace.unsuspended"
+    WORKSPACE_RESTORED = "workspace.restored"
+
 
 class AuditLog(Base):
     """One administrative act, kept.
