@@ -141,26 +141,43 @@ class AdminAuditService:
         # After the query, so the reader is not shown their own read at
         # the top of the page they asked for. It will be there on the
         # next one, which is where it belongs.
-        self.did(actor, AdminAction.AUDIT_READ, meta=_asked(page, page_size, action))
+        self.did(
+            actor,
+            AdminAction.AUDIT_READ,
+            meta=_asked(
+                page=page,
+                page_size=page_size,
+                action=action,
+                actor_user_id=actor_user_id,
+                workspace_id=workspace_id,
+            ),
+        )
         self._session.commit()
 
         return entries, total
 
 
 def _asked(
+    *,
     page: int,
     page_size: int,
     action: AdminAction | None,
+    actor_user_id: int | None,
+    workspace_id: uuid.UUID | None,
 ) -> dict[str, Any]:
-    """What was looked at, which is the useful half of a read entry.
+    """What was looked for, which is the useful half of a read entry.
 
-    "Somebody read the log" is not worth a row on its own. Which page and
-    which narrowing turns it into something an investigation can follow.
+    "Somebody read the log" is not worth a row on its own. What they
+    narrowed it to is: a colleague reading every entry about one
+    workspace, or about one other colleague, is the thing an
+    investigation follows, and the page number alone would not show it.
     """
     return {
         "page": page,
         "page_size": page_size,
         "action": action.value if action else None,
+        "actor_user_id": actor_user_id,
+        "workspace_id": str(workspace_id) if workspace_id else None,
     }
 
 
