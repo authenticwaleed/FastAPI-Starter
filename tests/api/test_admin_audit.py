@@ -27,11 +27,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
+from app.models.job import JobKind
 from app.models.staff_member import StaffRole
 from app.models.subscription import BillingProviderName
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
+from app.repositories.job_repository import JobRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_membership_repository import (
@@ -61,6 +63,25 @@ def acme(
     stops the log filling with entries about ids that never existed.
     """
     return Tenant(client, user_repository, membership_repository, "acme-fashion")
+
+
+def _a_job(session: Session) -> str:
+    """One pending job, so cancel and retry have something to act on.
+
+    Pending rather than failed, and in that order in the table below:
+    cancel refuses anything not waiting, and retry refuses anything
+    running or succeeded -- so cancelling first leaves exactly the state
+    the retry after it accepts.
+    """
+    job = JobRepository(session).enqueue(
+        kind=JobKind.DELIVER_MESSAGE,
+        workspace_id=None,
+        payload={"message_id": str(uuid.uuid4())},
+        run_at=datetime.now(UTC),
+    )
+    session.flush()
+
+    return str(job.id)
 
 
 def _a_billing_delivery(session: Session) -> str:
@@ -99,6 +120,7 @@ def _calls(
     conversation_id: str,
     slug: str,
     billing_event_id: str,
+    job_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -284,6 +306,36 @@ def _calls(
             lambda: console.delete(f"/workspaces/{workspace_id}/plan-override"),
             AdminAction.PLAN_OVERRIDE_REMOVED,
         ),
+        # Operations. The queue read, then one job acted on, then the
+        # pages that answer "is anything wrong".
+        ("GET", f"{ADMIN}/jobs"): (
+            lambda: console.get("/jobs"),
+            AdminAction.JOBS_SEARCHED,
+        ),
+        ("GET", f"{ADMIN}/jobs/{{job_id}}"): (
+            lambda: console.get(f"/jobs/{job_id}"),
+            AdminAction.JOB_READ,
+        ),
+        ("POST", f"{ADMIN}/jobs/{{job_id}}/cancel"): (
+            lambda: console.post(f"/jobs/{job_id}/cancel", {}),
+            AdminAction.JOB_CANCELLED,
+        ),
+        ("POST", f"{ADMIN}/jobs/{{job_id}}/retry"): (
+            lambda: console.post(f"/jobs/{job_id}/retry", {}),
+            AdminAction.JOB_RETRIED,
+        ),
+        ("GET", f"{ADMIN}/webhooks/failures"): (
+            lambda: console.get("/webhooks/failures"),
+            AdminAction.WEBHOOK_FAILURES_READ,
+        ),
+        ("GET", f"{ADMIN}/integrations/whatsapp"): (
+            lambda: console.get("/integrations/whatsapp"),
+            AdminAction.WHATSAPP_HEALTH_READ,
+        ),
+        ("GET", f"{ADMIN}/health"): (
+            lambda: console.get("/health"),
+            AdminAction.HEALTH_READ,
+        ),
         ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
             lambda: console.post(
                 f"/workspaces/{workspace_id}/erase-now",
@@ -317,6 +369,7 @@ def test_every_published_route_has_a_case(
                 _a_conversation(acme),
                 "acme-fashion",
                 _a_billing_delivery(db_session),
+                _a_job(db_session),
             )
         )
         == operations()
@@ -345,6 +398,7 @@ def test_every_route_writes_exactly_one_entry(
         _a_conversation(acme),
         "acme-fashion",
         _a_billing_delivery(db_session),
+        _a_job(db_session),
     ).items():
         before = len(entries(db_session))
 
