@@ -39,7 +39,6 @@ from app.db.session import SessionDep
 from app.models.admin_audit_log import AdminAction
 from app.models.user import User
 from app.models.user_session import SessionEndReason
-from app.models.workspace import Workspace
 from app.repositories.admin_console_repository import (
     AdminConsoleRepository,
     WorkspaceRow,
@@ -81,7 +80,7 @@ class AdminLifecycleService:
         workspace_id: uuid.UUID,
         *,
         reason: str,
-    ) -> Workspace:
+    ) -> WorkspaceRow:
         """Freeze an account: reachable, readable, unchangeable.
 
         The reason is required and reaches the customer's own log. A
@@ -89,12 +88,12 @@ class AdminLifecycleService:
         open a ticket to be told something the platform already knew.
         """
         row = self._workspace(workspace_id)
-        workspace = self._workspaces.suspend(
+
+        self._workspaces.suspend(
             row.workspace,
             by_staff=actor.user.email,
             reason=reason,
         )
-
         self._record(
             actor,
             AdminAction.WORKSPACE_SUSPENDED,
@@ -102,15 +101,18 @@ class AdminLifecycleService:
             {"reason": reason},
         )
 
-        return workspace
+        # The row, not the workspace. It carries the resolved plan
+        # alongside, so a lifecycle call answers with exactly what the
+        # console's own search result would say.
+        return row
 
-    def unsuspend(self, actor: StaffActor, workspace_id: uuid.UUID) -> Workspace:
+    def unsuspend(self, actor: StaffActor, workspace_id: uuid.UUID) -> WorkspaceRow:
         row = self._workspace(workspace_id)
-        workspace = self._workspaces.unsuspend(row.workspace, by_staff=actor.user.email)
 
+        self._workspaces.unsuspend(row.workspace, by_staff=actor.user.email)
         self._record(actor, AdminAction.WORKSPACE_UNSUSPENDED, row, {})
 
-        return workspace
+        return row
 
     def cancel(
         self,
@@ -118,7 +120,7 @@ class AdminLifecycleService:
         workspace_id: uuid.UUID,
         *,
         confirm_slug: str,
-    ) -> Workspace:
+    ) -> WorkspaceRow:
         """Close an account on the customer's behalf, and start the clock.
 
         Through the same path a customer's own close takes, so the grace
@@ -127,7 +129,7 @@ class AdminLifecycleService:
         list of workspaces.
         """
         row = self._confirmed(actor, workspace_id, confirm_slug)
-        workspace = self._workspaces.close_for_staff(
+        closed = self._workspaces.close_for_staff(
             row.workspace,
             by_staff=actor.user.email,
         )
@@ -137,22 +139,22 @@ class AdminLifecycleService:
             AdminAction.WORKSPACE_CANCELLED,
             row,
             {
-                "erase_after": workspace.erase_after.isoformat()
-                if workspace.erase_after
+                "erase_after": closed.erase_after.isoformat()
+                if closed.erase_after
                 else None
             },
         )
 
-        return workspace
+        return row
 
-    def restore(self, actor: StaffActor, workspace_id: uuid.UUID) -> Workspace:
+    def restore(self, actor: StaffActor, workspace_id: uuid.UUID) -> WorkspaceRow:
         """Bring a closed account back, if its date has not passed."""
         row = self._workspace(workspace_id)
-        workspace = self._workspaces.restore(row.workspace, by_staff=actor.user.email)
 
+        self._workspaces.restore(row.workspace, by_staff=actor.user.email)
         self._record(actor, AdminAction.WORKSPACE_RESTORED, row, {})
 
-        return workspace
+        return row
 
     def reschedule_erasure(
         self,
@@ -160,7 +162,7 @@ class AdminLifecycleService:
         workspace_id: uuid.UUID,
         *,
         erase_after: datetime,
-    ) -> Workspace:
+    ) -> WorkspaceRow:
         """Move the date a closed account's records are destroyed.
 
         Both directions, because both happen: a customer asking to be
@@ -169,12 +171,12 @@ class AdminLifecycleService:
         """
         row = self._workspace(workspace_id)
         was = row.workspace.erase_after
-        workspace = self._workspaces.reschedule_erasure(
+
+        self._workspaces.reschedule_erasure(
             row.workspace,
             by_staff=actor.user.email,
             erase_after=erase_after,
         )
-
         self._record(
             actor,
             AdminAction.WORKSPACE_ERASE_AFTER_CHANGED,
@@ -185,7 +187,7 @@ class AdminLifecycleService:
             },
         )
 
-        return workspace
+        return row
 
     def erase_now(
         self,
