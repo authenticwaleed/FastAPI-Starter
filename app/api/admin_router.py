@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limit import limit_by_staff
 from app.api.routes.admin import (
+    alerts,
     analytics,
     approvals,
     audit,
@@ -49,6 +50,8 @@ admin_router.include_router(audit.router)
 # Two-person approval, which the erasure and the owner promotion below
 # both spend.
 admin_router.include_router(approvals.router)
+# What the platform's own log says about the platform's own people.
+admin_router.include_router(alerts.router)
 # The read-only console. Two subjects rather than one, because a support
 # ticket arrives from either direction: sometimes it names a business,
 # and sometimes it is somebody who cannot sign in and does not know which

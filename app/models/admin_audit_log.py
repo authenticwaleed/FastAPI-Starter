@@ -147,6 +147,9 @@ class AdminAction(StrEnum):
     APPROVAL_SPENT = "approval.spent"
     APPROVALS_READ = "approval.listed"
 
+    # Looking at the platform's own behaviour rather than at a customer's.
+    ALERTS_READ = "alerts.read"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.

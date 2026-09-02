@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -122,6 +123,41 @@ class AdminAuditLogRepository:
             )
             or 0
         )
+
+    def busiest_readers(
+        self,
+        *,
+        since: datetime,
+        actions: Sequence[AdminAction],
+    ) -> list[tuple[int | None, str | None, int]]:
+        """Who read how many distinct workspaces, since when.
+
+        Distinct workspaces rather than requests, which is the whole
+        point of the number: somebody refreshing one customer's page
+        forty times is working, and somebody opening forty customers is
+        either doing a migration or going through the list.
+
+        Grouped by the actor and ordered by the count, so the console
+        shows the top of the list and nothing else. This is a detection
+        query, not a report -- what it produces is a question for a
+        person rather than a refusal.
+        """
+        rows = self._session.execute(
+            select(
+                AdminAuditLog.actor_user_id,
+                AdminAuditLog.actor_email,
+                func.count(func.distinct(AdminAuditLog.workspace_id)),
+            )
+            .where(
+                AdminAuditLog.created_at >= since,
+                AdminAuditLog.action.in_(actions),
+                AdminAuditLog.workspace_id.is_not(None),
+            )
+            .group_by(AdminAuditLog.actor_user_id, AdminAuditLog.actor_email)
+            .order_by(func.count(func.distinct(AdminAuditLog.workspace_id)).desc())
+        ).all()
+
+        return [(user_id, email, count) for user_id, email, count in rows]
 
     def _filters(
         self,
