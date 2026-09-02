@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.models.job import Job, JobKind, JobStatus
@@ -173,6 +173,102 @@ class JobRepository:
             or 0
         )
 
+    def oldest_pending_age(self, *, now: datetime) -> float | None:
+        """How long the oldest due job has been waiting, in seconds.
+
+        The other half of queue depth, and the half that says whether
+        anything is wrong. A depth of two hundred that drains in a minute
+        is a busy afternoon; a depth of three where the oldest has been
+        waiting an hour is a worker that has stopped, and the two are
+        indistinguishable from the count alone.
+
+        None when nothing is due, which is not zero: zero would read as
+        "something is waiting and it just arrived".
+        """
+        oldest = self._session.scalar(
+            select(func.min(Job.run_at)).where(
+                Job.status == JobStatus.PENDING,
+                Job.run_at <= now,
+            )
+        )
+
+        return None if oldest is None else (now - oldest).total_seconds()
+
+    def search(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        kind: JobKind | None = None,
+        status: JobStatus | None = None,
+        workspace_id: uuid.UUID | None = None,
+    ) -> Sequence[Job]:
+        """Jobs across every workspace, newest first.
+
+        Not workspace-scoped, unlike `list_for_workspace` beside it, and
+        that is what makes it the operations console's query rather than
+        a tenant's: half the rows here name no workspace at all, because
+        the recurring sweeps belong to the platform.
+        """
+        return self._session.scalars(
+            select(Job)
+            .where(*_search_filters(kind, status, workspace_id))
+            .order_by(Job.created_at.desc(), Job.id)
+            .limit(limit)
+            .offset(offset)
+        ).all()
+
+    def count_matching(
+        self,
+        *,
+        kind: JobKind | None = None,
+        status: JobStatus | None = None,
+        workspace_id: uuid.UUID | None = None,
+    ) -> int:
+        return (
+            self._session.scalar(
+                select(func.count())
+                .select_from(Job)
+                .where(*_search_filters(kind, status, workspace_id))
+            )
+            or 0
+        )
+
+    def requeue(self, job: Job, *, now: datetime) -> Job:
+        """Put a job back in the queue, with its attempts forgiven.
+
+        `dedupe_key` is left exactly as it is, which is what the plan
+        means by respecting it: the unique index on that column is what
+        stops a second row for the same work existing, and clearing it
+        here would let the next sweep enqueue a twin that races this one.
+
+        `started_at` and `finished_at` are cleared with the error,
+        because leaving them would describe an attempt that is no longer
+        this row's most recent.
+        """
+        job.status = JobStatus.PENDING
+        job.attempts = 0
+        job.run_at = now
+        job.started_at = None
+        job.finished_at = None
+        job.last_error = None
+        self._session.flush()
+
+        return job
+
+    def cancel(self, job: Job, *, now: datetime) -> Job:
+        """Stop a job that has not started.
+
+        The row is kept, like a failed one: a queue that deletes what
+        somebody decided not to do is a queue where that decision cannot
+        be found afterwards.
+        """
+        job.status = JobStatus.CANCELLED
+        job.finished_at = now
+        self._session.flush()
+
+        return job
+
     def get(self, job_id: uuid.UUID) -> Job | None:
         return self._session.get(Job, job_id)
 
@@ -190,3 +286,23 @@ class JobRepository:
         return self._session.scalars(
             select(Job).where(*where).order_by(Job.created_at.desc(), Job.id)
         ).all()
+
+
+def _search_filters(
+    kind: JobKind | None,
+    status: JobStatus | None,
+    workspace_id: uuid.UUID | None,
+) -> list[ColumnElement[bool]]:
+    """The same narrowing for a page of jobs and its total."""
+    where: list[ColumnElement[bool]] = []
+
+    if kind is not None:
+        where.append(Job.kind == kind)
+
+    if status is not None:
+        where.append(Job.status == status)
+
+    if workspace_id is not None:
+        where.append(Job.workspace_id == workspace_id)
+
+    return where
