@@ -18,6 +18,7 @@ from app.api.routes.admin import (
     billing,
     conversations,
     lifecycle,
+    operations,
     staff,
     support_access,
     users,
@@ -64,6 +65,9 @@ admin_router.include_router(conversations.router)
 # Billing before lifecycle, like every other workspace-scoped router:
 # `/plan-override` is a literal that the bare `/workspaces/{id}` prefix
 # below would otherwise be free to shadow.
+# Operations: the queue, the refused deliveries, and the health page
+# a person reads rather than an orchestrator.
+admin_router.include_router(operations.router)
 admin_router.include_router(billing.router)
 admin_router.include_router(billing.override_router)
 admin_router.include_router(lifecycle.router)
