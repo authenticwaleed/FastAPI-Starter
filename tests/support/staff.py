@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.main import create_app
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.staff_member import StaffMember, StaffRole
 from app.repositories.staff_repository import StaffRepository
@@ -114,6 +115,40 @@ def a_colleague(client: TestClient, session: Session, email: str) -> int:
     assert user is not None
 
     return user.id
+
+
+def seconded(
+    requester: Console,
+    approver: Console,
+    *,
+    action: ApprovableAction,
+    subject: str,
+    role: str | None = None,
+) -> str:
+    """One approval, raised by one console and agreed to by another.
+
+    Three lines in every test that touches an erasure or an owner
+    promotion, and worth a helper for a reason beyond brevity: the two
+    consoles have to be different people, and a helper that takes both
+    makes it impossible to write the test that accidentally uses one.
+    """
+    body: dict[str, Any] = {
+        "action": action.value,
+        "subject": subject,
+        "reason": "Agreed in the incident channel before doing it",
+    }
+
+    if role is not None:
+        body["role"] = role
+
+    raised = requester.post("/approvals", body)
+    assert raised.status_code == 201, raised.text
+
+    approval_id = str(raised.json()["id"])
+    agreed = approver.post(f"/approvals/{approval_id}/approve", {})
+    assert agreed.status_code == 200, agreed.text
+
+    return approval_id
 
 
 def entries(
