@@ -93,9 +93,15 @@ class WorkspaceAccess:
         A staff actor reads, whatever their rank on the platform: a
         support grant is permission to look at a customer's account, not
         permission to act as the customer. `VIEWER` is exactly that --
-        "reads and nothing else" -- so every existing role check refuses
-        them from writing without any of those checks having to learn
-        that staff exist.
+        "reads and nothing else" -- so every role check already written
+        refuses them, and none of those checks had to learn that staff
+        exist.
+
+        Not the whole guard on its own, and it is worth saying so here.
+        Several services take their role check from the route rather than
+        repeating it, so this stops a staff actor at every tenant route
+        and at every service that checks; `actor_user_id` below is what
+        stops one that does neither.
         """
         if self.membership is None:
             return WorkspaceRole.VIEWER

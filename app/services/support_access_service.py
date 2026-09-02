@@ -21,10 +21,19 @@ business on the free plan holds the entry without being able to read it
 today. Ungating it is a customer-facing change and belongs to whoever
 decides the plan's shape, not here.
 
-**It reads and nothing else.** The access this hands out carries a staff
-actor rather than a membership, which makes its role `viewer` -- so every
-write path in the application already refuses it, without any of them
-having to learn that staff exist.
+**It reads and nothing else.** Two things hold that up, and it is worth
+being exact about which, because a comment that overstates this is worse
+than none. The access handed out carries a staff actor rather than a
+membership, so its role is `viewer` -- which every role check on a
+tenant route refuses. And nothing on the platform surface calls a method
+that writes: the only two that take this access are the inbox and the
+thread below, both read-only, and a test asserts by introspection that
+no admin route publishes a verb that could reach tenant data.
+
+Where a service does write and record who did it, `actor_user_id`
+raises rather than naming a staff member among the customer's own people
+-- so the failure mode of a mistake here is a refusal, not a forged
+entry.
 
 **It is invisible to the team.** No membership row is written, so a grant
 never appears in the customer's member list, in their seat count, or in

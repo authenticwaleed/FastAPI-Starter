@@ -95,9 +95,12 @@ def list_workspace_messages(
     "they read the inbox" and "they read this customer's thread with this
     person" are different answers to give afterwards.
 
-    Read-only, and not by convention: the access this runs on carries a
-    staff actor rather than a membership, which makes its role `viewer`,
-    and every write in the application already refuses a viewer.
+    Read-only, and not by convention. The access this runs on carries a
+    staff actor rather than a membership, so its role is `viewer`; this
+    surface publishes no route that writes tenant data, which a test
+    asserts over the whole router; and a service that did write would
+    raise on `actor_user_id` rather than record a staff member as one of
+    the customer's own people.
     """
     messages, total = service.messages(
         actor,
