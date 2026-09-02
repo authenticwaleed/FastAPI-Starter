@@ -12,6 +12,7 @@ from app.models.subscription import (
     Subscription,
     SubscriptionStatus,
 )
+from app.models.workspace import Workspace
 from app.services.plans import PlanTier
 
 
@@ -173,22 +174,31 @@ class SubscriptionRepository:
         offset: int,
         status: SubscriptionStatus | None = None,
         plan: PlanTier | None = None,
-    ) -> Sequence[Subscription]:
-        """Every subscription on the platform, newest first.
+    ) -> list[tuple[Subscription, str]]:
+        """Every subscription on the platform, newest first, with its slug.
 
         `plan` filters on what the provider says rather than on what the
         workspace is entitled to, and the difference is the point of this
         screen: it is the provider's side of the ledger, and the console's
         workspace search is the other. A business comped onto Business
         appears here on whatever it is actually paying for.
+
+        Joined to the workspace rather than looked up per row, and an
+        inner join because the foreign key cascades -- a subscription
+        cannot outlive its workspace. Without the slug this is a list of
+        provider ids, and every other admin route is keyed on the
+        workspace it would send somebody to next.
         """
-        return self._session.scalars(
-            select(Subscription)
+        rows = self._session.execute(
+            select(Subscription, Workspace.slug)
+            .join(Workspace, Workspace.id == Subscription.workspace_id)
             .where(*_subscription_filters(status, plan))
             .order_by(Subscription.created_at.desc(), Subscription.id)
             .limit(limit)
             .offset(offset)
         ).all()
+
+        return [(subscription, slug) for subscription, slug in rows]
 
     def count_subscriptions(
         self,

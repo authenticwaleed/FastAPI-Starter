@@ -70,7 +70,7 @@ class AdminBillingService:
         plan: PlanTier | None = None,
         page: int = 1,
         page_size: int = 50,
-    ) -> tuple[Sequence[Subscription], int]:
+    ) -> tuple[list[tuple[Subscription, str]], int]:
         """Every subscription, filtered by what the provider says.
 
         `past_due` is the filter this screen exists for: it is the list of

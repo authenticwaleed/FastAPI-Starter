@@ -60,7 +60,7 @@ class AdminSubscriptionRow(AdminSubscription):
     before using one of them.
     """
 
-    workspace_slug: str | None
+    workspace_slug: str
 
 
 class AdminSubscriptionPage(BaseModel):
