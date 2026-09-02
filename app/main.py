@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.api.admin_router import admin_router
 from app.api.docs import register_docs
 from app.api.errors import register_exception_handlers
 from app.api.middleware import RequestContext, SecurityHeaders
@@ -129,6 +130,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(
         api_router,
+        prefix="/api/v1",
+    )
+    # Mounted separately, at the same version prefix. Same process and
+    # same deployment, which is what this plan assumes and the simplest
+    # thing that works; a separate one would let the network keep this
+    # surface off the public internet entirely, and nothing above the
+    # mount would have to change for that.
+    #
+    # What the separation buys today is that no tenant include can reach
+    # an admin path. `api_router` is a customer's own data behind a
+    # membership; `admin_router` is every customer's data behind a staff
+    # row, and the two should not be one list somebody appends to.
+    app.include_router(
+        admin_router,
         prefix="/api/v1",
     )
 
