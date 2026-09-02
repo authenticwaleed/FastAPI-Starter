@@ -54,6 +54,7 @@ from app.models.subscription import (
     Subscription,
     SubscriptionStatus,
 )
+from app.models.support_grant import SupportGrant
 from app.models.usage_record import UsageMetric, UsageRecord
 from app.models.user import User
 from app.models.user_session import (
@@ -130,6 +131,7 @@ __all__ = [
     "StaffRole",
     "Subscription",
     "SubscriptionStatus",
+    "SupportGrant",
     "UsageMetric",
     "UsageRecord",
     "User",
