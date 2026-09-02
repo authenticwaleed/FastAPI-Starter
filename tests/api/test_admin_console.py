@@ -26,7 +26,7 @@ from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
 )
 from app.services.plans import PlanTier
-from tests.support.staff import Console
+from tests.support.staff import ADMIN, Console, operations
 from tests.support.tenants import Tenant
 
 TOKEN = "a-provider-token-nobody-should-see"
@@ -494,28 +494,52 @@ def test_no_response_about_a_person_carries_a_password(
 # --- what the console still may not do --------------------------------------
 
 
-def test_the_console_returns_no_customer_content(
+def test_the_console_itself_returns_no_customer_content(
     console: Console,
     acme: Tenant,
 ) -> None:
-    """Phase A2 stops at the line, and this is the line.
+    """Phase A2 stopped at a line, and Phase A3 is the only door through it.
 
-    Aggregates and metadata. A conversation, a message, a contact or a
-    document is Phase A3, behind a grant with a reason and an expiry that
-    the customer can see in their own audit log.
+    Two paths on this surface return what a customer's own customers
+    wrote, and both need a live, time-boxed grant with a reason the
+    customer can read in their own audit log. Everything else is
+    aggregates and metadata.
+
+    Asserted as an exact list rather than as "none", because the useful
+    property now is that the set does not quietly grow: a third path
+    returning customer content should fail here and be a decision
+    somebody makes on purpose.
     """
     acme.contact("+923001234567", full_name="Ayesha Khan")
 
     published = {
         path
-        for path in console.client.app.openapi()["paths"]  # type: ignore[attr-defined]
-        if path.startswith("/api/v1/admin/")
+        for _, path in operations()
+        if any(
+            word in path
+            for word in ("conversations", "messages", "contacts", "knowledge")
+        )
     }
-    forbidden = ("conversations", "messages", "contacts", "knowledge")
 
-    assert not [path for path in published if any(w in path for w in forbidden)]
+    assert published == {
+        f"{ADMIN}/workspaces/{{workspace_id}}/conversations",
+        f"{ADMIN}/workspaces/{{workspace_id}}/conversations"
+        "/{conversation_id}/messages",
+    }
 
-    # And the one route that counts them does not name them either.
+    # And without a grant, neither of them opens.
+    for path in sorted(published):
+        response = console.get(
+            path.removeprefix(ADMIN).format(
+                workspace_id=acme.workspace_id,
+                conversation_id=uuid.uuid4(),
+            )
+        )
+
+        assert response.status_code == 403, path
+        assert response.json()["code"] == "support_access_required"
+
+    # The route that counts a customer's contacts still does not name one.
     body = console.get(f"/workspaces/{acme.workspace_id}").text
 
     assert "Ayesha" not in body
