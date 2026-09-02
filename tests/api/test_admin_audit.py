@@ -28,9 +28,11 @@ from sqlalchemy.orm import Session
 
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.staff_member import StaffRole
+from app.models.subscription import BillingProviderName
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
@@ -61,6 +63,23 @@ def acme(
     return Tenant(client, user_repository, membership_repository, "acme-fashion")
 
 
+def _a_billing_delivery(session: Session) -> str:
+    """One stored delivery, so the replay route has something to re-apply.
+
+    Recorded through the repository rather than by walking a checkout: a
+    replay is about a row in `billing_events`, and how it got there is
+    the payment webhook's own test.
+    """
+    event = SubscriptionRepository(session).record_event(
+        provider=BillingProviderName.STRIPE,
+        provider_event_id="evt_for_the_audit_case",
+        event_type="customer.subscription.updated",
+    )
+    session.flush()
+
+    return str(event.id)
+
+
 def _a_conversation(tenant: Tenant) -> str:
     """One real thread, so the messages route has something to open."""
     response = tenant.client.post(
@@ -79,6 +98,7 @@ def _calls(
     workspace_id: str,
     conversation_id: str,
     slug: str,
+    billing_event_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -239,6 +259,31 @@ def _calls(
             lambda: console.post(f"/users/{colleague}/verify-email", {}),
             AdminAction.USER_EMAIL_VERIFIED,
         ),
+        # Billing. The ledger is not about any one workspace; a granted
+        # plan is about exactly one.
+        ("GET", f"{ADMIN}/billing/subscriptions"): (
+            lambda: console.get("/billing/subscriptions"),
+            AdminAction.SUBSCRIPTIONS_SEARCHED,
+        ),
+        ("GET", f"{ADMIN}/billing/events"): (
+            lambda: console.get("/billing/events"),
+            AdminAction.BILLING_EVENTS_READ,
+        ),
+        ("POST", f"{ADMIN}/billing/events/{{event_id}}/replay"): (
+            lambda: console.post(f"/billing/events/{billing_event_id}/replay", {}),
+            AdminAction.BILLING_EVENT_REPLAYED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/plan-override"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/plan-override",
+                {"plan": "growth", "reason": "Pilot until the contract lands"},
+            ),
+            AdminAction.PLAN_OVERRIDE_GRANTED,
+        ),
+        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/plan-override"): (
+            lambda: console.delete(f"/workspaces/{workspace_id}/plan-override"),
+            AdminAction.PLAN_OVERRIDE_REMOVED,
+        ),
         ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
             lambda: console.post(
                 f"/workspaces/{workspace_id}/erase-now",
@@ -264,7 +309,16 @@ def test_every_published_route_has_a_case(
     colleague = a_colleague(client, db_session, "colleague@example.com")
 
     assert (
-        sorted(_calls(owner, colleague, acme.workspace_id, _a_conversation(acme)))
+        sorted(
+            _calls(
+                owner,
+                colleague,
+                acme.workspace_id,
+                _a_conversation(acme),
+                "acme-fashion",
+                _a_billing_delivery(db_session),
+            )
+        )
         == operations()
     )
 
@@ -290,6 +344,7 @@ def test_every_route_writes_exactly_one_entry(
         acme.workspace_id,
         _a_conversation(acme),
         "acme-fashion",
+        _a_billing_delivery(db_session),
     ).items():
         before = len(entries(db_session))
 
