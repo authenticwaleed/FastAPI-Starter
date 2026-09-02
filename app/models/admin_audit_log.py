@@ -85,6 +85,28 @@ class AdminAction(StrEnum):
     CONVERSATIONS_READ = "workspace.conversations_read"
     MESSAGES_READ = "workspace.messages_read"
 
+    # Lifecycle. The first entries in this table that change a customer's
+    # account rather than read it, and the last of them destroys it.
+    #
+    # `WORKSPACE_ERASE_REFUSED` is the one entry here written for
+    # something that did *not* happen, which the plan asks for by name:
+    # somebody typing the wrong slug into an erasure is either tired or
+    # in the wrong window, and both are worth a row.
+    WORKSPACE_SUSPENDED = "workspace.suspended"
+    WORKSPACE_UNSUSPENDED = "workspace.unsuspended"
+    WORKSPACE_CANCELLED = "workspace.cancelled"
+    WORKSPACE_RESTORED = "workspace.restored"
+    WORKSPACE_ERASE_AFTER_CHANGED = "workspace.erase_after_changed"
+    WORKSPACE_ERASED = "workspace.erased"
+    WORKSPACE_ERASE_REFUSED = "workspace.erase_refused"
+
+    # And what can be done to one account, none of which belongs to a
+    # workspace -- which is why the log's workspace reference is nullable.
+    USER_DEACTIVATED = "user.deactivated"
+    USER_ACTIVATED = "user.activated"
+    USER_SESSIONS_REVOKED = "user.sessions_revoked"
+    USER_EMAIL_VERIFIED = "user.email_verified"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.
