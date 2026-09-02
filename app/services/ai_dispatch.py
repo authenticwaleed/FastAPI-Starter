@@ -30,6 +30,7 @@ from app.db.session import get_session_factory
 from app.integrations.embeddings.base import EmbeddingProvider
 from app.integrations.llm.base import ReplyWriter
 from app.integrations.messaging.base import MessagingProvider
+from app.models.workspace import WorkspaceStatus
 from app.repositories.ai_response_log_repository import AiResponseLogRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.contact_repository import ContactRepository
@@ -276,6 +277,28 @@ def _answer(
 
             if workspace is None:
                 logger.warning("A background reply named a workspace that is gone")
+                return
+
+            if workspace.status == WorkspaceStatus.SUSPENDED:
+                # The other half of what a suspension means, and the one
+                # the plan asks to be decided explicitly: accept and
+                # store, do not auto-reply.
+                #
+                # The message is already recorded by the time this runs.
+                # Refusing to ingest it would lose a customer's question
+                # over their supplier's unpaid invoice, which is the
+                # worst thing a suspension could do to somebody who is
+                # not party to it. Answering on the business's behalf
+                # while its account is frozen would be the second worst.
+                #
+                # So it sits unanswered in an inbox the business can
+                # still read, which is exactly where a person would find
+                # it.
+                logger.info(
+                    "Workspace %s is suspended; conversation %s is left for a person",
+                    workspace_id,
+                    conversation_id,
+                )
                 return
 
             service = build_ai_response_service(
