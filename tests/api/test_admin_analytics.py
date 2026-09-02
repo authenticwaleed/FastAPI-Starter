@@ -199,10 +199,19 @@ def test_ai_spend_is_in_tokens_and_says_which_model(
     changes without a redeploy and differs per model, so a dollar figure
     computed here would look authoritative and be wrong within a quarter.
     """
+    # A real thread: `ai_response_logs` carries a composite foreign key
+    # tying the conversation to the same workspace, which is the tenant
+    # boundary drawn in the schema rather than in code.
+    conversation_id = acme.client.post(
+        acme.path("conversations"),
+        json={"contact_id": acme.contact()},
+        headers=acme.owner_headers,
+    ).json()["id"]
+
     db_session.add(
         AiResponseLog(
             workspace_id=uuid.UUID(acme.workspace_id),
-            conversation_id=uuid.uuid4(),
+            conversation_id=uuid.UUID(conversation_id),
             decision=AiDecision.ANSWERED,
             prompt_version="v1",
             model="claude-opus-5",
