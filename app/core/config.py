@@ -37,6 +37,20 @@ class Settings(BaseSettings):
     # signed in for a year.
     refresh_token_expire_days: int = 30
 
+    # How long a session may sit unused before the platform console
+    # stops accepting it. Staff sign in through the ordinary login and
+    # get an ordinary session -- one account, one password -- so this is
+    # the whole of "an admin session has its own policy": the same
+    # session keeps working on the tenant surface and is refused here.
+    #
+    # An hour, against the tenant side's thirty days, and the difference
+    # is what the two can reach. A console that can read any customer's
+    # account should not still be open on an unattended laptop after
+    # lunch. Note that `last_used_at` moves on token rotation rather than
+    # on every request, so this is accurate to about the access token's
+    # lifetime, which is what makes an hour the shortest useful value.
+    admin_session_idle_minutes: int = 60
+
     # How long an invitation link stays usable. A week is long enough to
     # survive somebody being on holiday and short enough that a link found
     # in an old mailbox is no longer a way into a workspace.
@@ -191,6 +205,13 @@ class Settings(BaseSettings):
     rate_limit_ai_per_minute: int = 60
     rate_limit_search_per_minute: int = 60
     rate_limit_uploads_per_hour: int = 120
+
+    # Per staff member, not per address: every one of these is
+    # authenticated, and several of them write an audit row on a GET, so
+    # what a runaway console costs is rows in the platform's own log.
+    # Generous, because a support engineer working through a ticket
+    # clicks a great deal.
+    rate_limit_admin_per_minute: int = 120
 
     # Per client address, and counted only against deliveries that fail
     # to authenticate. A provider sending real traffic from a handful of
