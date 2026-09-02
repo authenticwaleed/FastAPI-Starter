@@ -78,6 +78,23 @@ class UserRepository:
 
         return user
 
+    def set_active(self, user: User, *, active: bool) -> User:
+        """Turn an account off, or back on.
+
+        Its own method for the reason `clear_email_verification` is one:
+        `update` treats `None` as "leave this alone", so there is no value
+        it could be passed that means "set this to false".
+
+        Nothing here signs the account out. That is deliberate and it is
+        the caller's job, in the same transaction -- a deactivated account
+        that stays signed in is not deactivated, and pairing the two here
+        would hide a decision the platform surface has to make out loud.
+        """
+        user.is_active = active
+        self._session.flush()
+
+        return user
+
     def mark_email_verified(self, user: User, at: datetime) -> User:
         """Record that somebody proved they read mail at this address."""
         user.email_verified_at = at
