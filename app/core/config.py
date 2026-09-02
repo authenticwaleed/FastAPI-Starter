@@ -66,6 +66,36 @@ class Settings(BaseSettings):
     admin_support_grant_hours: int = 4
     admin_support_grant_max_hours: int = 24
 
+    # How long a two-person approval stays usable once a colleague has
+    # granted it. Thirty minutes, because the point of the second person
+    # is that they are looking at the same situation -- an approval
+    # collected in the morning and spent in the evening is one signature
+    # on a decision, not two.
+    admin_approval_expire_minutes: int = 30
+
+    # Addresses allowed to reach /api/v1/admin. Empty means anywhere,
+    # which is the default and has to be: a deployment that shipped with
+    # an allowlist would lock its own operator out on the first day.
+    #
+    # Where it earns its place is a platform console reachable from the
+    # public internet -- the address is a second factor that costs
+    # nothing and cannot be phished. Behind a proxy, uvicorn needs
+    # `--proxy-headers` or every caller looks like the load balancer.
+    admin_ip_allowlist: Annotated[list[str], NoDecode] = []
+
+    # The hours a support grant is unremarkable in, as UTC hours. A grant
+    # outside them is not refused -- incidents do not keep office hours
+    # -- it is logged at warning, which is what "alert on unusual
+    # patterns" comes to in a system whose alerting channel is its log
+    # stream.
+    admin_working_hours_utc: Annotated[list[int], NoDecode] = list(range(6, 19))
+
+    # How many workspaces one staff member may read in an hour before the
+    # console says so. Not a limit: reading forty accounts in an hour is
+    # either a migration or somebody going through the customer list, and
+    # the difference is a question for a person rather than a refusal.
+    admin_workspace_reads_per_hour: int = 20
+
     # How long an invitation link stays usable. A week is long enough to
     # survive somebody being on holiday and short enough that a link found
     # in an old mailbox is no longer a way into a workspace.
@@ -353,7 +383,28 @@ class Settings(BaseSettings):
 
         return value
 
-    @field_validator("cors_origins", "allowed_hosts", mode="before")
+    @field_validator("admin_working_hours_utc", mode="before")
+    @classmethod
+    def _accept_a_comma_separated_hour_list(cls, value: Any) -> Any:
+        """Take `9,10,11` as well as the JSON pydantic expects.
+
+        The same accommodation the string lists below get, and for the
+        same reason: this is what fits in a .env file and what people
+        reach for first.
+        """
+        if not isinstance(value, str):
+            return value
+
+        text = value.strip()
+
+        if text.startswith("["):
+            return json.loads(text)
+
+        return [int(hour.strip()) for hour in text.split(",") if hour.strip()]
+
+    @field_validator(
+        "cors_origins", "allowed_hosts", "admin_ip_allowlist", mode="before"
+    )
     @classmethod
     def _accept_a_comma_separated_list(cls, value: Any) -> Any:
         """Take `a,b` as well as the JSON `["a","b"]` pydantic expects.
