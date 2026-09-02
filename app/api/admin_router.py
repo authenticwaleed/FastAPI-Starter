@@ -13,7 +13,14 @@ Two routers, one mount, in `app/main.py`.
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limit import limit_by_staff
-from app.api.routes.admin import audit, staff, users, workspaces
+from app.api.routes.admin import (
+    audit,
+    conversations,
+    staff,
+    support_access,
+    users,
+    workspaces,
+)
 from app.core.rate_limit import RateLimited
 
 # Counted here rather than route by route, which is the opposite of how
@@ -40,3 +47,10 @@ admin_router.include_router(audit.router)
 # businesses they are in.
 admin_router.include_router(workspaces.router)
 admin_router.include_router(users.router)
+# Support access, and the two reads it opens. Registered after the console
+# although both hang off `/workspaces/{workspace_id}`: the paths are
+# distinct literals, so order carries no meaning here either -- and it
+# would the moment somebody proposed `…/workspaces/{workspace_id}/{thing}`,
+# which is a reason not to.
+admin_router.include_router(support_access.router)
+admin_router.include_router(conversations.router)
