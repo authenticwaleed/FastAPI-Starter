@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction
 from app.models.staff_member import StaffMember, StaffRole
 from app.models.user import User
@@ -31,6 +32,7 @@ from tests.support.staff import (
     a_colleague,
     entries,
     operations,
+    seconded,
 )
 from tests.support.tenants import sign_up
 
@@ -52,6 +54,36 @@ def _addressable(path: str) -> str:
 @pytest.fixture
 def owner(client: TestClient, db_session: Session) -> Console:
     return Console(client, db_session, "platform-owner@example.com", OWNER)
+
+
+def _a_second_owner(
+    owner: Console,
+    client: TestClient,
+    session: Session,
+) -> int:
+    """Promote somebody to owner, which needs a colleague to agree.
+
+    Phase A8 put a two-person approval in front of exactly this: an owner
+    can promote anybody and erase any business, so making one is the act
+    that creates more of the surface's most dangerous powers.
+    """
+    colleague = a_colleague(client, session, "second-owner@example.com")
+    seconding = Console(client, session, "seconder@example.com", ADMIN_ROLE)
+    approval_id = seconded(
+        owner,
+        seconding,
+        action=ApprovableAction.GRANT_STAFF_OWNER,
+        subject=str(colleague),
+        role=OWNER.value,
+    )
+
+    granted = owner.post(
+        "/staff",
+        {"user_id": colleague, "role": OWNER.value, "approval_id": approval_id},
+    )
+    assert granted.status_code == 201, granted.text
+
+    return colleague
 
 
 # --- the door ---------------------------------------------------------------
@@ -402,8 +434,7 @@ def test_an_owner_may_step_down_once_there_is_another(
     client: TestClient,
     db_session: Session,
 ) -> None:
-    colleague = a_colleague(client, db_session, "second-owner@example.com")
-    owner.post("/staff", {"user_id": colleague, "role": OWNER.value})
+    _a_second_owner(owner, client, db_session)
 
     response = owner.patch(f"/staff/{owner.user_id}", {"role": ADMIN_ROLE.value})
 
@@ -485,3 +516,65 @@ def test_a_path_parameter_is_never_looked_at_before_the_guard(
     )
 
     assert response.status_code == 403
+
+
+# --- granting owner takes two people ----------------------------------------
+
+
+def test_granting_owner_without_an_approval_is_refused(
+    owner: Console,
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    """The act that creates more of this surface's most dangerous powers.
+
+    An owner can promote anybody and erase any business, so making one
+    needs a colleague. `support` and `admin` do not, because requiring
+    one for every support engineer would mean nobody could be added on a
+    Friday -- and a rule people cannot follow is one they route around.
+    """
+    colleague = a_colleague(client, db_session, "hopeful@example.com")
+
+    refused = owner.post("/staff", {"user_id": colleague, "role": OWNER.value})
+
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "approval_required"
+
+
+def test_lesser_ranks_still_need_only_one_person(
+    owner: Console,
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    colleague = a_colleague(client, db_session, "hopeful@example.com")
+
+    assert (
+        owner.post("/staff", {"user_id": colleague, "role": SUPPORT.value}).status_code
+        == 201
+    )
+
+
+def test_an_approval_for_admin_cannot_be_spent_granting_owner(
+    owner: Console,
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    # The rank travels with the approval, so what a colleague agreed to
+    # is what happens -- which is the whole promotion this guards.
+    colleague = a_colleague(client, db_session, "hopeful@example.com")
+    seconding = Console(client, db_session, "seconder@example.com", ADMIN_ROLE)
+    approval_id = seconded(
+        owner,
+        seconding,
+        action=ApprovableAction.GRANT_STAFF_OWNER,
+        subject=str(colleague),
+        role=ADMIN_ROLE.value,
+    )
+
+    refused = owner.post(
+        "/staff",
+        {"user_id": colleague, "role": OWNER.value, "approval_id": approval_id},
+    )
+
+    assert refused.status_code == 403
+    assert "different role" in refused.json()["detail"]

@@ -7,6 +7,7 @@ from app.api.errors import (
     ADMIN_FORBIDDEN,
     ADMIN_NOT_FOUND,
     ADMIN_UNAUTHORISED,
+    APPROVAL_REQUIRED,
     BAD_CONFIRMATION,
     LIFECYCLE_CONFLICT,
     RATE_LIMITED,
@@ -16,6 +17,7 @@ from app.schemas.admin_console import AdminWorkspaceSummary
 from app.schemas.admin_lifecycle import (
     ConfirmSlugRequest,
     EraseAfterRequest,
+    EraseNowRequest,
     SuspendRequest,
 )
 from app.services.admin_lifecycle_service import AdminLifecycleServiceDep
@@ -30,6 +32,7 @@ PLATFORM = {
 }
 LIFECYCLE = {**PLATFORM, **LIFECYCLE_CONFLICT}
 DESTRUCTIVE = {**LIFECYCLE, **BAD_CONFIRMATION}
+SECONDED = {**DESTRUCTIVE, **APPROVAL_REQUIRED}
 
 
 # `admin` throughout, except the last, which is `owner`. Suspending an
@@ -130,26 +133,39 @@ def reschedule_erasure(
 @router.post(
     "/erase-now",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=DESTRUCTIVE,
+    responses=SECONDED,
 )
 def erase_workspace_now(
     workspace_id: uuid.UUID,
-    payload: ConfirmSlugRequest,
+    payload: EraseNowRequest,
     actor: StaffOwnerDep,
     service: AdminLifecycleServiceDep,
 ) -> None:
     """Destroy a workspace and everything it holds, immediately.
 
-    The most destructive call in the product. Owner rank, the slug typed
-    back in the body, and the audit entry written and committed *before*
-    the delete rather than after -- because afterwards there is no
-    workspace to write about.
+    The most destructive call in the product, and four things stand in
+    front of it: the owner rank, the slug typed back in the body, a
+    second staff member's approval for *this* workspace, and the audit
+    entry written and committed before the delete rather than after --
+    because afterwards there is no workspace to write about.
 
-    A wrong slug is refused and recorded as an attempt.
+    The approval is raised at `POST /admin/approvals` and agreed to by
+    somebody else. It cannot have been approved by whoever is calling
+    this, which is the whole of what makes it two people rather than a
+    form.
+
+    A wrong slug is refused and recorded as an attempt, and refused
+    before the approval is spent -- a mistyped erasure should not burn a
+    colleague's agreement.
 
     Answers 204, and there is nothing to return: the workspace this named
     does not exist any more, and neither do its contacts, conversations,
     messages, or its own audit log. What survives is the row in
     `/admin/audit` naming it by slug.
     """
-    service.erase_now(actor, workspace_id, confirm_slug=payload.confirm_slug)
+    service.erase_now(
+        actor,
+        workspace_id,
+        confirm_slug=payload.confirm_slug,
+        approval_id=payload.approval_id,
+    )

@@ -4,6 +4,7 @@ from app.api.dependencies.staff import StaffAdminDep, StaffDep, StaffOwnerDep
 from app.api.errors import (
     ADMIN_FORBIDDEN,
     ADMIN_UNAUTHORISED,
+    APPROVAL_REQUIRED,
     RATE_LIMITED,
     STAFF_CONFLICT,
     STAFF_NOT_FOUND,
@@ -70,7 +71,12 @@ def list_staff(
 @router.post(
     "/staff",
     status_code=status.HTTP_201_CREATED,
-    responses={**PLATFORM, **STAFF_NOT_FOUND, **STAFF_CONFLICT},
+    responses={
+        **PLATFORM,
+        **STAFF_NOT_FOUND,
+        **STAFF_CONFLICT,
+        **APPROVAL_REQUIRED,
+    },
 )
 def grant_staff_access(
     payload: StaffGrant,
@@ -86,8 +92,19 @@ def grant_staff_access(
     Re-granting to somebody whose access was revoked reinstates their
     row rather than adding a second one, so a colleague who left and came
     back has one history rather than two that have to be read together.
+
+    Granting `owner` needs a second staff member's approval, raised at
+    `POST /admin/approvals` and agreed to by somebody who is not the
+    person calling this. Only `owner`: an owner can promote anybody and
+    erase any business, and requiring a colleague for every support
+    engineer would mean nobody could be added on a Friday.
     """
-    member, user = service.grant(actor, payload.user_id, payload.role)
+    member, user = service.grant(
+        actor,
+        payload.user_id,
+        payload.role,
+        approval_id=payload.approval_id,
+    )
 
     return _read(member, user)
 

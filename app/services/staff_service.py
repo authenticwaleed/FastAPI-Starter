@@ -11,6 +11,7 @@ to the platform's own log, because on this surface being here is itself
 worth recording.
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -22,6 +23,7 @@ from app.core.config import get_settings
 from app.core.exceptions import (
     AdminSessionExpiredError,
     AlreadyStaffError,
+    ApprovalRequiredError,
     InsufficientStaffRoleError,
     LastStaffOwnerError,
     NotStaffError,
@@ -29,6 +31,7 @@ from app.core.exceptions import (
     UserNotFoundError,
 )
 from app.db.session import SessionDep
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction
 from app.models.staff_member import StaffMember, StaffRole, permits
 from app.models.user import User
@@ -36,6 +39,10 @@ from app.models.user_session import UserSession
 from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
 from app.repositories.staff_repository import StaffRepository
 from app.repositories.user_repository import UserRepository
+from app.services.admin_approval_service import (
+    AdminApprovalService,
+    AdminApprovalServiceDep,
+)
 from app.services.admin_audit_service import (
     AdminActor,
     AdminAuditService,
@@ -105,11 +112,16 @@ class StaffService:
         staff: StaffRepository,
         users: UserRepository,
         audit: AdminAuditService,
+        approvals: AdminApprovalService | None = None,
     ) -> None:
         self._session = session
         self._staff = staff
         self._users = users
         self._audit = audit
+        # Optional, and only because one caller has no use for it: the
+        # command line seeds the first owner, and there is nobody to
+        # approve when nobody is staff yet. `seed` never touches it.
+        self._approvals = approvals
 
     # --- the door ----------------------------------------------------------
 
@@ -200,6 +212,8 @@ class StaffService:
         actor: StaffActor,
         user_id: int,
         role: StaffRole,
+        *,
+        approval_id: uuid.UUID | None = None,
     ) -> tuple[StaffMember, User]:
         """Give an existing account access to the platform.
 
@@ -213,6 +227,14 @@ class StaffService:
         Re-granting to a colleague whose access was revoked updates that
         row rather than starting a second one. Their history is one
         history.
+
+        Granting `owner` needs a second staff member's approval, and only
+        `owner`: an owner is somebody who can promote anybody and erase
+        any business, so making one is the act that creates more of this
+        surface's most dangerous powers. `support` and `admin` are
+        ordinary promotions and stay one person's decision, because
+        requiring a colleague for every one would mean nobody could add a
+        support engineer on a Friday.
         """
         self._require(actor, MAY_GRANT)
 
@@ -220,6 +242,21 @@ class StaffService:
 
         if user is None:
             raise UserNotFoundError(user_id)
+
+        if role is StaffRole.OWNER:
+            if self._approvals is None:
+                raise ApprovalRequiredError("approvals are not available here")
+
+            self._approvals.spend(
+                actor.logged,
+                approval_id,
+                action=ApprovableAction.GRANT_STAFF_OWNER,
+                subject=str(user_id),
+                # The rank as well as the subject, so an approval
+                # somebody agreed to for `admin` cannot be spent granting
+                # `owner` -- which is the whole promotion this guards.
+                matching={"role": role.value},
+            )
 
         member, reinstated = self._admit(user, role, granted_by=actor.user.id)
 
@@ -479,8 +516,15 @@ def get_staff_service(
     staff: StaffRepositoryDep,
     users: UserRepositoryDep,
     audit: AdminAuditServiceDep,
+    approvals: AdminApprovalServiceDep,
 ) -> StaffService:
-    return StaffService(session=session, staff=staff, users=users, audit=audit)
+    return StaffService(
+        session=session,
+        staff=staff,
+        users=users,
+        audit=audit,
+        approvals=approvals,
+    )
 
 
 StaffServiceDep = Annotated[StaffService, Depends(get_staff_service)]

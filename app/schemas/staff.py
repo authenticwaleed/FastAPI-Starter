@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
@@ -48,6 +49,11 @@ class StaffGrant(BaseModel):
 
     user_id: int
     role: StaffRole
+    # Required only for `owner`, and refused as missing at that rank
+    # rather than by this schema: `support` and `admin` are ordinary
+    # promotions that one person decides, and a field marked required
+    # here would make every promotion look like the dangerous one.
+    approval_id: UUID | None = None
 
 
 class StaffUpdate(BaseModel):

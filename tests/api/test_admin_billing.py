@@ -237,10 +237,16 @@ def test_granting_is_recorded_but_not_in_the_customers_log(
     assert recorded.meta["reason"] == REASON
     assert recorded.workspace_slug == "acme-fashion"
 
+    # Asserted on the contents rather than on a 402, and the reason is
+    # itself the phase working: granting Business *entitles* this
+    # workspace to its audit log, so the route now answers. What matters
+    # is that the grant put nothing in it.
     tenant_log = acme.client.get(acme.path("audit-logs"), headers=acme.owner_headers)
-    # Their plan does not include the audit log, and that is beside the
-    # point: nothing was written to it either way.
-    assert tenant_log.status_code == 402
+
+    assert tenant_log.status_code == 200
+    assert [item["event"] for item in tenant_log.json()["items"]] == [
+        "workspace.created"
+    ]
 
 
 # --- the provider's ledger --------------------------------------------------

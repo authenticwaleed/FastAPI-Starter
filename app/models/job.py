@@ -48,6 +48,12 @@ class JobKind(StrEnum):
     # a date rather than when somebody remembers, and a queue is the only
     # part of this system that does anything on a date.
     SWEEP_ERASURES = "sweep_erasures"
+    # Ending support grants whose hour has passed. Not what makes them
+    # stop working -- an expired grant already stops matching the lookup
+    # that opens the door -- but what tells the *customer* it ended,
+    # which otherwise never happens: their log would show access granted
+    # and never show it end.
+    SWEEP_SUPPORT_GRANTS = "sweep_support_grants"
     ERASE_WORKSPACE = "erase_workspace"
 
 

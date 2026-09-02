@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
 from app.models.job import JobKind
 from app.models.staff_member import StaffRole
@@ -41,13 +42,26 @@ from app.repositories.workspace_membership_repository import (
 )
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.admin_audit_service import AdminActor, AdminAuditService
-from tests.support.staff import ADMIN, Console, a_colleague, entries, operations
+from tests.support.staff import (
+    ADMIN,
+    Console,
+    a_colleague,
+    entries,
+    operations,
+    seconded,
+)
 from tests.support.tenants import Tenant, sign_up
 
 
 @pytest.fixture
 def owner(client: TestClient, db_session: Session) -> Console:
     return Console(client, db_session, "platform-owner@example.com", StaffRole.OWNER)
+
+
+@pytest.fixture
+def seconder(client: TestClient, db_session: Session) -> Console:
+    """A second staff member, because the approval control needs one."""
+    return Console(client, db_session, "seconder@example.com", StaffRole.ADMIN)
 
 
 @pytest.fixture
@@ -63,6 +77,45 @@ def acme(
     stops the log filling with entries about ids that never existed.
     """
     return Tenant(client, user_repository, membership_repository, "acme-fashion")
+
+
+def _an_approved_erasure(
+    requester: Console,
+    approver: Console,
+    workspace_id: str,
+) -> str:
+    """One approval for erasing this workspace, already agreed to.
+
+    Raised outside the case table because the table's own POST case
+    raises another: this one is what the erasure at the end of the table
+    spends, and it has to exist before the loop starts.
+    """
+    return seconded(
+        requester,
+        approver,
+        action=ApprovableAction.ERASE_WORKSPACE,
+        subject=workspace_id,
+    )
+
+
+def _a_pending_approval(requester: Console, workspace_id: str) -> str:
+    """One approval nobody has agreed to yet, for the approve case.
+
+    Raised by the *other* console, because nobody may second their own
+    request -- so the approval the case table approves cannot be one the
+    console raised itself.
+    """
+    response = requester.post(
+        "/approvals",
+        {
+            "action": ApprovableAction.ERASE_WORKSPACE.value,
+            "subject": workspace_id,
+            "reason": "Raised so the approve case has something to agree to",
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    return str(response.json()["id"])
 
 
 def _a_job(session: Session) -> str:
@@ -121,6 +174,8 @@ def _calls(
     slug: str,
     billing_event_id: str,
     job_id: str,
+    approval_id: str,
+    pending_approval_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -336,10 +391,57 @@ def _calls(
             lambda: console.get("/health"),
             AdminAction.HEALTH_READ,
         ),
+        # Hardening. The approval is raised and agreed to by two
+        # different consoles, which is the control -- so the case table
+        # needs a second one.
+        ("POST", f"{ADMIN}/approvals"): (
+            lambda: console.post(
+                "/approvals",
+                {
+                    "action": "erase_workspace",
+                    "subject": workspace_id,
+                    "reason": "Agreed in the incident channel first",
+                },
+            ),
+            AdminAction.APPROVAL_REQUESTED,
+        ),
+        ("POST", f"{ADMIN}/approvals/{{approval_id}}/approve"): (
+            # A pending one, raised by the other console. Approving the
+            # erasure's own approval would be approving something already
+            # approved -- and nobody may second their own request, which
+            # is what makes this need two approvals rather than one.
+            lambda: console.post(f"/approvals/{pending_approval_id}/approve", {}),
+            AdminAction.APPROVAL_GRANTED,
+        ),
+        ("GET", f"{ADMIN}/approvals"): (
+            lambda: console.get("/approvals"),
+            AdminAction.APPROVALS_READ,
+        ),
+        ("GET", f"{ADMIN}/alerts"): (
+            lambda: console.get("/alerts"),
+            AdminAction.ALERTS_READ,
+        ),
+        # Analytics. Aggregates, recorded like everything else.
+        ("GET", f"{ADMIN}/analytics/overview"): (
+            lambda: console.get("/analytics/overview"),
+            AdminAction.ANALYTICS_READ,
+        ),
+        ("GET", f"{ADMIN}/analytics/growth"): (
+            lambda: console.get("/analytics/growth"),
+            AdminAction.ANALYTICS_READ,
+        ),
+        ("GET", f"{ADMIN}/analytics/revenue"): (
+            lambda: console.get("/analytics/revenue"),
+            AdminAction.ANALYTICS_READ,
+        ),
+        ("GET", f"{ADMIN}/analytics/ai"): (
+            lambda: console.get("/analytics/ai"),
+            AdminAction.ANALYTICS_READ,
+        ),
         ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
             lambda: console.post(
                 f"/workspaces/{workspace_id}/erase-now",
-                {"confirm_slug": slug},
+                {"confirm_slug": slug, "approval_id": approval_id},
             ),
             AdminAction.WORKSPACE_ERASED,
         ),
@@ -351,6 +453,7 @@ def _calls(
 
 def test_every_published_route_has_a_case(
     owner: Console,
+    seconder: Console,
     acme: Tenant,
     client: TestClient,
     db_session: Session,
@@ -370,6 +473,8 @@ def test_every_published_route_has_a_case(
                 "acme-fashion",
                 _a_billing_delivery(db_session),
                 _a_job(db_session),
+                _an_approved_erasure(owner, seconder, acme.workspace_id),
+                _a_pending_approval(seconder, acme.workspace_id),
             )
         )
         == operations()
@@ -378,6 +483,7 @@ def test_every_published_route_has_a_case(
 
 def test_every_route_writes_exactly_one_entry(
     owner: Console,
+    seconder: Console,
     acme: Tenant,
     client: TestClient,
     db_session: Session,
@@ -385,9 +491,13 @@ def test_every_route_writes_exactly_one_entry(
     """Principle 2, over the whole surface, reads included.
 
     On this surface looking at somebody else's data is the sensitive act,
-    so a log recording only writes would answer the wrong question. Each
-    call is checked for one entry rather than at least one, because two
-    rows for one act is a log that cannot be counted.
+    so a log recording only writes would answer the wrong question.
+
+    Exactly one entry *for the act itself*, because two rows for one act
+    is a log that cannot be counted. The one other entry a call may write
+    is `approval.spent`, and only the two acts that need a second person
+    write it -- which is not the act being recorded twice, it is the
+    control being recorded once.
     """
     colleague = a_colleague(client, db_session, "colleague@example.com")
 
@@ -399,6 +509,8 @@ def test_every_route_writes_exactly_one_entry(
         "acme-fashion",
         _a_billing_delivery(db_session),
         _a_job(db_session),
+        _an_approved_erasure(owner, seconder, acme.workspace_id),
+        _a_pending_approval(seconder, acme.workspace_id),
     ).items():
         before = len(entries(db_session))
 
@@ -406,10 +518,12 @@ def test_every_route_writes_exactly_one_entry(
 
         assert response.status_code < 400, f"{method} {path}: {response.text}"
 
-        written = entries(db_session)
+        wrote = [entry.action for entry in entries(db_session)[before:]]
 
-        assert len(written) == before + 1, f"{method} {path}"
-        assert written[-1].action == expected, f"{method} {path}"
+        assert wrote.count(expected) == 1, f"{method} {path}: {wrote}"
+        assert set(wrote) <= {expected, AdminAction.APPROVAL_SPENT}, (
+            f"{method} {path}: {wrote}"
+        )
 
 
 def test_an_entry_says_who_and_from_where(owner: Console, db_session: Session) -> None:

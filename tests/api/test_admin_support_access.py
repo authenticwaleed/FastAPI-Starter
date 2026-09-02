@@ -414,24 +414,71 @@ def test_a_grant_is_not_a_seat_the_customer_pays_for(
 # --- it reads, and cannot write ---------------------------------------------
 
 
-def test_no_admin_route_can_write_a_customers_data(console: Console) -> None:
-    """The acceptance criterion, over the whole published surface.
+def test_no_admin_route_can_write_a_customers_own_data(console: Console) -> None:
+    """The acceptance criterion, restated as later phases moved the line.
 
-    Every verb other than GET on `/admin` is checked by hand here,
-    because "no route writes tenant data" is a claim about the router
-    rather than about any one handler -- and a route added next month is
-    covered without anybody remembering.
+    When this was written the answer was "no admin route writes
+    anything". That is no longer true and should not be: Phase A4 gave
+    the platform a lifecycle, so it can freeze an account, close one and
+    destroy one, all of which change a customer's world.
+
+    What has not changed is the part that mattered. **No route on this
+    surface writes a customer's own data** -- a conversation, a message,
+    a contact, a document. Support access is permission to read, and the
+    two routes it opens are both GETs.
+
+    Every write is enumerated rather than pattern-matched, so a route
+    added next month fails here and somebody has to say which group it
+    belongs to.
     """
-    writes = [(method, path) for method, path in operations() if method != "GET"]
+    writes = {(method, path) for method, path in operations() if method != "GET"}
 
-    # Staff membership of the platform, and asking for or ending access.
-    # None of them touches a customer's own data.
-    assert sorted(writes) == [
-        ("DELETE", f"{ADMIN}/staff/{{user_id}}"),
-        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"),
-        ("PATCH", f"{ADMIN}/staff/{{user_id}}"),
+    # Who runs the platform, and who may read one customer's account.
+    platform = {
         ("POST", f"{ADMIN}/staff"),
+        ("PATCH", f"{ADMIN}/staff/{{user_id}}"),
+        ("DELETE", f"{ADMIN}/staff/{{user_id}}"),
+        ("POST", f"{ADMIN}/approvals"),
+        ("POST", f"{ADMIN}/approvals/{{approval_id}}/approve"),
         ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"),
+        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"),
+    }
+
+    # A workspace's status and its erasure date, and an account's. Every
+    # one goes through the tenant's own service, and none touches what is
+    # inside the workspace.
+    lifecycle = {
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/suspend"),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/unsuspend"),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/cancel"),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/restore"),
+        ("PATCH", f"{ADMIN}/workspaces/{{workspace_id}}/erase-after"),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"),
+        ("POST", f"{ADMIN}/users/{{user_id}}/deactivate"),
+        ("POST", f"{ADMIN}/users/{{user_id}}/activate"),
+        ("POST", f"{ADMIN}/users/{{user_id}}/sessions/revoke"),
+        ("POST", f"{ADMIN}/users/{{user_id}}/verify-email"),
+    }
+
+    # Entitlements and the queue: the platform's own tables, and the
+    # payment provider's word about a subscription.
+    operations_and_billing = {
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/plan-override"),
+        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/plan-override"),
+        ("POST", f"{ADMIN}/billing/events/{{event_id}}/replay"),
+        ("POST", f"{ADMIN}/jobs/{{job_id}}/retry"),
+        ("POST", f"{ADMIN}/jobs/{{job_id}}/cancel"),
+    }
+
+    assert writes == platform | lifecycle | operations_and_billing
+
+    # And the thing that has held since A3: nothing on this surface, at
+    # any verb, reaches a customer's own content.
+    assert not [
+        (method, path)
+        for method, path in writes
+        for word in ("conversations", "messages", "contacts", "knowledge")
+        if word in path
     ]
 
 

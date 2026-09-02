@@ -131,6 +131,25 @@ class AdminAction(StrEnum):
     WHATSAPP_HEALTH_READ = "ops.whatsapp_health_read"
     HEALTH_READ = "ops.health_read"
 
+    # Platform analytics. Recorded like everything else, although these
+    # are the one set of reads on this surface that reveal nothing about
+    # any one customer -- the log's rule is about the surface rather than
+    # about each route, and an exception here would be the first crack in
+    # it.
+    ANALYTICS_READ = "analytics.read"
+
+    # Two-person approval. Four entries for what is one decision, and
+    # that is the point: who asked, who agreed, who spent it, and who
+    # went looking at the list afterwards. A control whose own history
+    # were thinner than the act it guards would be decoration.
+    APPROVAL_REQUESTED = "approval.requested"
+    APPROVAL_GRANTED = "approval.granted"
+    APPROVAL_SPENT = "approval.spent"
+    APPROVALS_READ = "approval.listed"
+
+    # Looking at the platform's own behaviour rather than at a customer's.
+    ALERTS_READ = "alerts.read"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.

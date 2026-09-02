@@ -36,6 +36,7 @@ from app.core.exceptions import (
     WorkspaceNotFoundError,
 )
 from app.db.session import SessionDep
+from app.models.admin_approval import ApprovableAction
 from app.models.admin_audit_log import AdminAction
 from app.models.user import User
 from app.models.user_session import SessionEndReason
@@ -45,6 +46,10 @@ from app.repositories.admin_console_repository import (
 )
 from app.repositories.user_repository import UserRepository
 from app.repositories.user_session_repository import UserSessionRepository
+from app.services.admin_approval_service import (
+    AdminApprovalService,
+    AdminApprovalServiceDep,
+)
 from app.services.admin_audit_service import AdminAuditService, AdminAuditServiceDep
 from app.services.admin_workspace_service import AdminConsoleRepositoryDep
 from app.services.session_service import UserSessionRepositoryDep
@@ -63,6 +68,7 @@ class AdminLifecycleService:
         workspaces: WorkspaceService,
         users: UserRepository,
         sessions: UserSessionRepository,
+        approvals: AdminApprovalService,
         admin_audit: AdminAuditService,
     ) -> None:
         self._session = session
@@ -70,6 +76,7 @@ class AdminLifecycleService:
         self._workspaces = workspaces
         self._users = users
         self._sessions = sessions
+        self._approvals = approvals
         self._admin_audit = admin_audit
 
     # --- a business --------------------------------------------------------
@@ -195,6 +202,7 @@ class AdminLifecycleService:
         workspace_id: uuid.UUID,
         *,
         confirm_slug: str,
+        approval_id: uuid.UUID | None,
     ) -> None:
         """Destroy a workspace and everything it holds, immediately.
 
@@ -208,8 +216,22 @@ class AdminLifecycleService:
         A wrong slug is recorded too, as an attempt. Somebody typing the
         wrong name into an erasure is either tired or in the wrong
         window, and both are worth a row.
+
+        Four things stand in front of this now, and the order they are
+        checked in is deliberate: the owner's rank, the slug typed back,
+        a colleague's approval for *this* workspace, and the entry
+        written before the delete. The approval is spent last of the
+        three checks, so a refused erasure does not burn a colleague's
+        agreement.
         """
         row = self._confirmed(actor, workspace_id, confirm_slug)
+
+        self._approvals.spend(
+            actor.logged,
+            approval_id,
+            action=ApprovableAction.ERASE_WORKSPACE,
+            subject=str(workspace_id),
+        )
 
         self._record(actor, AdminAction.WORKSPACE_ERASED, row, {})
         self._workspaces.erase_now(row.workspace)
@@ -398,6 +420,7 @@ def get_admin_lifecycle_service(
     workspaces: WorkspaceServiceDep,
     users: UserRepositoryDep,
     sessions: UserSessionRepositoryDep,
+    approvals: AdminApprovalServiceDep,
     admin_audit: AdminAuditServiceDep,
 ) -> AdminLifecycleService:
     return AdminLifecycleService(
@@ -406,6 +429,7 @@ def get_admin_lifecycle_service(
         workspaces=workspaces,
         users=users,
         sessions=sessions,
+        approvals=approvals,
         admin_audit=admin_audit,
     )
 

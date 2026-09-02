@@ -75,7 +75,11 @@ def plan(session: Session, jobs: JobRepository, *, now: datetime) -> None:
     """
     window = int(now.timestamp()) // get_settings().worker_sweep_every_seconds
 
-    for kind in (JobKind.SWEEP_AUTOMATIONS, JobKind.SWEEP_ERASURES):
+    for kind in (
+        JobKind.SWEEP_AUTOMATIONS,
+        JobKind.SWEEP_ERASURES,
+        JobKind.SWEEP_SUPPORT_GRANTS,
+    ):
         try:
             # A savepoint each, so the second sweep is still planned when
             # the first one is already there.
