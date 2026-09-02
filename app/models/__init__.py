@@ -64,6 +64,7 @@ from app.models.user_session import (
     UserSession,
 )
 from app.models.user_token import UserToken, UserTokenPurpose
+from app.models.webhook_failure import WebhookFailure, WebhookRefusal
 from app.models.whatsapp_account import (
     MessagingProviderName,
     WhatsAppAccount,
@@ -140,6 +141,8 @@ __all__ = [
     "UserSession",
     "UserToken",
     "UserTokenPurpose",
+    "WebhookFailure",
+    "WebhookRefusal",
     "WhatsAppAccount",
     "WhatsAppAccountStatus",
     "Workspace",
