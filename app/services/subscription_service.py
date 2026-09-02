@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Annotated
 
@@ -26,6 +27,7 @@ from app.integrations.billing.stripe import StripeProvider
 from app.models.audit_log import AuditEvent
 from app.models.notification import NotificationKind
 from app.models.subscription import Subscription, SubscriptionStatus
+from app.repositories.plan_override_repository import PlanOverrideRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.services.audit_service import AuditService, AuditServiceDep
 from app.services.notification_service import (
@@ -100,6 +102,7 @@ class SubscriptionService:
         self,
         session: Session,
         subscriptions: SubscriptionRepository,
+        overrides: PlanOverrideRepository,
         provider: BillingProvider,
         notifications: NotificationService,
         usage: UsageService,
@@ -107,6 +110,7 @@ class SubscriptionService:
     ) -> None:
         self._session = session
         self._subscriptions = subscriptions
+        self._overrides = overrides
         self._provider = provider
         self._notifications = notifications
         self._usage = usage
@@ -117,12 +121,30 @@ class SubscriptionService:
     def plan_for(self, workspace_id: uuid.UUID) -> Plan:
         """The plan a workspace is actually entitled to right now.
 
-        Not the plan it subscribed to: the plan it subscribed to *while
-        that subscription is good for something*. A cancelled or unpaid
-        subscription falls back to the free plan rather than to nothing,
-        which is what stops a declined card locking a business out of its
-        own inbox.
+        Three sources in one order, and the order is the whole rule:
+        **an override, then the subscription, then free.**
+
+        An override is a plan the platform granted -- a pilot, a comp, an
+        enterprise contract invoiced offline -- and it outranks the
+        provider because it was a decision somebody made about this
+        customer. It stops applying on its own date, with nothing having
+        to run.
+
+        Otherwise the plan it subscribed to, *while that subscription is
+        good for something*. A cancelled or unpaid one falls back to free
+        rather than to nothing, which is what stops a declined card
+        locking a business out of its own inbox.
+
+        This is the only place that decides. Nothing anywhere reads
+        `subscription.plan` to answer "what may this workspace do" --
+        the console asks the same question in SQL, and a test holds the
+        two answers side by side.
         """
+        granted = self._overrides.applying_to(workspace_id, datetime.now(UTC))
+
+        if granted is not None:
+            return PLANS[granted.plan]
+
         subscription = self._subscriptions.get_for_workspace(workspace_id)
 
         if subscription is None or subscription.status not in ENTITLING:
@@ -392,9 +414,20 @@ SubscriptionRepositoryDep = Annotated[
 ]
 
 
+def get_plan_override_repository(session: SessionDep) -> PlanOverrideRepository:
+    return PlanOverrideRepository(session)
+
+
+PlanOverrideRepositoryDep = Annotated[
+    PlanOverrideRepository,
+    Depends(get_plan_override_repository),
+]
+
+
 def get_subscription_service(
     session: SessionDep,
     subscriptions: SubscriptionRepositoryDep,
+    overrides: PlanOverrideRepositoryDep,
     provider: BillingProviderDep,
     notifications: NotificationServiceDep,
     usage: UsageServiceDep,
@@ -403,6 +436,7 @@ def get_subscription_service(
     return SubscriptionService(
         session=session,
         subscriptions=subscriptions,
+        overrides=overrides,
         provider=provider,
         notifications=notifications,
         usage=usage,

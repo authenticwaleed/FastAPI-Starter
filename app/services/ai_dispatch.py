@@ -43,6 +43,7 @@ from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.order_repository import OrderRepository
+from app.repositories.plan_override_repository import PlanOverrideRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.usage_repository import UsageRepository
@@ -119,6 +120,7 @@ def build_subscription_service(session: Session) -> SubscriptionService:
     return SubscriptionService(
         session=session,
         subscriptions=SubscriptionRepository(session),
+        overrides=PlanOverrideRepository(session),
         provider=get_billing_provider(),
         notifications=NotificationService(
             session=session,
