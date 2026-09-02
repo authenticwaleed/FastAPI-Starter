@@ -56,6 +56,7 @@ class AuditService:
         event: AuditEvent,
         *,
         actor_user_id: int | None = None,
+        by_staff: str | None = None,
         meta: dict[str, Any] | None = None,
     ) -> AuditLog:
         """Record that this happened, here, by them.
@@ -65,7 +66,25 @@ class AuditService:
         where there is genuinely nobody behind it -- a payment provider
         changing a subscription -- because an audit entry that names the
         wrong person is not a gap in the record, it is an accusation.
+
+        `by_staff` is the address of a platform support engineer where
+        the act was theirs rather than the business's own. It goes into
+        `meta` and leaves the actor empty, which is the rule this
+        application keeps about staff appearing in a customer's history:
+        an entry naming them among the customer's colleagues is what the
+        whole support-access design exists to prevent.
+
+        Passing both is a programming error rather than a combination
+        with a meaning, so it raises here rather than picking one.
         """
+        if by_staff is not None:
+            if actor_user_id is not None:
+                raise ValueError(
+                    "an entry is either a member's or a staff member's, not both"
+                )
+
+            meta = {**(meta or {}), "by_staff": by_staff}
+
         return self._logs.record(
             workspace_id=workspace_id,
             event=event,
