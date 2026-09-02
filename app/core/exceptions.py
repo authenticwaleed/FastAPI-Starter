@@ -1141,3 +1141,39 @@ class ConfirmationMismatchError(AppError):
     def __init__(self, workspace_id: object) -> None:
         super().__init__(f"Confirmation did not match workspace {workspace_id}")
         self.workspace_id = workspace_id
+
+
+class JobNotFoundError(AppError):
+    """No job with that id.
+
+    Safe to say plainly, like every other refusal on the platform
+    surface: whoever is asking has already proved they operate this
+    deployment.
+    """
+
+    detail = "No such job"
+
+    def __init__(self, job_id: object) -> None:
+        super().__init__(f"No job with id {job_id}")
+        self.job_id = job_id
+
+
+class JobNotRetryableError(AppError):
+    """The job is not in a state this can be done from.
+
+    Carries its own sentence, like WorkspaceLifecycleError. The
+    interesting case is `running`: the worker holding that row does not
+    check back, so moving it would let a second worker claim the same
+    work and race the first -- which is what "retry must respect
+    dedupe_key" comes to in practice.
+    """
+
+    detail = "That job cannot be retried or cancelled from its current state"
+
+    def __init__(self, job_id: object, reason: str) -> None:
+        super().__init__(
+            f"Job {job_id} cannot be acted on: {reason}",
+            detail=f"That job cannot be acted on: {reason}",
+        )
+        self.job_id = job_id
+        self.reason = reason

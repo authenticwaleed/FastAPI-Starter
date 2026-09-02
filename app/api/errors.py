@@ -45,6 +45,8 @@ from app.core.exceptions import (
     InvitationExpiredError,
     InvitationNotFoundError,
     InvitationNotYoursError,
+    JobNotFoundError,
+    JobNotRetryableError,
     KnowledgeDocumentNotFoundError,
     KnowledgeSourceNotFoundError,
     LastOwnerError,
@@ -431,6 +433,8 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "confirmation_mismatch",
     ),
+    JobNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "job_not_found"),
+    JobNotRetryableError: _Answer(status.HTTP_409_CONFLICT, "job_not_retryable"),
 }
 
 _UNEXPECTED = _Answer(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error")
@@ -791,4 +795,10 @@ LIFECYCLE_CONFLICT = _documented(
 BAD_CONFIRMATION = _documented(
     status.HTTP_422_UNPROCESSABLE_CONTENT,
     "The confirmation does not name this workspace",
+)
+
+JOB_NOT_FOUND = _documented(status.HTTP_404_NOT_FOUND, "No job has that id")
+JOB_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That job cannot be retried or cancelled from its current state",
 )
