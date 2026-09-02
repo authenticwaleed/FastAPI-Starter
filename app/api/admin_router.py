@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from app.api.dependencies.rate_limit import limit_by_staff
 from app.api.routes.admin import (
     audit,
+    billing,
     conversations,
     lifecycle,
     staff,
@@ -60,4 +61,9 @@ admin_router.include_router(conversations.router)
 # match the literals above -- `/members`, `/usage`, `/support-access` --
 # if it were registered first and had a route shaped like them. It does
 # not today, and registering it last means it never can by accident.
+# Billing before lifecycle, like every other workspace-scoped router:
+# `/plan-override` is a literal that the bare `/workspaces/{id}` prefix
+# below would otherwise be free to shadow.
+admin_router.include_router(billing.router)
+admin_router.include_router(billing.override_router)
 admin_router.include_router(lifecycle.router)
