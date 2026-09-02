@@ -51,6 +51,26 @@ class AdminAction(StrEnum):
     # and there is no route at any role that can remove the row.
     AUDIT_READ = "audit.read"
 
+    # The read-only console. Nine actions and every one of them a read,
+    # which is the shape of this whole surface rather than an oversight:
+    # what has to be answerable afterwards is who looked at a customer's
+    # account, and none of these changes anything.
+    #
+    # Told apart from each other rather than collapsed into one
+    # `workspace.read`, because they are not the same act. Looking up a
+    # workspace to answer a ticket is ordinary; reading a whole team's
+    # names, or a business's own audit log, is the thing somebody would
+    # want to be able to ask about later.
+    WORKSPACES_SEARCHED = "workspaces.searched"
+    WORKSPACE_READ = "workspace.read"
+    WORKSPACE_MEMBERS_READ = "workspace.members_read"
+    WORKSPACE_SUBSCRIPTION_READ = "workspace.subscription_read"
+    WORKSPACE_USAGE_READ = "workspace.usage_read"
+    WORKSPACE_INTEGRATIONS_READ = "workspace.integrations_read"
+    WORKSPACE_AUDIT_READ = "workspace.audit_read"
+    USERS_SEARCHED = "users.searched"
+    USER_READ = "user.read"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.

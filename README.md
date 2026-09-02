@@ -172,6 +172,15 @@ test is rolled back afterwards, so it never touches application data. Set
 | PATCH | `/api/v1/admin/staff/{user_id}` | Move somebody up or down |
 | DELETE | `/api/v1/admin/staff/{user_id}` | Take platform access away |
 | GET | `/api/v1/admin/audit` | What staff have done |
+| GET | `/api/v1/admin/workspaces` | Find a business by name, slug, member, plan |
+| GET | `…/admin/workspaces/{workspace_id}` | One business, and how much it holds |
+| GET | `…/{workspace_id}/members` | Who is on its team |
+| GET | `…/{workspace_id}/subscription` | What it pays, and what it gets |
+| GET | `…/{workspace_id}/usage` | What it has used this period |
+| GET | `…/{workspace_id}/integrations` | Connected, and how healthily |
+| GET | `…/{workspace_id}/audit` | Its own history, read by staff |
+| GET | `/api/v1/admin/users` | Find an account by address or name |
+| GET | `/api/v1/admin/users/{user_id}` | One account, its workspaces, its sessions |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -911,6 +920,48 @@ that no `include_router` added to the wrong file can put an admin path
 behind a tenant guard. Same process today; a separate deployment would
 let the network keep this surface off the public internet entirely, and
 nothing above the mount would change for it.
+
+#### The console, and the line it stops at
+
+The nine read-only routes are what make support possible, and every one
+of them returns **aggregates and metadata only**. A support engineer can
+see that a business has eleven thousand messages and nothing since March;
+they cannot see a message, a conversation, a contact or a knowledge
+document. Reading those needs a time-boxed grant with a reason, which the
+customer sees in their own audit log — a later phase, deliberately.
+
+Nothing here decrypts a provider credential, for any reason. A WhatsApp
+number reads as connected or not, with the phone number and when it was
+connected; a storefront as its domain and when it last synced. The
+response models have nowhere to put a token, which is the enforcement
+rather than a convention.
+
+A workspace is found three ways, because a ticket arrives in three
+shapes: by slug, by name, or by the address of **anyone active in it**.
+That last is a deliberate superset of the plan's "by owner email" —
+whoever writes in is whoever noticed the problem, and is as often an
+agent as the owner. Search terms have their LIKE wildcards escaped, or a
+search for `%` would return every business on the platform.
+
+Two answers differ from the tenant surface on purpose:
+
+- A **cancelled workspace is visible here**, with the date its records
+  are due to be destroyed, while the customer's own API answers 404. "It
+  was closed last week and its data goes on the 30th" is the answer to
+  the ticket.
+- A **404 means one thing**: no such row. The tenant boundary collapses
+  three refusals into one so that an id cannot be used to discover which
+  businesses have accounts; nobody reaching `/admin` needs that.
+
+The plan a workspace is on is resolved in SQL with the same statuses
+`SubscriptionService` uses one workspace at a time, so a detail page
+cannot disagree with the list it was opened from — and a `past_due`
+subscription still reads as entitled, because a card that did not go
+through is a provider still retrying.
+
+One route ignores the customer's plan on purpose: audit logs are a paid
+feature for a business, and whether support can answer a ticket about
+that business is not a decision its plan gets to make.
 
 ## Configuration
 

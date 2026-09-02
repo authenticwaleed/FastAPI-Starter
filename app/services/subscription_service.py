@@ -50,11 +50,16 @@ from app.services.workspace_service import MAY_ADMINISTER, WorkspaceAccess
 logger = logging.getLogger(__name__)
 
 # The statuses under which a workspace actually gets what it pays for.
+# Public rather than private since the platform console arrived: it has to
+# ask the same question in SQL, across every workspace at once, and two
+# definitions of "is this subscription good for anything" would be two
+# answers the day somebody edited one of them.
+#
 # `past_due` is in here deliberately: a card that did not go through is a
 # provider still retrying, and taking a business's automations away over a
 # bank's fraud check is the wrong way to lose a customer. What happens
 # instead is that its administrators are told.
-_ENTITLING = frozenset(
+ENTITLING = frozenset(
     {
         SubscriptionStatus.ACTIVE,
         SubscriptionStatus.TRIALING,
@@ -120,7 +125,7 @@ class SubscriptionService:
         """
         subscription = self._subscriptions.get_for_workspace(workspace_id)
 
-        if subscription is None or subscription.status not in _ENTITLING:
+        if subscription is None or subscription.status not in ENTITLING:
             return FREE_PLAN
 
         return PLANS[subscription.plan]

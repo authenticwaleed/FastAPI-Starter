@@ -13,7 +13,7 @@ Two routers, one mount, in `app/main.py`.
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limit import limit_by_staff
-from app.api.routes.admin import audit, staff
+from app.api.routes.admin import audit, staff, users, workspaces
 from app.core.rate_limit import RateLimited
 
 # Counted here rather than route by route, which is the opposite of how
@@ -34,3 +34,9 @@ admin_router.include_router(staff.router)
 # swallow the other's literal -- and it will the moment a route like
 # `/admin/{something}` is proposed, which is a reason not to propose one.
 admin_router.include_router(audit.router)
+# The read-only console. Two subjects rather than one, because a support
+# ticket arrives from either direction: sometimes it names a business,
+# and sometimes it is somebody who cannot sign in and does not know which
+# businesses they are in.
+admin_router.include_router(workspaces.router)
+admin_router.include_router(users.router)
