@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import (
+    AdminSessionExpiredError,
     AlreadyAMemberError,
+    AlreadyStaffError,
     ApiKeyNotFoundError,
     AppError,
     AutomationAlreadyExistsError,
@@ -29,6 +31,7 @@ from app.core.exceptions import (
     FeatureNotInPlanError,
     InactiveUserError,
     IncorrectPasswordError,
+    InsufficientStaffRoleError,
     InsufficientWorkspaceRoleError,
     InvalidApiKeyError,
     InvalidAutomationSettingsError,
@@ -44,11 +47,13 @@ from app.core.exceptions import (
     KnowledgeDocumentNotFoundError,
     KnowledgeSourceNotFoundError,
     LastOwnerError,
+    LastStaffOwnerError,
     MembershipNotFoundError,
     MessageNotFoundError,
     MessagingProviderError,
     NoSubscriptionError,
     NotificationNotFoundError,
+    NotStaffError,
     OrderAlreadyExistsError,
     OrderNotConfirmableError,
     OrderNotFoundError,
@@ -61,6 +66,7 @@ from app.core.exceptions import (
     ReplyProviderError,
     SessionNotFoundError,
     SlugAlreadyExistsError,
+    StaffMemberNotFoundError,
     StorefrontAlreadyConnectedError,
     StorefrontNotConnectedError,
     UnknownTimezoneError,
@@ -346,6 +352,31 @@ _ANSWERS: dict[type[AppError], _Answer] = {
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "invalid_date_range",
     ),
+    # The platform surface. Every one of these is answered honestly,
+    # unlike the tenant refusals above, and it can afford to be: nobody
+    # reaches an /admin route without a session that has already been
+    # matched to a live staff row, so there is no stranger here to keep
+    # in the dark -- and a support engineer who cannot tell "no such
+    # account" from "not a staff member" cannot answer the ticket.
+    NotStaffError: _Answer(status.HTTP_403_FORBIDDEN, "not_staff"),
+    # 401 rather than 403: signing in again fixes it, which is what a 401
+    # tells a client to do. The same session keeps working on the tenant
+    # surface, which is the point of a separate window.
+    AdminSessionExpiredError: _Answer(
+        status.HTTP_401_UNAUTHORIZED,
+        "admin_session_expired",
+        {"WWW-Authenticate": "Bearer"},
+    ),
+    InsufficientStaffRoleError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "insufficient_staff_role",
+    ),
+    StaffMemberNotFoundError: _Answer(
+        status.HTTP_404_NOT_FOUND,
+        "staff_member_not_found",
+    ),
+    AlreadyStaffError: _Answer(status.HTTP_409_CONFLICT, "already_staff"),
+    LastStaffOwnerError: _Answer(status.HTTP_409_CONFLICT, "last_staff_owner"),
 }
 
 _UNEXPECTED = _Answer(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error")
@@ -652,4 +683,23 @@ EMBEDDING_UNAVAILABLE = _documented(
 BAD_RANGE = _documented(
     status.HTTP_422_UNPROCESSABLE_CONTENT,
     "The date range is backwards, too long, or names an unknown timezone",
+)
+
+# The platform surface, whose refusals are their own set because they mean
+# different things from the tenant ones sharing their status codes.
+ADMIN_UNAUTHORISED = _documented(
+    status.HTTP_401_UNAUTHORIZED,
+    "Not authenticated, or this session is too idle for the console",
+)
+ADMIN_FORBIDDEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Inactive user, not a staff member, or your staff role does not permit this",
+)
+STAFF_NOT_FOUND = _documented(
+    status.HTTP_404_NOT_FOUND,
+    "No such account, or it has never been granted platform access",
+)
+STAFF_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That account already has access, or it is the last staff owner",
 )
