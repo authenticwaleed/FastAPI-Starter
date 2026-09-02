@@ -221,27 +221,7 @@ class StaffService:
         if user is None:
             raise UserNotFoundError(user_id)
 
-        existing = self._staff.get_for_user(user_id)
-
-        if existing is not None and existing.is_live:
-            # Changing what somebody may do is a PATCH, and it is the
-            # request that gets recorded as a change of rank. Quietly
-            # accepting a POST here would lose that distinction.
-            raise AlreadyStaffError(user_id)
-
-        if existing is None:
-            member = self._staff.create(
-                user_id=user_id,
-                role=role,
-                granted_by_user_id=actor.user.id,
-            )
-        else:
-            member = self._staff.reinstate(
-                existing,
-                role=role,
-                granted_by_user_id=actor.user.id,
-                at=datetime.now(UTC),
-            )
+        member, reinstated = self._admit(user, role, granted_by=actor.user.id)
 
         self._audit.did(
             actor.logged,
@@ -253,7 +233,7 @@ class StaffService:
             meta={
                 "email": user.email,
                 "role": role.value,
-                "reinstated": existing is not None,
+                "reinstated": reinstated,
             },
         )
         self._session.commit()
@@ -280,24 +260,7 @@ class StaffService:
         always add an owner and then act as one, which is the version of
         that power that leaves a trail.
         """
-        existing = self._staff.get_for_user(user.id)
-
-        if existing is not None and existing.is_live:
-            raise AlreadyStaffError(user.id)
-
-        if existing is None:
-            member = self._staff.create(
-                user_id=user.id,
-                role=role,
-                granted_by_user_id=None,
-            )
-        else:
-            member = self._staff.reinstate(
-                existing,
-                role=role,
-                granted_by_user_id=None,
-                at=datetime.now(UTC),
-            )
+        member, reinstated = self._admit(user, role, granted_by=None)
 
         self._audit.did(
             AdminActor(),
@@ -306,7 +269,7 @@ class StaffService:
             meta={
                 "email": user.email,
                 "role": role.value,
-                "reinstated": existing is not None,
+                "reinstated": reinstated,
                 # So a reader can tell this from a grant made by a
                 # colleague, which is the difference between a
                 # deployment being set up and somebody being promoted.
@@ -388,6 +351,50 @@ class StaffService:
         return member, user
 
     # --- the rules everything above shares ---------------------------------
+
+    def _admit(
+        self,
+        user: User,
+        role: StaffRole,
+        *,
+        granted_by: int | None,
+    ) -> tuple[StaffMember, bool]:
+        """Create the row, or give a revoked one its access back.
+
+        One place, because "re-granting reinstates rather than adds" is a
+        rule rather than a coincidence, and it is asked twice: once by the
+        console and once by the command line. Two copies of it would
+        eventually be two answers, and the second answer would be a
+        colleague with two histories.
+
+        Refusing somebody who already has live access belongs here for
+        the same reason. Changing what a person may do is a PATCH, and it
+        is the request that gets recorded as a change of rank; quietly
+        accepting a second grant would lose that distinction on whichever
+        path forgot to check.
+        """
+        existing = self._staff.get_for_user(user.id)
+
+        if existing is not None and existing.is_live:
+            raise AlreadyStaffError(user.id)
+
+        if existing is None:
+            created = self._staff.create(
+                user_id=user.id,
+                role=role,
+                granted_by_user_id=granted_by,
+            )
+
+            return created, False
+
+        reinstated = self._staff.reinstate(
+            existing,
+            role=role,
+            granted_by_user_id=granted_by,
+            at=datetime.now(UTC),
+        )
+
+        return reinstated, True
 
     def _require(self, actor: StaffActor, needed: StaffRole) -> None:
         """Enforce the rank, again, where the work happens.
