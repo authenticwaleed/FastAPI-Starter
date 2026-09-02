@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.dependencies.staff import StaffDep
+from app.api.dependencies.staff import StaffAdminDep, StaffDep
 from app.api.errors import (
     ADMIN_FORBIDDEN,
     ADMIN_NOT_FOUND,
@@ -20,6 +20,8 @@ from app.schemas.admin_console import (
     AdminUserSession,
     AdminUserSummary,
 )
+from app.schemas.admin_lifecycle import SessionsRevoked
+from app.services.admin_lifecycle_service import AdminLifecycleServiceDep
 from app.services.admin_user_service import AdminUserServiceDep
 
 router = APIRouter(prefix="/users", tags=["platform"])
@@ -80,6 +82,78 @@ def read_user(
         ],
         sessions=[_session(session) for session in sessions],
     )
+
+
+# Reading an account is any staff rank; changing one is `admin`. None of
+# these four destroys anything -- an account turned off can be turned back
+# on, and sessions can be signed in again -- which is why none of them
+# needs an owner or a confirmation.
+@router.post("/{user_id}/deactivate", responses={**PLATFORM, **ADMIN_NOT_FOUND})
+def deactivate_user(
+    user_id: int,
+    actor: StaffAdminDep,
+    service: AdminLifecycleServiceDep,
+) -> AdminUserSummary:
+    """Turn an account off, and sign it out everywhere.
+
+    One transaction, because a deactivated account that stays signed in
+    is not deactivated: the access token in a browser keeps working until
+    it expires, and the refresh token behind it would mint another.
+    """
+    return _summary(service.deactivate(actor, user_id))
+
+
+@router.post("/{user_id}/activate", responses={**PLATFORM, **ADMIN_NOT_FOUND})
+def activate_user(
+    user_id: int,
+    actor: StaffAdminDep,
+    service: AdminLifecycleServiceDep,
+) -> AdminUserSummary:
+    """Turn an account back on.
+
+    Nothing is signed back in. The sessions that ended when it was
+    deactivated are gone, and coming back means signing in -- which is
+    also what proves the account is theirs again.
+    """
+    return _summary(service.activate(actor, user_id))
+
+
+@router.post("/{user_id}/sessions/revoke", responses={**PLATFORM, **ADMIN_NOT_FOUND})
+def revoke_user_sessions(
+    user_id: int,
+    actor: StaffAdminDep,
+    service: AdminLifecycleServiceDep,
+) -> SessionsRevoked:
+    """Sign an account out everywhere, without turning it off.
+
+    The answer to "somebody has my laptop" from a customer who cannot
+    reach their own session list. They can sign straight back in, which
+    is the difference between this and deactivating.
+
+    Answers with a count rather than 204, because zero and three are
+    different answers to that question.
+    """
+    return SessionsRevoked(sessions_ended=service.revoke_sessions(actor, user_id))
+
+
+@router.post("/{user_id}/verify-email", responses={**PLATFORM, **ADMIN_NOT_FOUND})
+def verify_user_email(
+    user_id: int,
+    actor: StaffAdminDep,
+    service: AdminLifecycleServiceDep,
+) -> AdminUserSummary:
+    """Mark an address confirmed, when the mail will not arrive.
+
+    The narrow case the plan names, and it is worth naming what it is
+    not: a way to confirm addresses in bulk, or to skip the link for
+    convenience. The point of a verification timestamp is that somebody
+    proved something, and here the proof is a staff member's word -- so
+    the entry records whose.
+
+    An address already confirmed is left alone rather than restamped: the
+    question the column answers is when it was first proved.
+    """
+    return _summary(service.verify_email(actor, user_id))
 
 
 def _summary(user: User) -> AdminUserSummary:

@@ -1011,3 +1011,169 @@ class LastStaffOwnerError(AppError):
     def __init__(self, user_id: int) -> None:
         super().__init__(f"User {user_id} is the last staff owner")
         self.user_id = user_id
+
+
+class StaffCannotActAsTenantError(AppError):
+    """A staff actor reached a path that records who on the team did it.
+
+    Should be impossible, and it is raised rather than worked around for
+    exactly that reason. A support grant is permission to look at a
+    customer's account, not permission to act as the customer -- so a
+    staff actor holds the viewer's role, and every path that writes
+    requires more than a viewer has.
+
+    If one ever does not, this is what stops it. The alternative is an
+    entry in a business's own audit log naming a support engineer among
+    their colleagues, which is the single thing the whole arrangement is
+    built to prevent, and which nobody would notice for months.
+    """
+
+    detail = "Support access may not act inside a customer's workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(
+            f"A staff actor tried to act as a member of workspace {workspace_id}"
+        )
+        self.workspace_id = workspace_id
+
+
+class SupportAccessRequiredError(AppError):
+    """Reading this customer's data needs a live support grant.
+
+    Unknown, expired and revoked are one answer, which is unusual on this
+    surface -- everything else here is deliberately exact. The difference
+    is that all three mean the same thing to the person asking and lead
+    to the same next step: ask for access, with a reason.
+    """
+
+    detail = "This needs a live support grant for the workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"No live support grant for workspace {workspace_id}")
+        self.workspace_id = workspace_id
+
+
+class SupportGrantTooLongError(AppError):
+    """The requested duration is past what configuration allows.
+
+    Refused rather than clamped, which is the plan's word and the right
+    one. Silently shortening a grant to four hours when somebody asked
+    for two days would leave them believing they have access they do not,
+    and the moment they find out is halfway through an incident.
+    """
+
+    detail = "That support grant is longer than the maximum allowed"
+
+    def __init__(self, hours: int, maximum: int) -> None:
+        super().__init__(f"A support grant of {hours}h exceeds the {maximum}h maximum")
+        self.hours = hours
+        self.maximum = maximum
+
+
+class SupportAccessAlreadyGrantedError(AppError):
+    """This staff member already holds a live grant for this workspace.
+
+    Refused rather than extended. A grant carries a reason and an expiry
+    that were both recorded when it was asked for, and quietly pushing
+    the expiry out on a second request would make the recorded reason
+    describe a window it no longer covers.
+    """
+
+    detail = "You already hold a live support grant for this workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"A live support grant already exists for {workspace_id}")
+        self.workspace_id = workspace_id
+
+
+class WorkspaceSuspendedError(AppError):
+    """The workspace is frozen: it can be read, and not changed.
+
+    Its own error rather than a role refusal, because it is not about who
+    is asking. A suspension is reachable and read-only on purpose -- a
+    business that has not paid should be able to look at its own history
+    and settle the bill, not be locked out of its records over an invoice.
+    Telling them their role is insufficient would send them to an
+    administrator who cannot help.
+    """
+
+    detail = "This workspace is suspended. It can be read but not changed"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Workspace {workspace_id} is suspended")
+        self.workspace_id = workspace_id
+
+
+class WorkspaceLifecycleError(AppError):
+    """A lifecycle move that does not apply from where the workspace is.
+
+    One class carrying its own sentence rather than five near-identical
+    ones, like InvalidDateRangeError. Suspending what is already
+    suspended, restoring what was never closed, restoring after the
+    erasure date has passed: each is a different sentence and the same
+    kind of refusal, and a client's only useful response to any of them
+    is to read it.
+    """
+
+    detail = "That is not possible from this workspace's current state"
+
+    def __init__(self, workspace_id: object, reason: str) -> None:
+        super().__init__(f"Workspace {workspace_id}: {reason}", detail=reason)
+        self.workspace_id = workspace_id
+        self.reason = reason
+
+
+class ConfirmationMismatchError(AppError):
+    """A destructive call did not name its subject correctly.
+
+    The plan's rule for the operations that cannot be undone: deleting
+    takes the workspace's slug in the body, not just its id in the path.
+    An id is copied from a list and a slug has to be read and typed, and
+    the difference between those two acts is the whole safeguard.
+
+    The attempt is audited before this is raised. Somebody typing the
+    wrong slug into an erasure is either tired or in the wrong window,
+    and both are worth a row.
+    """
+
+    detail = "The confirmation does not match this workspace"
+
+    def __init__(self, workspace_id: object) -> None:
+        super().__init__(f"Confirmation did not match workspace {workspace_id}")
+        self.workspace_id = workspace_id
+
+
+class JobNotFoundError(AppError):
+    """No job with that id.
+
+    Safe to say plainly, like every other refusal on the platform
+    surface: whoever is asking has already proved they operate this
+    deployment.
+    """
+
+    detail = "No such job"
+
+    def __init__(self, job_id: object) -> None:
+        super().__init__(f"No job with id {job_id}")
+        self.job_id = job_id
+
+
+class JobNotRetryableError(AppError):
+    """The job is not in a state this can be done from.
+
+    Carries its own sentence, like WorkspaceLifecycleError. The
+    interesting case is `running`: the worker holding that row does not
+    check back, so moving it would let a second worker claim the same
+    work and race the first -- which is what "retry must respect
+    dedupe_key" comes to in practice.
+    """
+
+    detail = "That job cannot be retried or cancelled from its current state"
+
+    def __init__(self, job_id: object, reason: str) -> None:
+        super().__init__(
+            f"Job {job_id} cannot be acted on: {reason}",
+            detail=f"That job cannot be acted on: {reason}",
+        )
+        self.job_id = job_id
+        self.reason = reason

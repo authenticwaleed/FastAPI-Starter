@@ -17,6 +17,7 @@ from app.core.exceptions import (
     AutomationAlreadyExistsError,
     AutomationNotFoundError,
     BillingProviderError,
+    ConfirmationMismatchError,
     ContactAlreadyExistsError,
     ContactNotFoundError,
     ConversationAlreadyOpenError,
@@ -44,6 +45,8 @@ from app.core.exceptions import (
     InvitationExpiredError,
     InvitationNotFoundError,
     InvitationNotYoursError,
+    JobNotFoundError,
+    JobNotRetryableError,
     KnowledgeDocumentNotFoundError,
     KnowledgeSourceNotFoundError,
     LastOwnerError,
@@ -66,17 +69,23 @@ from app.core.exceptions import (
     ReplyProviderError,
     SessionNotFoundError,
     SlugAlreadyExistsError,
+    StaffCannotActAsTenantError,
     StaffMemberNotFoundError,
     StorefrontAlreadyConnectedError,
     StorefrontNotConnectedError,
+    SupportAccessAlreadyGrantedError,
+    SupportAccessRequiredError,
+    SupportGrantTooLongError,
     UnknownTimezoneError,
     UnreadableDocumentError,
     UnsupportedDocumentTypeError,
     UserNotFoundError,
     WhatsAppAlreadyConnectedError,
     WhatsAppNotConnectedError,
+    WorkspaceLifecycleError,
     WorkspaceNotFoundError,
     WorkspaceOwnershipError,
+    WorkspaceSuspendedError,
 )
 from app.schemas.errors import ErrorResponse
 
@@ -377,6 +386,55 @@ _ANSWERS: dict[type[AppError], _Answer] = {
     ),
     AlreadyStaffError: _Answer(status.HTTP_409_CONFLICT, "already_staff"),
     LastStaffOwnerError: _Answer(status.HTTP_409_CONFLICT, "last_staff_owner"),
+    # Support access. The refusal a support engineer meets most often,
+    # and the one that should read as "ask for access" rather than as a
+    # fault: unknown, expired and revoked all arrive here, because all
+    # three lead to the same next step.
+    SupportAccessRequiredError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "support_access_required",
+    ),
+    # 422 rather than 400: the request was well formed and the number in
+    # it was outside what configuration allows, which is the distinction
+    # that tells a client to change the value rather than the call.
+    SupportGrantTooLongError: _Answer(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "support_grant_too_long",
+    ),
+    SupportAccessAlreadyGrantedError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "support_access_already_granted",
+    ),
+    # Should be unreachable: a staff actor holds the viewer's role, and
+    # every path that records who did something needs more than that. It
+    # is mapped so that the day one does not, the answer is a refusal
+    # rather than a 500 -- and so that the log line names what happened.
+    StaffCannotActAsTenantError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "staff_cannot_act_as_tenant",
+    ),
+    # Lifecycle. 403 rather than 402 for a suspension: the plan is not
+    # what is in the way, an operational decision is, and the difference
+    # matters to whoever reads the message. A suspended workspace can
+    # still be read, so this only ever answers a write.
+    WorkspaceSuspendedError: _Answer(
+        status.HTTP_403_FORBIDDEN,
+        "workspace_suspended",
+    ),
+    WorkspaceLifecycleError: _Answer(
+        status.HTTP_409_CONFLICT,
+        "workspace_lifecycle",
+    ),
+    # 422 rather than 400: the request was well formed and the value in
+    # it did not match the workspace it was aimed at, which is the
+    # distinction that tells somebody to check what they typed rather
+    # than how they called it.
+    ConfirmationMismatchError: _Answer(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "confirmation_mismatch",
+    ),
+    JobNotFoundError: _Answer(status.HTTP_404_NOT_FOUND, "job_not_found"),
+    JobNotRetryableError: _Answer(status.HTTP_409_CONFLICT, "job_not_retryable"),
 }
 
 _UNEXPECTED = _Answer(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error")
@@ -711,4 +769,36 @@ STAFF_CONFLICT = _documented(
 ADMIN_NOT_FOUND = _documented(
     status.HTTP_404_NOT_FOUND,
     "No workspace or account exists with that id",
+)
+
+SUPPORT_ACCESS_FORBIDDEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Not staff, your rank does not permit this, or you hold no live grant",
+)
+SUPPORT_GRANT_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "You already hold a live support grant for this workspace",
+)
+BAD_GRANT_DURATION = _documented(
+    status.HTTP_422_UNPROCESSABLE_CONTENT,
+    "That support grant is longer than the maximum allowed",
+)
+
+WORKSPACE_FROZEN = _documented(
+    status.HTTP_403_FORBIDDEN,
+    "Inactive user, your role does not permit this, or the workspace is suspended",
+)
+LIFECYCLE_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That is not possible from this workspace's current state",
+)
+BAD_CONFIRMATION = _documented(
+    status.HTTP_422_UNPROCESSABLE_CONTENT,
+    "The confirmation does not name this workspace",
+)
+
+JOB_NOT_FOUND = _documented(status.HTTP_404_NOT_FOUND, "No job has that id")
+JOB_CONFLICT = _documented(
+    status.HTTP_409_CONFLICT,
+    "That job cannot be retried or cancelled from its current state",
 )

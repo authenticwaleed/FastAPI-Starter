@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -196,6 +198,23 @@ class BillingEvent(Base):
     # vocabulary, because the useful thing about this column is being
     # able to hold it up against the provider's own dashboard.
     event_type: Mapped[str] = mapped_column(String(120))
+
+    # The delivery as it arrived, sorted into this application's words
+    # rather than the provider's wire format. Stored because a delivery
+    # that was recorded and not acted on -- a deploy mid-flight, a bug
+    # since fixed, a subscription that did not exist yet -- is otherwise
+    # a row saying something happened and nothing saying what.
+    #
+    # This is what `/admin/billing/events/{id}/replay` re-applies. Note
+    # what it is not: the raw body. That is the provider's to keep, it
+    # carries fields nothing here reads, and storing it would mean
+    # holding a customer's billing details in a table this application
+    # has no reason to hold them in.
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
 
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

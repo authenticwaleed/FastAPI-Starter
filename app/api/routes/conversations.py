@@ -48,8 +48,14 @@ NAMED = {**SCOPED, **CONVERSATION_NOT_FOUND}
 ASSIGNED_TO = r"^(me|[0-9]+)$"
 
 
-def _read(row: InboxRow) -> ConversationRead:
-    """One conversation, with what it takes to render it, as one object."""
+def read_of(row: InboxRow) -> ConversationRead:
+    """One conversation, with what it takes to render it, as one object.
+
+    Public, and shared with the platform console, which serves this same
+    inbox to support behind a time-boxed grant. Two renderers would
+    eventually be two shapes, and what a support engineer is looking at
+    had better be what the customer is looking at.
+    """
     return ConversationRead(
         id=row.conversation.id,
         contact=ContactSummary.model_validate(row.contact),
@@ -86,7 +92,7 @@ def _assignee(access: WorkspaceAccess, assigned_to: str | None) -> int | None:
         return None
 
     if assigned_to == "me":
-        return access.membership.user_id
+        return access.actor_user_id
 
     return int(assigned_to)
 
@@ -105,7 +111,7 @@ def open_conversation(
     access: WorkspaceAgentDep,
     service: ConversationServiceDep,
 ) -> ConversationRead:
-    return _read(service.create(access, payload))
+    return read_of(service.create(access, payload))
 
 
 @router.get("", responses=SCOPED)
@@ -150,7 +156,7 @@ def list_conversations(
     )
 
     return ConversationPage(
-        items=[_read(row) for row in rows],
+        items=[read_of(row) for row in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -163,7 +169,7 @@ def read_conversation(
     access: WorkspaceMemberDep,
     service: ConversationServiceDep,
 ) -> ConversationRead:
-    return _read(service.detail(access, conversation_id))
+    return read_of(service.detail(access, conversation_id))
 
 
 @router.patch(
@@ -176,7 +182,7 @@ def update_conversation(
     access: WorkspaceAgentDep,
     service: ConversationServiceDep,
 ) -> ConversationRead:
-    return _read(service.update(access, conversation_id, payload))
+    return read_of(service.update(access, conversation_id, payload))
 
 
 @router.post("/{conversation_id}/assign", responses=NAMED)
@@ -187,7 +193,7 @@ def assign_conversation(
     service: ConversationServiceDep,
 ) -> ConversationRead:
     """Hand the thread to a colleague, or send `null` to unassign it."""
-    return _read(service.assign(access, conversation_id, payload.user_id))
+    return read_of(service.assign(access, conversation_id, payload.user_id))
 
 
 @router.post("/{conversation_id}/read", responses=NAMED)
@@ -203,7 +209,7 @@ def mark_conversation_read(
     dashboard should not be able to clear a badge their colleagues work
     from.
     """
-    return _read(service.mark_read(access, conversation_id))
+    return read_of(service.mark_read(access, conversation_id))
 
 
 @router.post("/{conversation_id}/takeover", responses=NAMED)
@@ -221,7 +227,7 @@ def take_over_conversation(
     a customer, and the plan makes stopping that a rule rather than a
     preference.
     """
-    return _read(service.take_over(access, conversation_id, payload.reason))
+    return read_of(service.take_over(access, conversation_id, payload.reason))
 
 
 @router.post("/{conversation_id}/release-to-ai", responses=NAMED)
@@ -238,7 +244,7 @@ def release_conversation_to_ai(
     decisions, and whoever took it is usually still the right person to
     see the customer's reply.
     """
-    return _read(service.release_to_ai(access, conversation_id, payload.ai_mode))
+    return read_of(service.release_to_ai(access, conversation_id, payload.ai_mode))
 
 
 @router.get("/{conversation_id}/events", responses=NAMED)
@@ -273,7 +279,7 @@ def close_conversation(
 ) -> ConversationRead:
     """Closing an already closed conversation changes nothing and says so
     with the same 200, so a double click is not an error."""
-    return _read(service.close(access, conversation_id))
+    return read_of(service.close(access, conversation_id))
 
 
 @router.post(
@@ -285,7 +291,7 @@ def reopen_conversation(
     access: WorkspaceAgentDep,
     service: ConversationServiceDep,
 ) -> ConversationRead:
-    return _read(service.reopen(access, conversation_id))
+    return read_of(service.reopen(access, conversation_id))
 
 
 @router.get("/{conversation_id}/messages", responses=NAMED)

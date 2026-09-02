@@ -67,6 +67,11 @@ class JobStatus(StrEnum):
     # row, and a queue that silently drops what it could not do is a queue
     # nobody can debug.
     FAILED = "failed"
+    # Stopped by a person rather than by the runner giving up. Its own
+    # status and not `failed`, because the two answer different questions
+    # afterwards: a failure is something to investigate, and this is
+    # something somebody already decided about.
+    CANCELLED = "cancelled"
 
 
 class Job(Base):

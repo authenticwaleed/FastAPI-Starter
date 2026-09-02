@@ -9,6 +9,7 @@ from app.models.contact import Contact
 from app.models.conversation import Conversation
 from app.models.knowledge import KnowledgeDocument
 from app.models.message import Message
+from app.models.plan_override import PlanOverride
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceStatus
@@ -61,24 +62,48 @@ class WorkspaceCounts:
 def entitled_plan() -> ColumnElement[str]:
     """The plan a workspace is really on, as a column.
 
-    The same rule `SubscriptionService.plan_for` applies one workspace at
-    a time -- the subscription's plan while that subscription is good for
-    something, and the free plan otherwise -- expressed once more in SQL
-    because a console asks it about every workspace at once.
+    The same three sources in the same order as
+    `SubscriptionService.plan_for` -- an override, then the subscription,
+    then free -- expressed once more in SQL because a console asks about
+    every workspace at once rather than one at a time.
 
-    Two answers to one question is a risk worth naming: this shares
-    `ENTITLING` with the service so the statuses cannot drift, and the
-    fallback is `FREE_PLAN.tier` rather than a literal, so a change of
-    free tier moves both together. What is left is the shape, and a test
-    holds the two side by side.
+    Two answers to one question is a risk worth naming, so as little as
+    possible is restated: `ENTITLING` is imported from the service, the
+    fallback is `FREE_PLAN.tier` rather than a literal, and the override
+    is matched by the same "no date or a date ahead" the repository uses.
+    What is left is the shape, and a test holds the two side by side on
+    every combination that matters.
 
-    A workspace with no subscription row at all lands in `else_` too:
-    a NULL status is not in the list, so it reads as the free plan --
-    which is what it is.
+    Both `NULL` cases fall through correctly and neither is an accident.
+    A workspace with no override has a NULL granted plan, so `coalesce`
+    moves on; one with no subscription has a NULL status, which is not in
+    `ENTITLING`, so it reads as free -- which is what it is.
     """
-    return case(
-        (Subscription.status.in_(ENTITLING), Subscription.plan),
-        else_=literal(FREE_PLAN.tier.value),
+    return func.coalesce(
+        _granted_plan(),
+        case(
+            (Subscription.status.in_(ENTITLING), Subscription.plan),
+            else_=literal(FREE_PLAN.tier.value),
+        ),
+    )
+
+
+def _granted_plan() -> ColumnElement[str | None]:
+    """The plan the platform granted this workspace, if one is in force.
+
+    A correlated subquery rather than a join, so that adding this to a
+    search cannot change how many rows it returns -- the unique
+    constraint makes at most one match, and a subquery says so at a
+    glance where a join would need reading twice.
+    """
+    return (
+        select(PlanOverride.plan)
+        .where(
+            PlanOverride.workspace_id == Workspace.id,
+            (PlanOverride.expires_at.is_(None))
+            | (PlanOverride.expires_at > func.now()),
+        )
+        .scalar_subquery()
     )
 
 

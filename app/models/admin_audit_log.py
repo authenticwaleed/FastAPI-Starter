@@ -71,6 +71,66 @@ class AdminAction(StrEnum):
     USERS_SEARCHED = "users.searched"
     USER_READ = "user.read"
 
+    # Support access, and the two reads it opens. These are the entries
+    # that matter most in this table: everything above is metadata about
+    # a business, and these are somebody reading the messages its
+    # customers sent it.
+    #
+    # The reads are recorded per request rather than once per grant. A
+    # grant says somebody was allowed to look; these say what they
+    # actually opened, which is the question asked afterwards.
+    SUPPORT_ACCESS_GRANTED = "support_access.granted"
+    SUPPORT_ACCESS_REVOKED = "support_access.revoked"
+    SUPPORT_ACCESS_LISTED = "support_access.listed"
+    CONVERSATIONS_READ = "workspace.conversations_read"
+    MESSAGES_READ = "workspace.messages_read"
+
+    # Lifecycle. The first entries in this table that change a customer's
+    # account rather than read it, and the last of them destroys it.
+    #
+    # `WORKSPACE_ERASE_REFUSED` is the one entry here written for
+    # something that did *not* happen, which the plan asks for by name:
+    # somebody typing the wrong slug into an erasure is either tired or
+    # in the wrong window, and both are worth a row.
+    WORKSPACE_SUSPENDED = "workspace.suspended"
+    WORKSPACE_UNSUSPENDED = "workspace.unsuspended"
+    WORKSPACE_CANCELLED = "workspace.cancelled"
+    WORKSPACE_RESTORED = "workspace.restored"
+    WORKSPACE_ERASE_AFTER_CHANGED = "workspace.erase_after_changed"
+    WORKSPACE_ERASED = "workspace.erased"
+    WORKSPACE_ERASE_REFUSED = "workspace.erase_refused"
+
+    # And what can be done to one account, none of which belongs to a
+    # workspace -- which is why the log's workspace reference is nullable.
+    USER_DEACTIVATED = "user.deactivated"
+    USER_ACTIVATED = "user.activated"
+    USER_SESSIONS_REVOKED = "user.sessions_revoked"
+    USER_EMAIL_VERIFIED = "user.email_verified"
+
+    # Billing and entitlements. This surface reads what the provider says
+    # and grants what the provider does not know about; it never moves
+    # money, which is why there is no refund action here and will not be
+    # one -- that belongs in the provider's dashboard, which is better at
+    # it and is already the system of record.
+    SUBSCRIPTIONS_SEARCHED = "billing.subscriptions_searched"
+    PLAN_OVERRIDE_GRANTED = "billing.plan_override_granted"
+    PLAN_OVERRIDE_REMOVED = "billing.plan_override_removed"
+    BILLING_EVENTS_READ = "billing.events_read"
+    BILLING_EVENT_REPLAYED = "billing.event_replayed"
+
+    # Operations. Where "why did this not work" gets answered without a
+    # database console, which is the point of the phase -- and the reason
+    # the reads are recorded like every other: a job payload names a
+    # workspace, so reading the queue is reading which customers had
+    # trouble.
+    JOBS_SEARCHED = "ops.jobs_searched"
+    JOB_READ = "ops.job_read"
+    JOB_RETRIED = "ops.job_retried"
+    JOB_CANCELLED = "ops.job_cancelled"
+    WEBHOOK_FAILURES_READ = "ops.webhook_failures_read"
+    WHATSAPP_HEALTH_READ = "ops.whatsapp_health_read"
+    HEALTH_READ = "ops.health_read"
+
 
 class AdminAuditLog(Base):
     """What staff did, kept apart from what tenants did.

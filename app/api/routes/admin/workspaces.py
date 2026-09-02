@@ -84,7 +84,7 @@ def search_workspaces(
     )
 
     return AdminWorkspacePage(
-        items=[_summary(row) for row in found],
+        items=[summary_of(row) for row in found],
         total=total,
         page=page,
         page_size=page_size,
@@ -229,7 +229,14 @@ def read_workspace_audit(
     )
 
 
-def _summary(row: WorkspaceRow) -> AdminWorkspaceSummary:
+def summary_of(row: WorkspaceRow) -> AdminWorkspaceSummary:
+    """One workspace as the console shows it in a list.
+
+    Public, and shared with the lifecycle routes, so that what suspending
+    an account answers with is exactly what the search result beside it
+    would say -- the resolved plan included, which is an expression
+    rather than a column on the workspace.
+    """
     return AdminWorkspaceSummary(
         id=row.workspace.id,
         name=row.workspace.name,
@@ -244,7 +251,7 @@ def _summary(row: WorkspaceRow) -> AdminWorkspaceSummary:
 
 def _detail(row: WorkspaceRow, counts: WorkspaceCounts) -> AdminWorkspaceDetail:
     return AdminWorkspaceDetail(
-        **_summary(row).model_dump(),
+        **summary_of(row).model_dump(),
         timezone=row.workspace.timezone,
         default_currency=row.workspace.default_currency,
         counts=AdminWorkspaceCounts(

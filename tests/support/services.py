@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.models.subscription import BillingProviderName, SubscriptionStatus
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.notification_repository import NotificationRepository
+from app.repositories.plan_override_repository import PlanOverrideRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.usage_repository import UsageRepository
 from app.repositories.workspace_membership_repository import (
@@ -73,6 +74,7 @@ def subscription_service(session: Session) -> SubscriptionService:
     return SubscriptionService(
         session=session,
         subscriptions=SubscriptionRepository(session),
+        overrides=PlanOverrideRepository(session),
         provider=FakeBillingProvider(),
         notifications=notification_service(session),
         usage=usage_service(session),

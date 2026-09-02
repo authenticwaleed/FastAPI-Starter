@@ -187,8 +187,8 @@ def engine() -> Iterator[Engine]:
                 # that stops referencing users would quietly stop being
                 # cleaned -- and admin_audit_logs is arranged precisely
                 # so that deleting its subjects does not delete it.
-                "admin_audit_logs, staff_members, "
-                "billing_events, usage_records, subscriptions, "
+                "admin_audit_logs, support_grants, staff_members, webhook_failures, "
+                "billing_events, plan_overrides, usage_records, subscriptions, "
                 "automation_runs, automations, "
                 "product_variants, products, orders, "
                 "messages, conversations, contacts, "

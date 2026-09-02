@@ -89,6 +89,19 @@ class WorkspaceRepository:
         self._session.delete(workspace)
         self._session.flush()
 
+    def clear_erasure(self, workspace: Workspace) -> Workspace:
+        """Take the erasure date off a workspace that is coming back.
+
+        Its own method rather than a null passed to `set_status`, which
+        reads there as "leave it alone" -- and the difference between
+        leaving a date alone and removing it is a restored workspace that
+        gets erased anyway on the day nobody expected.
+        """
+        workspace.erase_after = None
+        self._session.flush()
+
+        return workspace
+
     def get_by_slug(self, slug: str) -> Workspace | None:
         return self._session.scalar(select(Workspace).where(Workspace.slug == slug))
 

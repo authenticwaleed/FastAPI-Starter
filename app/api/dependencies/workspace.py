@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from app.api.dependencies.auth import CurrentUserDep
 from app.core import context
@@ -14,6 +14,7 @@ from app.services.workspace_service import (
     MAY_HANDLE_CUSTOMERS,
     WorkspaceAccess,
     WorkspaceServiceDep,
+    require_writable,
 )
 
 
@@ -34,7 +35,19 @@ def get_workspace_access(
     return service.access(workspace_id, user)
 
 
+# What does not change a workspace. Everything else is a write, and a
+# suspended workspace refuses all of it.
+#
+# The method rather than the role, and the difference matters: some of
+# this application's reads need an administrator -- the audit log, the
+# API key list -- so refusing by role would freeze those too, and a
+# suspended business being unable to read its own audit log is the
+# opposite of what a suspension is for.
+_READS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
 async def bound_workspace_access(
+    request: Request,
     access: Annotated[WorkspaceAccess, Depends(get_workspace_access)],
 ) -> WorkspaceAccess:
     """The same access, with the workspace added to the log context.
@@ -53,6 +66,20 @@ async def bound_workspace_access(
     than no line at all.
     """
     context.bind(workspace_id=access.workspace.id)
+
+    # One check for every write on the tenant surface, rather than one
+    # per service. A suspension is a property of the workspace and not of
+    # the caller, so it belongs where the workspace is resolved -- and a
+    # route added next month is frozen without anybody remembering.
+    #
+    # Note what this does not cover, on purpose: work that reaches a
+    # service by another road. A webhook still stores an inbound message
+    # for a suspended business, because losing a customer's message over
+    # an unpaid invoice would be the worst thing a suspension could do.
+    # What that road decides for itself is whether to answer it -- see
+    # app/services/ai_dispatch.py.
+    if request.method not in _READS:
+        require_writable(access)
 
     return access
 

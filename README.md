@@ -181,6 +181,21 @@ test is rolled back afterwards, so it never touches application data. Set
 | GET | `…/{workspace_id}/audit` | Its own history, read by staff |
 | GET | `/api/v1/admin/users` | Find an account by address or name |
 | GET | `/api/v1/admin/users/{user_id}` | One account, its workspaces, its sessions |
+| POST | `…/{workspace_id}/support-access` | Ask to read this customer's data |
+| DELETE | `…/{workspace_id}/support-access` | End your own access early |
+| GET | `…/{workspace_id}/support-access` | Who has had access, when, and why |
+| GET | `…/{workspace_id}/conversations` | Their inbox. Needs a live grant |
+| GET | `…/conversations/{conversation_id}/messages` | One thread. Needs a live grant |
+| POST | `…/{workspace_id}/suspend` | Freeze an account: readable, unchangeable |
+| POST | `…/{workspace_id}/unsuspend` | Thaw it |
+| POST | `…/{workspace_id}/cancel` | Close it. Body echoes the slug |
+| POST | `…/{workspace_id}/restore` | Bring it back, before its erasure date |
+| PATCH | `…/{workspace_id}/erase-after` | Move that date, either way |
+| POST | `…/{workspace_id}/erase-now` | Destroy it. Owner, slug echoed |
+| POST | `/api/v1/admin/users/{user_id}/deactivate` | Turn an account off, and sign it out |
+| POST | `/api/v1/admin/users/{user_id}/activate` | Turn it back on |
+| POST | `…/users/{user_id}/sessions/revoke` | Sign out everywhere, stay active |
+| POST | `…/users/{user_id}/verify-email` | Confirm an address delivery cannot reach |
 
 Protected endpoints take `Authorization: Bearer <access_token>`. The two
 webhook routes are not: their caller is Meta, which has no account here.
@@ -963,6 +978,91 @@ One route ignores the customer's plan on purpose: audit logs are a paid
 feature for a business, and whether support can answer a ticket about
 that business is not a decision its plan gets to make.
 
+#### Support access, and the door through that line
+
+Reading a customer's actual messages needs a **support grant**: a row
+naming one staff member, one workspace, a reason, and an hour it ends.
+Nobody has standing access. Four properties hold it up, and they only
+work as a set:
+
+- **It ends by itself.** `expires_at` is not nullable — a grant with no
+  end is not a grant — and nothing has to run for one to lapse. It simply
+  stops matching the lookup that opens the door. Four hours by default
+  (`ADMIN_SUPPORT_GRANT_HOURS`), hard-capped at
+  `ADMIN_SUPPORT_GRANT_MAX_HOURS`. A request for longer is **refused, not
+  shortened**: somebody who believes they have two days and has four
+  hours finds out mid-incident.
+- **The customer sees it.** Starting and ending a grant each write to the
+  business's own audit log, carrying the staff member's address and their
+  stated reason — which is what turns "a staff member read your account"
+  into an answer. They are their own events (`support.access_granted`,
+  `support.access_ended`) rather than ordinary ones with an odd actor,
+  because such an entry must never be able to look like one of the
+  customer's own colleagues.
+- **It reads and cannot write.** The access carries a `staff_actor`
+  instead of a membership, which makes its role `viewer`; this surface
+  publishes no route that writes tenant data, asserted over the whole
+  router by a test; and any service that did write would raise on
+  `actor_user_id` rather than record a staff member among the customer's
+  own people.
+- **It is not a membership.** No row is written, so a grant never appears
+  in the member list, the seat count, or the bill.
+
+Asking for access is `support` and reviewing who has had it is `admin` —
+the rank that answers tickets is not the rank that oversees whether it
+should have. Every read through a grant is recorded separately from the
+grant itself: the grant says somebody was allowed to look, and the
+entries say what they actually opened.
+
+**One gap worth knowing.** Reading a tenant audit log is a paid feature,
+so a business on the free plan holds those entries without being able to
+read them today. Ungating that is a customer-facing decision about the
+plan's shape and deliberately not made here.
+
+#### Suspension, which used to be only a word
+
+`WorkspaceStatus.SUSPENDED` was declared by the enum, set by nothing and
+checked by nothing — a workspace marked suspended kept working normally.
+It now means something, and the shape of that meaning is a decision:
+
+**Reachable and frozen, not locked out.** Reads succeed; writes are
+refused with `workspace_suspended`. A business that has not paid should
+be able to read its history, see what it owes and settle it — taking
+their records away over an invoice punishes them for the thing you want
+them to fix.
+
+The check is **by HTTP method, not by role**, in the one dependency every
+workspace-scoped route resolves. Refusing by role would freeze the audit
+log and the API key list too, which are administrator reads. A route
+added next month is frozen without anybody remembering.
+
+**Their inbox keeps listening.** A suspended workspace still ingests
+inbound WhatsApp messages and simply does not auto-answer them. Refusing
+to ingest would lose a customer's question over their supplier's unpaid
+invoice — the worst thing a suspension could do to somebody who is not
+party to it; answering on the business's behalf while its account is
+frozen would be the second worst. The message sits unanswered in an inbox
+the business can still read.
+
+#### The calls that cannot be undone
+
+Closing and erasing take the workspace's **slug in the body**. An id is
+copied from a list; a slug has to be read and typed, and the difference
+between those two acts is the safeguard. `erase-now` additionally needs
+the `owner` rank.
+
+The erasure's audit entry is written and committed **before** the delete,
+because afterwards there is no workspace to write about — and it survives
+because `admin_audit_logs.workspace_id` is nullable and does not cascade,
+with the slug copied beside it. A **wrong slug is refused and recorded as
+an attempt**: somebody typing the wrong name into an erasure is either
+tired or in the wrong window.
+
+Closing goes through the same `WorkspaceService` method a customer's own
+close uses, so the grace period and the erasure job behave identically. A
+second closing path that set the date differently is how a business ends
+up erased on a day nobody told them about.
+
 ## Configuration
 
 All configuration is read from the environment, with `.env` as a convenience
@@ -981,6 +1081,8 @@ production.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Short: it is sent with every request |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Idle timeout. Every refresh pushes it out |
 | `ADMIN_SESSION_IDLE_MINUTES` | `60` | The same session, refused by `/admin` alone |
+| `ADMIN_SUPPORT_GRANT_HOURS` | `4` | How long support access lasts by default |
+| `ADMIN_SUPPORT_GRANT_MAX_HOURS` | `24` | Longer is refused, not shortened |
 | `CORS_ORIGINS` | empty | Comma separated. Empty means no cross-origin access |
 | `CORS_ALLOW_CREDENTIALS` | `true` | Cannot be combined with `*` origins |
 | `ALLOWED_HOSTS` | `*` | Host header allow-list. Must be explicit in production |

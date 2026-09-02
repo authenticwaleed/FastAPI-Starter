@@ -27,10 +27,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.admin_audit_log import AdminAction, AdminAuditLog
+from app.models.job import JobKind
 from app.models.staff_member import StaffRole
+from app.models.subscription import BillingProviderName
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.repositories.admin_audit_log_repository import AdminAuditLogRepository
+from app.repositories.job_repository import JobRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_membership_repository import (
     WorkspaceMembershipRepository,
@@ -61,10 +65,62 @@ def acme(
     return Tenant(client, user_repository, membership_repository, "acme-fashion")
 
 
+def _a_job(session: Session) -> str:
+    """One pending job, so cancel and retry have something to act on.
+
+    Pending rather than failed, and in that order in the table below:
+    cancel refuses anything not waiting, and retry refuses anything
+    running or succeeded -- so cancelling first leaves exactly the state
+    the retry after it accepts.
+    """
+    job = JobRepository(session).enqueue(
+        kind=JobKind.DELIVER_MESSAGE,
+        workspace_id=None,
+        payload={"message_id": str(uuid.uuid4())},
+        run_at=datetime.now(UTC),
+    )
+    session.flush()
+
+    return str(job.id)
+
+
+def _a_billing_delivery(session: Session) -> str:
+    """One stored delivery, so the replay route has something to re-apply.
+
+    Recorded through the repository rather than by walking a checkout: a
+    replay is about a row in `billing_events`, and how it got there is
+    the payment webhook's own test.
+    """
+    event = SubscriptionRepository(session).record_event(
+        provider=BillingProviderName.STRIPE,
+        provider_event_id="evt_for_the_audit_case",
+        event_type="customer.subscription.updated",
+    )
+    session.flush()
+
+    return str(event.id)
+
+
+def _a_conversation(tenant: Tenant) -> str:
+    """One real thread, so the messages route has something to open."""
+    response = tenant.client.post(
+        tenant.path("conversations"),
+        json={"contact_id": tenant.contact()},
+        headers=tenant.owner_headers,
+    )
+    assert response.status_code == 201, response.text
+
+    return str(response.json()["id"])
+
+
 def _calls(
     console: Console,
     colleague: int,
     workspace_id: str,
+    conversation_id: str,
+    slug: str,
+    billing_event_id: str,
+    job_id: str,
 ) -> dict[tuple[str, str], tuple[Callable[[], Any], AdminAction]]:
     """One valid call per published operation, and what it should record.
 
@@ -145,6 +201,148 @@ def _calls(
             lambda: console.get(f"/users/{colleague}"),
             AdminAction.USER_READ,
         ),
+        # Support access, and the two reads it opens. In this order
+        # because the reads need the grant the first of them asks for,
+        # and the last of them ends it.
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/support-access",
+                {"reason": "Investigating a reported delivery failure"},
+            ),
+            AdminAction.SUPPORT_ACCESS_GRANTED,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/conversations"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/conversations"),
+            AdminAction.CONVERSATIONS_READ,
+        ),
+        (
+            "GET",
+            f"{ADMIN}/workspaces/{{workspace_id}}/conversations"
+            "/{conversation_id}/messages",
+        ): (
+            lambda: console.get(
+                f"/workspaces/{workspace_id}/conversations/{conversation_id}/messages"
+            ),
+            AdminAction.MESSAGES_READ,
+        ),
+        ("GET", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"): (
+            lambda: console.get(f"/workspaces/{workspace_id}/support-access"),
+            AdminAction.SUPPORT_ACCESS_LISTED,
+        ),
+        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/support-access"): (
+            lambda: console.delete(f"/workspaces/{workspace_id}/support-access"),
+            AdminAction.SUPPORT_ACCESS_REVOKED,
+        ),
+        # Lifecycle. In an order that leaves the workspace usable for the
+        # ones after it, and with the erasure last -- because after it
+        # there is no workspace for anything else to name.
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/suspend"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/suspend",
+                {"reason": "The invoice of 3 March is sixty days overdue"},
+            ),
+            AdminAction.WORKSPACE_SUSPENDED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/unsuspend"): (
+            lambda: console.post(f"/workspaces/{workspace_id}/unsuspend", {}),
+            AdminAction.WORKSPACE_UNSUSPENDED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/cancel"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/cancel",
+                {"confirm_slug": slug},
+            ),
+            AdminAction.WORKSPACE_CANCELLED,
+        ),
+        ("PATCH", f"{ADMIN}/workspaces/{{workspace_id}}/erase-after"): (
+            lambda: console.patch(
+                f"/workspaces/{workspace_id}/erase-after",
+                {"erase_after": (datetime.now(UTC) + timedelta(days=3)).isoformat()},
+            ),
+            AdminAction.WORKSPACE_ERASE_AFTER_CHANGED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/restore"): (
+            lambda: console.post(f"/workspaces/{workspace_id}/restore", {}),
+            AdminAction.WORKSPACE_RESTORED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/deactivate"): (
+            lambda: console.post(f"/users/{colleague}/deactivate", {}),
+            AdminAction.USER_DEACTIVATED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/activate"): (
+            lambda: console.post(f"/users/{colleague}/activate", {}),
+            AdminAction.USER_ACTIVATED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/sessions/revoke"): (
+            lambda: console.post(f"/users/{colleague}/sessions/revoke", {}),
+            AdminAction.USER_SESSIONS_REVOKED,
+        ),
+        ("POST", f"{ADMIN}/users/{{user_id}}/verify-email"): (
+            lambda: console.post(f"/users/{colleague}/verify-email", {}),
+            AdminAction.USER_EMAIL_VERIFIED,
+        ),
+        # Billing. The ledger is not about any one workspace; a granted
+        # plan is about exactly one.
+        ("GET", f"{ADMIN}/billing/subscriptions"): (
+            lambda: console.get("/billing/subscriptions"),
+            AdminAction.SUBSCRIPTIONS_SEARCHED,
+        ),
+        ("GET", f"{ADMIN}/billing/events"): (
+            lambda: console.get("/billing/events"),
+            AdminAction.BILLING_EVENTS_READ,
+        ),
+        ("POST", f"{ADMIN}/billing/events/{{event_id}}/replay"): (
+            lambda: console.post(f"/billing/events/{billing_event_id}/replay", {}),
+            AdminAction.BILLING_EVENT_REPLAYED,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/plan-override"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/plan-override",
+                {"plan": "growth", "reason": "Pilot until the contract lands"},
+            ),
+            AdminAction.PLAN_OVERRIDE_GRANTED,
+        ),
+        ("DELETE", f"{ADMIN}/workspaces/{{workspace_id}}/plan-override"): (
+            lambda: console.delete(f"/workspaces/{workspace_id}/plan-override"),
+            AdminAction.PLAN_OVERRIDE_REMOVED,
+        ),
+        # Operations. The queue read, then one job acted on, then the
+        # pages that answer "is anything wrong".
+        ("GET", f"{ADMIN}/jobs"): (
+            lambda: console.get("/jobs"),
+            AdminAction.JOBS_SEARCHED,
+        ),
+        ("GET", f"{ADMIN}/jobs/{{job_id}}"): (
+            lambda: console.get(f"/jobs/{job_id}"),
+            AdminAction.JOB_READ,
+        ),
+        ("POST", f"{ADMIN}/jobs/{{job_id}}/cancel"): (
+            lambda: console.post(f"/jobs/{job_id}/cancel", {}),
+            AdminAction.JOB_CANCELLED,
+        ),
+        ("POST", f"{ADMIN}/jobs/{{job_id}}/retry"): (
+            lambda: console.post(f"/jobs/{job_id}/retry", {}),
+            AdminAction.JOB_RETRIED,
+        ),
+        ("GET", f"{ADMIN}/webhooks/failures"): (
+            lambda: console.get("/webhooks/failures"),
+            AdminAction.WEBHOOK_FAILURES_READ,
+        ),
+        ("GET", f"{ADMIN}/integrations/whatsapp"): (
+            lambda: console.get("/integrations/whatsapp"),
+            AdminAction.WHATSAPP_HEALTH_READ,
+        ),
+        ("GET", f"{ADMIN}/health"): (
+            lambda: console.get("/health"),
+            AdminAction.HEALTH_READ,
+        ),
+        ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
+            lambda: console.post(
+                f"/workspaces/{workspace_id}/erase-now",
+                {"confirm_slug": slug},
+            ),
+            AdminAction.WORKSPACE_ERASED,
+        ),
     }
 
 
@@ -162,7 +360,20 @@ def test_every_published_route_has_a_case(
     # going unaudited in the test below.
     colleague = a_colleague(client, db_session, "colleague@example.com")
 
-    assert sorted(_calls(owner, colleague, acme.workspace_id)) == operations()
+    assert (
+        sorted(
+            _calls(
+                owner,
+                colleague,
+                acme.workspace_id,
+                _a_conversation(acme),
+                "acme-fashion",
+                _a_billing_delivery(db_session),
+                _a_job(db_session),
+            )
+        )
+        == operations()
+    )
 
 
 def test_every_route_writes_exactly_one_entry(
@@ -184,6 +395,10 @@ def test_every_route_writes_exactly_one_entry(
         owner,
         colleague,
         acme.workspace_id,
+        _a_conversation(acme),
+        "acme-fashion",
+        _a_billing_delivery(db_session),
+        _a_job(db_session),
     ).items():
         before = len(entries(db_session))
 

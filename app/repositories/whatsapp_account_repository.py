@@ -8,6 +8,7 @@ from app.models.whatsapp_account import (
     WhatsAppAccount,
     WhatsAppAccountStatus,
 )
+from app.models.workspace import Workspace
 
 
 class WhatsAppAccountRepository:
@@ -63,6 +64,26 @@ class WhatsAppAccountRepository:
                 WhatsAppAccount.status == WhatsAppAccountStatus.CONNECTED,
             )
         )
+
+    def list_with_workspaces(self) -> list[tuple[WhatsAppAccount, Workspace]]:
+        """Every connected number on the platform, with whose it is.
+
+        Not workspace-scoped, unlike everything else in this file, and it
+        is the operations console's query rather than a tenant's: the
+        question is "which numbers are connected and are any of them
+        broken", which no single customer can ask.
+
+        Joined rather than looked up per row, and an inner join because
+        the foreign key cascades -- an account cannot outlive its
+        workspace.
+        """
+        rows = self._session.execute(
+            select(WhatsAppAccount, Workspace)
+            .join(Workspace, Workspace.id == WhatsAppAccount.workspace_id)
+            .order_by(WhatsAppAccount.connected_at.desc(), WhatsAppAccount.id)
+        ).all()
+
+        return [(account, workspace) for account, workspace in rows]
 
     def delete(self, account: WhatsAppAccount) -> None:
         self._session.delete(account)

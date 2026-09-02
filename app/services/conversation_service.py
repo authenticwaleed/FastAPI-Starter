@@ -220,14 +220,14 @@ class ConversationService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.CONVERSATION_ASSIGNED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={
                 "conversation_id": str(conversation.id),
                 "assigned_to": user_id,
             },
         )
 
-        if user_id is not None and user_id != access.membership.user_id:
+        if user_id is not None and user_id != access.actor_user_id:
             # Told in the same transaction as the assignment, so the two
             # cannot disagree -- and not told to whoever did it, who
             # already knows and does not need a badge for their own click.
@@ -291,7 +291,7 @@ class ConversationService:
         alternative.
         """
         conversation = self.get(access, conversation_id)
-        actor = access.membership.user_id
+        actor = access.actor_user_id
 
         self._conversations.take_over(
             conversation,
@@ -334,7 +334,7 @@ class ConversationService:
             workspace_id=access.workspace.id,
             conversation_id=conversation.id,
             event_type=EventType.AI_RELEASED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
         )
         self._session.commit()
 
@@ -404,7 +404,7 @@ class ConversationService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.CONVERSATION_CLOSED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"conversation_id": str(conversation.id)},
         )
 
@@ -429,7 +429,7 @@ class ConversationService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.CONVERSATION_AI_DISABLED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"conversation_id": str(conversation.id), "from": was.value},
         )
 

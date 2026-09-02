@@ -12,10 +12,14 @@ from app.core.config import get_settings
 from app.core.exceptions import (
     InsufficientWorkspaceRoleError,
     SlugAlreadyExistsError,
+    StaffCannotActAsTenantError,
+    WorkspaceLifecycleError,
     WorkspaceNotFoundError,
+    WorkspaceSuspendedError,
 )
 from app.db.session import SessionDep
 from app.models.audit_log import AuditEvent
+from app.models.staff_member import StaffMember
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.models.workspace_membership import (
@@ -46,20 +50,86 @@ MAY_HANDLE_CUSTOMERS = frozenset(
 
 @dataclass(frozen=True)
 class WorkspaceAccess:
-    """A workspace together with the membership that permitted reaching it.
+    """A workspace, and whatever it was that permitted reaching it.
 
-    Nothing hands out a Workspace on its own. Carrying the membership with
-    it means every later decision -- may this person rename it, close it,
-    read its contacts -- is answered from a role that was already proved,
+    Nothing hands out a Workspace on its own. Carrying the proof with it
+    means every later decision -- may this person rename it, close it,
+    read its contacts -- is answered from something already established,
     rather than from a second lookup somebody could forget to do.
+
+    Two kinds of proof, and exactly one of them per instance.
+
+    A **membership** is the ordinary case: somebody on the customer's own
+    team, with a role that says what they may do.
+
+    A **staff actor** is a platform support engineer holding a live,
+    time-boxed grant. They have no membership, and giving them one --
+    even a fabricated one that never reaches the database -- was the
+    tempting mistake this shape exists to refuse. It would put them in
+    the customer's member list, in their seat count, and in their audit
+    log as an ordinary colleague, which is the one property this feature
+    must never have.
     """
 
     workspace: Workspace
-    membership: WorkspaceMembership
+    membership: WorkspaceMembership | None = None
+    staff_actor: StaffMember | None = None
+
+    def __post_init__(self) -> None:
+        """Exactly one proof, checked where it cannot be skipped.
+
+        Neither would be a workspace nobody proved they could reach.
+        Both would be a staff member wearing a customer's role, which is
+        the thing the whole arrangement is arranged against -- and it is
+        worth being unable to construct rather than merely discouraged.
+        """
+        if (self.membership is None) == (self.staff_actor is None):
+            raise ValueError(
+                "workspace access needs a membership or a staff actor, not both"
+            )
 
     @property
     def role(self) -> WorkspaceRole:
+        """What the holder may do inside this workspace.
+
+        A staff actor reads, whatever their rank on the platform: a
+        support grant is permission to look at a customer's account, not
+        permission to act as the customer. `VIEWER` is exactly that --
+        "reads and nothing else" -- so every role check already written
+        refuses them, and none of those checks had to learn that staff
+        exist.
+
+        Not the whole guard on its own, and it is worth saying so here.
+        Several services take their role check from the route rather than
+        repeating it, so this stops a staff actor at every tenant route
+        and at every service that checks; `actor_user_id` below is what
+        stops one that does neither.
+        """
+        if self.membership is None:
+            return WorkspaceRole.VIEWER
+
         return self.membership.role
+
+    @property
+    def actor_user_id(self) -> int:
+        """Whose id belongs on this workspace's own audit entry.
+
+        Raises for a staff actor rather than answering, and the raise is
+        the point rather than an inconvenience. An entry in a customer's
+        log naming a support engineer among their own people is precisely
+        what this design exists to prevent, and returning their id -- or
+        a bare `None`, which reads as "a payment provider did it" -- would
+        write exactly that.
+
+        Unreachable in practice: a staff actor is a viewer, and every
+        path that records something first requires a role a viewer does
+        not have. This is where it stops if one ever does not, rather
+        than where it quietly lies.
+        """
+        if self.membership is None:
+            raise StaffCannotActAsTenantError(self.workspace.id)
+
+        return self.membership.user_id
 
 
 class WorkspaceService:
@@ -184,7 +254,7 @@ class WorkspaceService:
             self._audit.did(
                 access.workspace.id,
                 AuditEvent.WORKSPACE_UPDATED,
-                actor_user_id=access.membership.user_id,
+                actor_user_id=access.actor_user_id,
                 meta={"changed": changed},
             )
 
@@ -213,27 +283,228 @@ class WorkspaceService:
         """
         _require(access, MAY_CLOSE)
 
+        return self._close(access.workspace, actor_user_id=access.actor_user_id)
+
+    def _close(
+        self,
+        workspace: Workspace,
+        *,
+        actor_user_id: int | None = None,
+        by_staff: str | None = None,
+    ) -> Workspace:
+        """Mark it closed and set the date, whoever asked.
+
+        One body for both doors. The platform can close an account on a
+        customer's behalf -- for non-payment, for abuse, at their request
+        over the phone -- and if that took a different path the two would
+        eventually schedule erasure differently, which means a business
+        whose data goes on a day nobody told them about.
+        """
         erase_after = datetime.now(UTC) + timedelta(
             days=get_settings().erasure_grace_days
         )
 
         self._workspaces.set_status(
-            access.workspace,
+            workspace,
             WorkspaceStatus.CANCELLED,
             erase_after=erase_after,
         )
         self._audit.did(
-            access.workspace.id,
+            workspace.id,
             AuditEvent.WORKSPACE_CLOSED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=actor_user_id,
+            by_staff=by_staff,
             meta={"erase_after": erase_after.isoformat()},
         )
         self._session.commit()
 
-        return access.workspace
+        return workspace
+
+    # --- what the platform may do to a workspace --------------------------
+    #
+    # These take a Workspace and the address of the staff member behind
+    # the act rather than a WorkspaceAccess, because there is no access
+    # to have: a support engineer holds no membership, and a fabricated
+    # one is the thing this codebase refuses. The role check for them is
+    # on the admin route, and the service they end up in is this one --
+    # so a workspace closed by staff schedules its erasure exactly the
+    # way a customer closing their own account does.
+
+    def suspend(self, workspace: Workspace, *, by_staff: str, reason: str) -> Workspace:
+        """Freeze an account: reachable, readable, and unchangeable.
+
+        Refused if it is already suspended rather than quietly replacing
+        the reason, because the reason and the state were recorded
+        together and a second one would describe a freeze that was
+        already in force.
+        """
+        if workspace.status == WorkspaceStatus.SUSPENDED:
+            raise WorkspaceLifecycleError(workspace.id, "already suspended")
+
+        if workspace.status == WorkspaceStatus.CANCELLED:
+            raise WorkspaceLifecycleError(
+                workspace.id, "closed accounts cannot be suspended"
+            )
+
+        self._workspaces.set_status(workspace, WorkspaceStatus.SUSPENDED)
+        self._audit.did(
+            workspace.id,
+            AuditEvent.WORKSPACE_SUSPENDED,
+            by_staff=by_staff,
+            meta={"reason": reason},
+        )
+        self._session.commit()
+
+        return workspace
+
+    def unsuspend(self, workspace: Workspace, *, by_staff: str) -> Workspace:
+        """Thaw an account.
+
+        A no-op on one that is not frozen, and nothing is recorded for
+        it. Un-suspending something that was never suspended is the
+        safest request on this surface, and refusing it would be a
+        confusing answer to somebody who is trying to put things right.
+        """
+        if workspace.status != WorkspaceStatus.SUSPENDED:
+            return workspace
+
+        self._workspaces.set_status(workspace, WorkspaceStatus.ACTIVE)
+        self._audit.did(
+            workspace.id,
+            AuditEvent.WORKSPACE_UNSUSPENDED,
+            by_staff=by_staff,
+        )
+        self._session.commit()
+
+        return workspace
+
+    def close_for_staff(self, workspace: Workspace, *, by_staff: str) -> Workspace:
+        """Close an account on the customer's behalf.
+
+        The same path a customer's own close takes, deliberately: same
+        status, same grace period, same erasure job. A second closing
+        route that set the date differently is how a business ends up
+        erased on a day nobody told them about.
+        """
+        if workspace.status == WorkspaceStatus.CANCELLED:
+            raise WorkspaceLifecycleError(workspace.id, "already closed")
+
+        return self._close(workspace, by_staff=by_staff)
+
+    def restore(self, workspace: Workspace, *, by_staff: str) -> Workspace:
+        """Bring a closed account back, if its date has not passed.
+
+        Refused after `erase_after` rather than pretending. Once the date
+        is behind us the erasure job may have run, may be running, or may
+        run in the next minute -- and answering "restored" to any of
+        those would be a promise this cannot keep.
+        """
+        if workspace.status != WorkspaceStatus.CANCELLED:
+            raise WorkspaceLifecycleError(workspace.id, "this account is not closed")
+
+        if workspace.erase_after is not None and workspace.erase_after <= datetime.now(
+            UTC
+        ):
+            raise WorkspaceLifecycleError(
+                workspace.id,
+                "its erasure date has passed and its data may already be gone",
+            )
+
+        self._workspaces.set_status(workspace, WorkspaceStatus.ACTIVE)
+        # Cleared, so the sweep stops finding it. A restored workspace
+        # with a date still on it is one that gets erased anyway.
+        self._workspaces.clear_erasure(workspace)
+        self._audit.did(
+            workspace.id,
+            AuditEvent.WORKSPACE_RESTORED,
+            by_staff=by_staff,
+        )
+        self._session.commit()
+
+        return workspace
+
+    def reschedule_erasure(
+        self,
+        workspace: Workspace,
+        *,
+        by_staff: str,
+        erase_after: datetime,
+    ) -> Workspace:
+        """Move the date a closed account's records are destroyed.
+
+        Both directions. Bringing it forward is what a customer asking to
+        be forgotten sooner looks like; pushing it out is what a dispute
+        or a legal hold looks like, and having neither would mean doing
+        one of them in a database console.
+        """
+        if workspace.status != WorkspaceStatus.CANCELLED:
+            raise WorkspaceLifecycleError(
+                workspace.id,
+                "only a closed account has an erasure date",
+            )
+
+        was = workspace.erase_after
+
+        self._workspaces.set_status(
+            workspace,
+            WorkspaceStatus.CANCELLED,
+            erase_after=erase_after,
+        )
+        self._audit.did(
+            workspace.id,
+            AuditEvent.WORKSPACE_CLOSED,
+            by_staff=by_staff,
+            meta={
+                "from": was.isoformat() if was else None,
+                "to": erase_after.isoformat(),
+            },
+        )
+        self._session.commit()
+
+        return workspace
+
+    def erase_now(self, workspace: Workspace) -> None:
+        """Destroy a workspace and everything it holds, immediately.
+
+        The most destructive call in the product, and the least
+        ceremonious code in this file -- everything that makes it safe
+        happens before it: an owner's rank, the slug typed back, and an
+        audit entry written and committed *before* this runs rather than
+        after, because after there is no workspace to write about.
+
+        Nothing is recorded in the customer's own log here. There is
+        nowhere to put it: the entry would belong to the workspace being
+        deleted and would go with it, which is the reason
+        `admin_audit_logs` exists and does not cascade.
+        """
+        self._workspaces.erase(workspace)
+        self._session.commit()
 
     def sole_owned_workspace_ids(self, user: User) -> list[uuid.UUID]:
         return self._memberships.sole_owned_workspace_ids(user.id)
+
+
+def require_writable(access: WorkspaceAccess) -> None:
+    """Refuse if this workspace is frozen.
+
+    `SUSPENDED` was a word before this: the enum declared it, nothing set
+    it, and nothing checked it, so a workspace marked suspended kept
+    working normally. This is the half that makes it mean something.
+
+    Reachable and frozen, rather than locked out. That is the useful
+    reading of a suspension and the one the enum's own comment promises:
+    a business that has not paid should be able to read its history,
+    export what it needs and settle the bill. Taking their records away
+    over an invoice punishes them for the thing you want them to fix.
+
+    Called from the dependency every workspace-scoped route resolves,
+    against the request's method, so one check covers every write on the
+    tenant surface rather than one per service. Anything reaching a
+    service by another road -- a job, a webhook -- decides for itself,
+    and the assistant's reply path is the one that does.
+    """
+    if access.workspace.status == WorkspaceStatus.SUSPENDED:
+        raise WorkspaceSuspendedError(access.workspace.id)
 
 
 def _require(access: WorkspaceAccess, allowed: frozenset[WorkspaceRole]) -> None:

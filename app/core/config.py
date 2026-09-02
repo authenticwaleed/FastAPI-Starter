@@ -51,6 +51,21 @@ class Settings(BaseSettings):
     # lifetime, which is what makes an hour the shortest useful value.
     admin_session_idle_minutes: int = 60
 
+    # How long a support grant lasts when whoever asks for one does not
+    # say, and the longest one anybody may ask for.
+    #
+    # Four hours is a shift, which is the unit support work actually
+    # happens in. The cap is what stops "just make it a week" becoming
+    # the habit, and it is a hard ceiling rather than a default: a
+    # request for longer is refused rather than quietly shortened,
+    # because somebody who believes they have two days of access and
+    # actually has four hours finds out halfway through an incident.
+    #
+    # Standing access to every customer's data is not access control, so
+    # neither of these may be zero or unbounded.
+    admin_support_grant_hours: int = 4
+    admin_support_grant_max_hours: int = 24
+
     # How long an invitation link stays usable. A week is long enough to
     # survive somebody being on holiday and short enough that a link found
     # in an old mailbox is no longer a way into a workspace.

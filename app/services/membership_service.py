@@ -103,7 +103,7 @@ class MembershipService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.MEMBER_ROLE_CHANGED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"user_id": user_id, "from": was.value, "to": role.value},
         )
         self._session.commit()
@@ -122,7 +122,10 @@ class MembershipService:
         instead of colliding with it.
         """
         membership, _ = self._member(access, user_id)
-        leaving_themselves = membership.id == access.membership.id
+        # By user rather than by membership id, which the unique
+        # constraint makes the same comparison and which reads as the
+        # question actually being asked.
+        leaving_themselves = user_id == access.actor_user_id
 
         if not leaving_themselves:
             if access.role not in MAY_ADMINISTER:
@@ -140,7 +143,7 @@ class MembershipService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.MEMBER_REMOVED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"user_id": user_id, "role": membership.role.value},
         )
         self._session.commit()

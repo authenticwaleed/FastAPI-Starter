@@ -135,7 +135,7 @@ class InvitationService:
             role=payload.role,
             token_hash=hash_token(token),
             expires_at=now + timedelta(hours=get_settings().invitation_expire_hours),
-            invited_by_user_id=access.membership.user_id,
+            invited_by_user_id=access.actor_user_id,
         )
         # The email and the rank offered, not the token. What makes an
         # invitation worth auditing is that it is a seat at a rank handed
@@ -144,7 +144,7 @@ class InvitationService:
         self._audit.did(
             access.workspace.id,
             AuditEvent.MEMBER_INVITED,
-            actor_user_id=access.membership.user_id,
+            actor_user_id=access.actor_user_id,
             meta={"email": invitation.email, "role": invitation.role.value},
         )
         self._session.commit()

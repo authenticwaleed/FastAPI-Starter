@@ -46,6 +46,7 @@ from app.models.message import (
 )
 from app.models.notification import Notification, NotificationKind
 from app.models.order import Order, OrderStatus
+from app.models.plan_override import PlanOverride
 from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.staff_member import StaffMember, StaffRole
 from app.models.subscription import (
@@ -54,6 +55,7 @@ from app.models.subscription import (
     Subscription,
     SubscriptionStatus,
 )
+from app.models.support_grant import SupportGrant
 from app.models.usage_record import UsageMetric, UsageRecord
 from app.models.user import User
 from app.models.user_session import (
@@ -62,6 +64,7 @@ from app.models.user_session import (
     UserSession,
 )
 from app.models.user_token import UserToken, UserTokenPurpose
+from app.models.webhook_failure import WebhookFailure, WebhookRefusal
 from app.models.whatsapp_account import (
     MessagingProviderName,
     WhatsAppAccount,
@@ -118,6 +121,7 @@ __all__ = [
     "NotificationKind",
     "Order",
     "OrderStatus",
+    "PlanOverride",
     "Product",
     "ProductStatus",
     "ProductVariant",
@@ -130,12 +134,15 @@ __all__ = [
     "StaffRole",
     "Subscription",
     "SubscriptionStatus",
+    "SupportGrant",
     "UsageMetric",
     "UsageRecord",
     "User",
     "UserSession",
     "UserToken",
     "UserTokenPurpose",
+    "WebhookFailure",
+    "WebhookRefusal",
     "WhatsAppAccount",
     "WhatsAppAccountStatus",
     "Workspace",
