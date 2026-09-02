@@ -336,6 +336,23 @@ def _calls(
             lambda: console.get("/health"),
             AdminAction.HEALTH_READ,
         ),
+        # Analytics. Aggregates, recorded like everything else.
+        ("GET", f"{ADMIN}/analytics/overview"): (
+            lambda: console.get("/analytics/overview"),
+            AdminAction.ANALYTICS_READ,
+        ),
+        ("GET", f"{ADMIN}/analytics/growth"): (
+            lambda: console.get("/analytics/growth"),
+            AdminAction.ANALYTICS_READ,
+        ),
+        ("GET", f"{ADMIN}/analytics/revenue"): (
+            lambda: console.get("/analytics/revenue"),
+            AdminAction.ANALYTICS_READ,
+        ),
+        ("GET", f"{ADMIN}/analytics/ai"): (
+            lambda: console.get("/analytics/ai"),
+            AdminAction.ANALYTICS_READ,
+        ),
         ("POST", f"{ADMIN}/workspaces/{{workspace_id}}/erase-now"): (
             lambda: console.post(
                 f"/workspaces/{workspace_id}/erase-now",
