@@ -5,10 +5,19 @@ says nothing is wrong, and the browser shows white, because the policy the
 API sends forbade the script the page depends on.
 """
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.api.docs import STATIC_DIR
 from app.core.config import Settings
+from app.docs_cli import (
+    _ENOUGH_TO_RENDER_A_DOCUMENT,
+    BUNDLE,
+    build,
+    render,
+    schema,
+)
 from app.main import create_app
 
 VENDORED = (
@@ -121,4 +130,79 @@ def test_production_withholds_the_schema_as_well() -> None:
 def test_production_does_not_serve_the_documentation_assets() -> None:
     assert (
         _production_app_client().get("/static/swagger-ui-bundle.js").status_code == 404
+    )
+
+
+# --- the reference somebody can be sent ------------------------------------
+#
+# Same failure as the pages above, one step worse: a file that has to
+# fetch something opens blank on the aeroplane it was sent for, and there
+# is no log to say so.
+
+_MINIMAL_SPEC = {"info": {"title": "Baton", "version": "0.1.0"}, "paths": {}}
+
+
+def test_the_reference_builds_to_a_single_file(tmp_path: Path) -> None:
+    output = build(tmp_path / "api.html")
+
+    assert output.is_file()
+    # The bundle is inlined rather than linked, so the file is at least
+    # as large as it is. Anything much smaller means it was referenced.
+    assert output.stat().st_size > BUNDLE.stat().st_size
+
+
+def test_the_reference_has_nothing_left_to_fetch(tmp_path: Path) -> None:
+    page = build(tmp_path / "api.html").read_text(encoding="utf-8")
+
+    assert "<script src" not in page
+    assert "<link rel" not in page
+    assert "fonts.googleapis.com" not in page
+    assert "cdn.jsdelivr.net" not in page
+
+
+def test_the_reference_carries_the_schema_the_application_serves() -> None:
+    page = render(schema(), bundle="/* bundle */")
+
+    for path in ("/api/v1/health/ready", "/api/v1/plans", "/api/v1/admin/staff"):
+        assert path in page, path
+
+
+def test_a_description_quoting_a_script_tag_cannot_break_out() -> None:
+    """The quiet one: the element closes early and the rest lands as text."""
+    spec = {**_MINIMAL_SPEC, "paths": {"/x": {"description": "</script><b>hi</b>"}}}
+
+    page = render(spec, bundle="/* bundle */")
+
+    assert "</script><b>" not in page
+    assert "\\u003c/script" in page
+
+
+def test_a_bundle_quoting_a_script_tag_cannot_close_the_element() -> None:
+    page = render(_MINIMAL_SPEC, bundle='var t = "</script>";')
+
+    assert '"</script>"' not in page
+    assert '"<\\/script>"' in page
+
+
+def test_the_stand_in_settings_cover_everything_with_no_default() -> None:
+    """Otherwise an unconfigured checkout stops being able to build this.
+
+    The failure is a new required setting added months from now, which
+    nothing else here would notice: the reference still builds on every
+    developer's machine, and only CI and the colleague with a fresh
+    clone are told they need a database to be sent a document.
+    """
+    required = {
+        name.upper()
+        for name, field in Settings.model_fields.items()
+        if field.is_required()
+    }
+
+    assert required == set(_ENOUGH_TO_RENDER_A_DOCUMENT)
+
+
+def test_the_page_is_the_same_twice() -> None:
+    """No timestamp, so a diff between builds is the API and nothing else."""
+    assert render(schema(), bundle="/* bundle */") == render(
+        schema(), bundle="/* bundle */"
     )

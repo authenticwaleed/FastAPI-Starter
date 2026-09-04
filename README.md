@@ -41,6 +41,7 @@ Interactive documentation is then at http://localhost:8000/docs.
 | Lint, format and types together | `uv run pre-commit run --all-files` |
 | Evaluate the assistant | `uv run python -m app.evaluation` |
 | Grant the first platform owner | `uv run python -m app.staff_cli grant you@example.com` |
+| Build the reference to send somebody | `./run.sh docs` |
 
 The evaluation is not part of the test suite and not part of CI: it calls
 the embedding provider and the model for real, which costs money and gives
@@ -60,6 +61,25 @@ test is rolled back afterwards, so it never touches application data. Set
 `TEST_DATABASE_URL` to point it somewhere else.
 
 ## API
+
+Three ways to read this surface, for three different readers. `/docs` and
+`/redoc` are for somebody building against a deployment they can reach.
+`/openapi.json` is for their code generator. And `./run.sh docs` writes
+**`docs/api.html`** — one self-contained file, no server and no network, for
+the reader who has neither: a customer's integrator, somebody on a support
+ticket, a colleague reviewing the surface offline. Send it, attach it to the
+ticket, host it anywhere static.
+
+It renders with the ReDoc bundle already vendored under `app/static` for the
+served page, so it adds no dependency and cannot disagree with what the
+deployment shows. The schema comes from the routes, so nothing here is
+maintained by hand — and because it needs neither `.env` nor a database, CI
+and a fresh checkout can both build it. The output is deterministic, with no
+timestamp, which is what makes keeping it in the repository work: the file is
+committed so it can be handed to somebody without a build step first, and a
+diff on it is the API changing and nothing else. Rebuild it in the same
+commit as a route change — nothing enforces that yet, so it is a habit rather
+than a check.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
