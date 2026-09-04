@@ -135,7 +135,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # `package_json_file` rather than a `version` here, and the
+      # difference matters: the version lives in web/package.json as
+      # `packageManager`, and duplicating it into this file would give the
+      # repository two answers that drift the first time one is bumped.
+      #
+      # It has to be said at all because `defaults.run.working-directory`
+      # applies only to `run:` steps. An action runs at the repository
+      # root, where there is no package.json to read.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
 
       - uses: actions/setup-node@v4
         with:
