@@ -44,6 +44,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
           <WorkspaceSwitcher />
 
+          {/*
+            Two links and no more. The inbox is what this product is for;
+            everything else is reachable from the account menu or from
+            inside a screen that needs it.
+          */}
+          <nav className="hidden items-center gap-4 text-sm sm:flex">
+            <Link href="/inbox" className="hover:underline underline-offset-4">
+              Inbox
+            </Link>
+            <Link href="/contacts" className="hover:underline underline-offset-4">
+              Contacts
+            </Link>
+          </nav>
+
           <div className="ml-auto flex items-center gap-1">
             <NotificationBell />
             <AccountMenu user={user} />
