@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { NotificationBell } from "./notification-bell";
 import { UnverifiedBanner } from "./unverified-banner";
 import { WorkspaceSwitcher } from "./workspace-switcher";
-import { Button } from "@/components/ui/button";
+import { AccountMenu } from "./account-menu";
 import { api } from "@/lib/api";
-import { signOut } from "@/lib/auth-actions";
 import { ApiError } from "@/lib/errors";
 import type { User } from "@/lib/types";
 
@@ -18,6 +18,10 @@ import type { User } from "@/lib/types";
  * between the proxy and this fetch -- an account deactivated, a session
  * revoked from another device -- which is rare and must still not render a
  * stack trace.
+ *
+ * Nothing in this header reaches the platform console, and nothing ever
+ * will: the two surfaces share components and not navigation, which is the
+ * same separation the API keeps between its two routers.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let user: User;
@@ -33,31 +37,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-svh flex-col">
       <header className="border-b">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-4 px-4">
+        <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4">
           <Link href="/" className="font-semibold tracking-tight">
             Baton
           </Link>
 
           <WorkspaceSwitcher />
 
-          <div className="ml-auto flex items-center gap-3">
-            <span
-              className="text-muted-foreground hidden text-sm sm:inline"
-              title={user.email}
-            >
-              {user.name}
-            </span>
-
-            {/*
-              A form rather than a link. Signing out spends the refresh
-              token at the API, and a GET that changes something is a GET a
-              prefetcher will eventually make on somebody's behalf.
-            */}
-            <form action={signOut}>
-              <Button type="submit" variant="ghost" size="sm">
-                Sign out
-              </Button>
-            </form>
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationBell />
+            <AccountMenu user={user} />
           </div>
         </div>
       </header>
