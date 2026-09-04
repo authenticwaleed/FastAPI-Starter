@@ -4,6 +4,7 @@
 #
 #   ./run.sh            migrate to head, then serve
 #   ./run.sh --reset    rebuild the database from empty first, then the above
+#   ./run.sh docs       write docs/api.html and stop
 #   PORT=8001 ./run.sh  serve somewhere other than 8000
 #
 # --reset drops the database. It exists because a database stamped at a
@@ -15,6 +16,17 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT="${PORT:-8000}"
+
+# Documentation, and then stop. Before everything below deliberately:
+# writing the reference needs neither a .env nor a database -- the schema
+# comes from the routes -- and somebody who asks for the API should not
+# have to stand up Postgres to be sent it.
+if [ "${1:-}" = "docs" ]; then
+    shift
+    uv sync --quiet
+    echo "==> reading the schema from app.main"
+    exec uv run python -m app.docs_cli "$@"
+fi
 
 if [ ! -f .env ]; then
     echo "run.sh: no .env here. Copy the example and give it a signing key:" >&2
