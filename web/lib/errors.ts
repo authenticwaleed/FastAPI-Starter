@@ -95,6 +95,24 @@ export const SENTENCES: Record<string, string> = {
   invalid_verification_token:
     "This link is no longer valid. It may have been used already, or expired.",
 
+  // --- the account, and its workspaces (W2) -------------------------------
+  // `workspace_not_found` covers "no such workspace" and "you are not a
+  // member of it" alike. The API answers both the same way on purpose, so
+  // an id cannot be used to discover which businesses have accounts, and
+  // this sentence must not be more helpful than that.
+  workspace_not_found: "No such workspace.",
+  slug_already_exists: "That address is taken. Try another.",
+  insufficient_workspace_role: "Your role in this workspace does not allow this.",
+  // 403, and about an operational decision rather than a plan or a role.
+  // The copy must not imply the customer failed to pay.
+  workspace_suspended:
+    "This workspace is suspended, so it cannot be changed. Its data is still here.",
+  workspace_ownership_required:
+    "You are the only owner of a workspace. Hand it over or close it first.",
+  last_owner: "A workspace has to keep at least one owner.",
+  membership_not_found: "That person is not in this workspace.",
+  notification_not_found: "That notification is no longer there.",
+
   // --- anything, anywhere -------------------------------------------------
   rate_limit_exceeded: "Too many attempts. Wait a moment and try again.",
   validation_error: "Some of what you entered needs fixing.",

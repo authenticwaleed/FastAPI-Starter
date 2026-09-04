@@ -17,18 +17,10 @@ import { redirect } from "next/navigation";
 
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
+import type { FormState } from "@/lib/form-state";
 import { clearSession, readSession, writeSession, type TokenPair } from "@/lib/session";
 
-export type FormState = {
-  /** One sentence, already chosen for the code the API returned. */
-  error?: string;
-  /** Per-field messages from a 422, keyed by input name. */
-  fields?: Record<string, string>;
-  /** For the flows that finish without navigating anywhere. */
-  done?: boolean;
-  /** How long to wait, when a 429 says so. */
-  retryAfter?: number;
-} | null;
+export type { FormState };
 
 function failure(error: unknown): FormState {
   if (error instanceof ApiError) {

@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import { signOutThrough } from "./support";
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/session";
 
 /**
@@ -70,8 +71,7 @@ test("a wrong password renders one sentence, not a JSON body", async ({ page }) 
   const person = someone();
 
   await registerThrough(page, person);
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/sign-in/);
+  await signOutThrough(page);
 
   await page.getByLabel("Email").fill(person.email);
   await page.getByLabel("Password").fill("not-the-password");
@@ -148,8 +148,7 @@ test("signing out ends the session at the API, not just in the browser", async (
 
   const refresh = await cookieNamed(context, REFRESH_COOKIE);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/sign-in/);
+  await signOutThrough(page);
 
   expect(await cookieNamed(context, ACCESS_COOKIE)).toBeUndefined();
 
