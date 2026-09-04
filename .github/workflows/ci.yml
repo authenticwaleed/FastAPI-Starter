@@ -88,3 +88,103 @@ jobs:
           uv export --frozen --no-emit-project --format requirements-txt \
             > /tmp/requirements.txt
           uvx pip-audit --requirement /tmp/requirements.txt --strict
+
+  # The web client, in its own job. Separate from `check` rather than a
+  # step inside it because the two share nothing: a Python failure and a
+  # TypeScript failure are different people's afternoons, and running them
+  # in parallel means neither waits for the other.
+  #
+  # The end-to-end tests are the exception -- they need the API, so this
+  # job stands one up. They sign in against the real thing, because a
+  # fake API here would only be testing the fake.
+  web:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: baton
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/baton
+      JWT_SECRET_KEY: ci-only-signing-key-not-used-for-anything-real
+      ENVIRONMENT: development
+      LOG_LEVEL: WARNING
+      # The suite registers an account per test, and the API allows ten
+      # authentication attempts a minute per address. Raised rather than
+      # switched off: the 429 path is something this client renders, so a
+      # deployment with no limiter at all would not be the thing under test.
+      RATE_LIMIT_AUTH_PER_MINUTE: "500"
+      RATE_LIMIT_EMAIL_PER_HOUR: "500"
+      API_URL: http://localhost:8000
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        # --frozen-lockfile: fail if the lock file and package.json
+        # disagree, rather than quietly resolving something else.
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      # Everything below needs the API. Python is installed here rather
+      # than at the top so the four gates above fail fast without it.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Start the API
+        working-directory: .
+        run: |
+          uv sync --frozen
+          uv run alembic upgrade head
+          uv run uvicorn app.main:app --port 8000 &
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:8000/api/v1/health && break
+            sleep 1
+          done
+
+      - name: Install the browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Acceptance
+        run: pnpm test:e2e
+
+      - name: Keep the traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
