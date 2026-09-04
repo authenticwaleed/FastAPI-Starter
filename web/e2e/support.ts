@@ -95,6 +95,50 @@ export async function addMemberViaApi(
   return inviteeToken;
 }
 
+export async function createContactViaApi(
+  token: string,
+  workspaceId: string,
+  phone: string,
+  name?: string,
+): Promise<{ id: string; phone_number: string }> {
+  return call(`/workspaces/${workspaceId}/contacts`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ phone_number: phone, name }),
+  });
+}
+
+export async function openConversationViaApi(
+  token: string,
+  workspaceId: string,
+  contactId: string,
+): Promise<{ id: string }> {
+  return call(`/workspaces/${workspaceId}/conversations`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ contact_id: contactId }),
+  });
+}
+
+/** Close a thread behind the browser's back, the way a colleague would. */
+export async function closeConversationViaApi(
+  token: string,
+  workspaceId: string,
+  conversationId: string,
+): Promise<void> {
+  await call(`/workspaces/${workspaceId}/conversations/${conversationId}/close`, {
+    method: "POST",
+    token,
+  });
+}
+
+/** A number nobody else in the test run will have. */
+export function somePhone(): string {
+  const tail = String(Math.floor(Math.random() * 90_000_000) + 10_000_000);
+
+  return `+92300${tail}`;
+}
+
 /** Sign in through the screens, which is the only way to get the cookies. */
 export async function signInThrough(page: Page, person: Person) {
   await page.goto("/sign-in");
