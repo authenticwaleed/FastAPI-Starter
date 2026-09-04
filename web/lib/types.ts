@@ -102,3 +102,148 @@ export type UnreadCount = { unread: number };
 
 /** `POST /notifications/read-all`. Zero is visibly different from forty. */
 export type MarkedRead = { marked_read: number };
+
+// --- the inbox (W3) --------------------------------------------------
+
+export type ContactStatus = "lead" | "customer" | "blocked";
+
+export type Contact = {
+  id: string;
+  phone_number: string;
+  name: string | null;
+  email: string | null;
+  status: ContactStatus;
+  source: string | null;
+  external_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A name, a number and a badge — not the profile, which has its own page. */
+export type ContactSummary = {
+  id: string;
+  name: string | null;
+  phone_number: string;
+  status: ContactStatus;
+};
+
+export type AssigneeSummary = { id: number; name: string; email: string };
+
+export type ConversationStatus = "open" | "pending" | "closed";
+
+/** How much the assistant may do here. `suggest_only` is where pilots start. */
+export type AiMode = "disabled" | "suggest_only" | "automatic";
+
+/**
+ * Who is answering, as one value.
+ *
+ * Derived by the API from `ai_mode` and the handoff together, so a screen
+ * renders this rather than reimplementing the rule that produces it.
+ */
+export type ConversationState =
+  | "ai_active"
+  | "suggest_only"
+  | "human_active"
+  | "ai_disabled";
+
+export type SenderType = "customer" | "agent" | "ai" | "system";
+export type Direction = "inbound" | "outbound";
+export type MessageStatus =
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | "received";
+
+/** The last line of a thread, as an inbox row shows it. Text is truncated. */
+export type MessagePreview = {
+  text: string | null;
+  sender_type: SenderType;
+  direction: Direction;
+  status: MessageStatus;
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  contact: ContactSummary;
+  channel: string;
+  status: ConversationStatus;
+  assigned_user: AssigneeSummary | null;
+  ai_mode: AiMode;
+  state: ConversationState;
+  handoff_at: string | null;
+  handoff_reason: string | null;
+  /** Set with `handoff_at` and null here means the assistant handed over. */
+  handoff_by_user_id: number | null;
+  last_message: MessagePreview | null;
+  last_message_at: string | null;
+  unread_count: number;
+  last_read_at: string | null;
+  opened_at: string;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Message = {
+  id: string;
+  conversation_id: string;
+  sender_type: SenderType;
+  direction: Direction;
+  channel: string;
+  content_type: string;
+  text: string | null;
+  status: MessageStatus;
+  sent_at: string | null;
+  received_at: string | null;
+  created_at: string;
+};
+
+export type ConversationEvent = {
+  id: string;
+  event_type: string;
+  /** Null means the assistant did it: the only actor here that is not a person. */
+  actor_user_id: number | null;
+  reason: string | null;
+  created_at: string;
+};
+
+/**
+ * What the pipeline did about one customer message.
+ *
+ * Branch on this, never on `text`: a reply with no text is the ordinary
+ * shape of a handoff, and a client that checks the text first reads "a
+ * person should take this" as an empty answer.
+ */
+export type AiDecision = "answered" | "suggested" | "handoff" | "blocked";
+
+export type AiReply = {
+  decision: AiDecision;
+  text: string | null;
+  confidence: number | null;
+  /** `no_knowledge`, `low_confidence`, `cannot_answer`, `plan_limit`, … */
+  reason: string | null;
+  sources: string[];
+  /** Present when the decision was `answered` and the reply went out. */
+  message_id: string | null;
+};
+
+export type AiResponseLog = {
+  id: string;
+  message_id: string | null;
+  decision: AiDecision;
+  reply_text: string | null;
+  sent_message_id: string | null;
+  reason: string | null;
+  model: string | null;
+  prompt_version: string;
+  confidence: number | null;
+  retrieved_chunk_ids: string[];
+  latency_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  created_at: string;
+};

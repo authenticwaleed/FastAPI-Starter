@@ -113,6 +113,31 @@ export const SENTENCES: Record<string, string> = {
   membership_not_found: "That person is not in this workspace.",
   notification_not_found: "That notification is no longer there.",
 
+  // --- the inbox (W3) -----------------------------------------------------
+  //
+  // Two of these are not faults. Two people working one inbox will race
+  // each other, and a thread somebody else closed a second ago is an
+  // ordinary outcome of that rather than something to colour red.
+  conversation_not_found: "That conversation is no longer here.",
+  conversation_closed: "This conversation was closed. Reopen it to reply.",
+  conversation_already_open: "That contact already has an open conversation.",
+  contact_not_found: "That contact is no longer here.",
+  contact_already_exists: "A contact with that number already exists.",
+  message_not_found: "That message is no longer here.",
+
+  // --- the plan getting in the way ----------------------------------------
+  //
+  // 402, not 403. A 403 says "you may not", which sends somebody to an
+  // administrator who cannot help; these say the plan is what is in the
+  // way, and the plan is something they can change themselves.
+  feature_not_in_plan: "Your plan does not include this.",
+  plan_limit_reached: "You have used everything your plan allows this month.",
+
+  // --- something we depend on, rather than something you did --------------
+  reply_provider_error: "The assistant could not be reached. Try again shortly.",
+  messaging_provider_error: "WhatsApp could not be reached. Try again shortly.",
+  embedding_provider_error: "The knowledge search is unavailable right now.",
+
   // --- anything, anywhere -------------------------------------------------
   rate_limit_exceeded: "Too many attempts. Wait a moment and try again.",
   validation_error: "Some of what you entered needs fixing.",

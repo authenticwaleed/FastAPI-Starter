@@ -100,15 +100,20 @@ export default async function HomePage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            <h2>Next: the inbox</h2>
+            <h2>Your inbox</h2>
           </CardTitle>
           <CardDescription>
-            Conversations, contacts and the assistant arrive in the next
-            phase. Until then, this workspace can be renamed, its team is
-            managed from the API, and your account settings are below.
+            Customer conversations arrive here when somebody messages the
+            connected number. You can also open one yourself from a contact.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
+          <Button asChild size="sm">
+            <Link href="/inbox">Open the inbox</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/contacts">Contacts</Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/workspaces/${workspace.id}/settings`}>
               Workspace settings
