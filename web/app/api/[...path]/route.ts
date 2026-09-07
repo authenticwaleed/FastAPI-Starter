@@ -61,7 +61,13 @@ async function relay(request: NextRequest, path: string[]) {
   }
 
   const target = `/${path.join("/")}${request.nextUrl.search}`;
-  const body = READS.has(request.method) ? undefined : await request.text();
+
+  // An ArrayBuffer rather than text. A multipart upload carries a PDF's
+  // bytes, and decoding those as UTF-8 replaces every invalid sequence --
+  // which arrives at the API as a file that is the right length and no
+  // longer a PDF. Read once here, because a retry after a refresh needs to
+  // send the same body again and a stream cannot be replayed.
+  const body = READS.has(request.method) ? undefined : await request.arrayBuffer();
 
   const forwarded: Record<string, string> = {};
   const contentType = request.headers.get("content-type");

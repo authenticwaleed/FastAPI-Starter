@@ -111,6 +111,7 @@ export const SENTENCES: Record<string, string> = {
     "You are the only owner of a workspace. Hand it over or close it first.",
   last_owner: "A workspace has to keep at least one owner.",
   membership_not_found: "That person is not in this workspace.",
+  notification_not_found: "That notification is no longer there.",
 
   // --- the team, and its invitations (W4) ---------------------------------
   //
@@ -123,7 +124,6 @@ export const SENTENCES: Record<string, string> = {
   invitation_not_yours: "This invitation was sent to a different address.",
   invitation_already_pending: "That address has already been invited.",
   already_a_member: "That person is already in this workspace.",
-  notification_not_found: "That notification is no longer there.",
 
   // --- the inbox (W3) -----------------------------------------------------
   //
@@ -137,6 +137,21 @@ export const SENTENCES: Record<string, string> = {
   contact_already_exists: "A contact with that number already exists.",
   message_not_found: "That message is no longer here.",
 
+  // --- the knowledge base (W5) --------------------------------------------
+  //
+  // The two upload refusals mean different things and must not share a
+  // sentence: 415 is a file we cannot open at all, 422 is one we opened
+  // and found no text in. The second is the ordinary fate of a scan, and
+  // "it failed" would send somebody hunting for a bug rather than for a
+  // different file.
+  knowledge_source_not_found: "That source is no longer here.",
+  knowledge_document_not_found: "That document is no longer here.",
+  unsupported_document_type: "Only PDFs and plain text files can be added.",
+  unreadable_document: "No text could be read from that file.",
+  // Not a failure. The same content is already in the knowledge base, so
+  // the state somebody wanted already holds.
+  document_already_ingested: "This is already in your knowledge base.",
+
   // --- the plan getting in the way ----------------------------------------
   //
   // 402, not 403. A 403 says "you may not", which sends somebody to an
@@ -148,7 +163,10 @@ export const SENTENCES: Record<string, string> = {
   // --- something we depend on, rather than something you did --------------
   reply_provider_error: "The assistant could not be reached. Try again shortly.",
   messaging_provider_error: "WhatsApp could not be reached. Try again shortly.",
-  embedding_provider_error: "The knowledge search is unavailable right now.",
+  // Reached from adding a document as well as from searching -- both go
+  // through the same provider -- so the wording cannot say "search".
+  embedding_provider_error:
+    "The knowledge service is unavailable right now. Try again shortly.",
 
   // --- anything, anywhere -------------------------------------------------
   rate_limit_exceeded: "Too many attempts. Wait a moment and try again.",
