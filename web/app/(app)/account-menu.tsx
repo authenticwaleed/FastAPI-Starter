@@ -1,10 +1,13 @@
 "use client";
 
 import {
+  BarChart3,
   Building2,
   CreditCard,
+  KeyRound,
   LogOut,
   Plug,
+  ScrollText,
   User as UserIcon,
   Zap,
 } from "lucide-react";
@@ -69,6 +72,13 @@ export function AccountMenu({ user }: { user: User }) {
         </DropdownMenuItem>
 
         <DropdownMenuItem asChild>
+          <Link href="/analytics">
+            <BarChart3 className="size-4" />
+            Analytics
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
           <Link href="/automations">
             <Zap className="size-4" />
             Automations
@@ -79,6 +89,20 @@ export function AccountMenu({ user }: { user: User }) {
           <Link href="/integrations">
             <Plug className="size-4" />
             Integrations
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
+          <Link href="/audit">
+            <ScrollText className="size-4" />
+            Audit log
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
+          <Link href="/api-keys">
+            <KeyRound className="size-4" />
+            API keys
           </Link>
         </DropdownMenuItem>
 

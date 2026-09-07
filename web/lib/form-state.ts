@@ -12,6 +12,7 @@
 
 import type {
   AiReply,
+  ApiKeyCreated,
   InvitationCreated,
   SearchResult,
   SweepReport,
@@ -66,6 +67,14 @@ export type FormState = {
   sweep?: SweepReport;
   /** What one storefront sync did. */
   sync?: SyncReport;
+  /**
+   * The key just made, with the secret in it.
+   *
+   * Carried because the API returns it exactly once and nothing stored
+   * can reproduce it. If the action does not hand it to the screen, the
+   * key is lost the moment it is created.
+   */
+  apiKey?: ApiKeyCreated;
 } | null;
 
 /** The shape every action's catch produces. Re-thrown if it is not a refusal. */
