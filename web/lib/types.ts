@@ -247,3 +247,42 @@ export type AiResponseLog = {
   output_tokens: number | null;
   created_at: string;
 };
+
+// --- the team (W4) ---------------------------------------------------
+
+/** Derived from two timestamps and the clock, never stored. */
+export type InvitationStatus = "pending" | "accepted" | "expired";
+
+export type Invitation = {
+  id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: InvitationStatus;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
+/**
+ * What creating an invitation returns, once.
+ *
+ * The token is here and in no later response: what the API stores is a
+ * digest, so it cannot be produced again. This is the only chance to put
+ * it in a link, which is why the screen that creates one has to show it.
+ */
+export type InvitationCreated = Invitation & { token: string };
+
+/**
+ * What somebody holding the link may see before deciding.
+ *
+ * Enough to answer "who is asking me to join what, and as what", and
+ * deliberately nothing that would matter to whoever else got hold of it.
+ */
+export type InvitationPreview = {
+  workspace_name: string;
+  workspace_slug: string;
+  email: string;
+  role: WorkspaceRole;
+  status: InvitationStatus;
+  expires_at: string;
+};
