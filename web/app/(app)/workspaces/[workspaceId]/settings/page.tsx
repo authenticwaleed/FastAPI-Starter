@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CloseWorkspace } from "./close-workspace";
@@ -63,6 +64,12 @@ export default async function WorkspaceSettingsPage({
         <p className="text-muted-foreground mt-1 font-mono text-sm">
           {workspace.slug}
         </p>
+        <Link
+          href={`/workspaces/${workspace.id}/team`}
+          className="mt-2 inline-block text-sm underline underline-offset-4"
+        >
+          Team and invitations
+        </Link>
       </div>
 
       {workspace.status === "suspended" ? (
