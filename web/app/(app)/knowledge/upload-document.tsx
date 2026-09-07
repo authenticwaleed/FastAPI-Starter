@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -12,12 +13,13 @@ import {
   isTooLarge,
   readableSize,
 } from "@/lib/knowledge-limits";
+import { isPlanRefusal } from "@/lib/plans";
 import type { KnowledgeSource } from "@/lib/types";
 
 type Upload =
   | { state: "idle" }
   | { state: "sending"; name: string; percent: number }
-  | { state: "failed"; message: string }
+  | { state: "failed"; message: string; code?: string }
   | { state: "done"; title: string };
 
 /**
@@ -104,6 +106,9 @@ export function UploadDocument({
       setUpload({
         state: "failed",
         message: sentenceFor(body.code ?? "http_error", body.detail),
+        // Kept so a document limit reached renders the upgrade prompt
+        // rather than a red box, like every other 402 in the client.
+        code: body.code,
       });
     });
 
@@ -203,9 +208,18 @@ export function UploadDocument({
       ) : null}
 
       {upload.state === "failed" ? (
-        <p role="alert" className="text-destructive text-sm">
-          {upload.message}
-        </p>
+        isPlanRefusal(upload.code) ? (
+          <div role="alert" data-testid="upgrade-prompt" className="grid gap-1 text-sm">
+            <span>{upload.message}</span>
+            <Link href="/billing" className="w-fit underline underline-offset-4">
+              See what each plan includes
+            </Link>
+          </div>
+        ) : (
+          <p role="alert" className="text-destructive text-sm">
+            {upload.message}
+          </p>
+        )
       ) : null}
 
       {upload.state === "done" ? (
