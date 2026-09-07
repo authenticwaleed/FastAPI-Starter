@@ -172,6 +172,15 @@ export const SENTENCES: Record<string, string> = {
   integration_unavailable:
     "Connections are not available on this deployment. Ask whoever runs it.",
 
+  // --- analytics, audit and API keys (W9) ---------------------------------
+  //
+  // Both 422s belong on the range picker rather than the page: the
+  // request was well formed and a value in it was not, which is what
+  // tells somebody to change the dates rather than the call.
+  api_key_not_found: "That key is no longer here.",
+  invalid_date_range: "That range is backwards, or longer than allowed.",
+  unknown_timezone: "That is not a timezone we recognise.",
+
   // --- the catalogue and its orders (W6) ----------------------------------
   //
   // Both conflicts belong on a field rather than on the page. A SKU
