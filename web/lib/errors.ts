@@ -111,6 +111,18 @@ export const SENTENCES: Record<string, string> = {
     "You are the only owner of a workspace. Hand it over or close it first.",
   last_owner: "A workspace has to keep at least one owner.",
   membership_not_found: "That person is not in this workspace.",
+
+  // --- the team, and its invitations (W4) ---------------------------------
+  //
+  // `invitation_expired` is a 410 rather than a 404, and the difference is
+  // the whole message: the link was real, so the answer is "ask for
+  // another" rather than "check the address".
+  invitation_not_found: "That invitation link is not one we know.",
+  invitation_expired: "This invitation has expired. Ask for another.",
+  invitation_already_accepted: "This invitation has already been used.",
+  invitation_not_yours: "This invitation was sent to a different address.",
+  invitation_already_pending: "That address has already been invited.",
+  already_a_member: "That person is already in this workspace.",
   notification_not_found: "That notification is no longer there.",
 
   // --- the inbox (W3) -----------------------------------------------------
