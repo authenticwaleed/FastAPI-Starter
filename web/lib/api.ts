@@ -14,7 +14,7 @@
  * honestly.
  */
 
-import { API_PREFIX, API_URL } from "@/lib/config";
+import { API_PREFIX, apiUrl } from "@/lib/config";
 import { ApiError, errorFrom } from "@/lib/errors";
 import { readSession } from "@/lib/session";
 
@@ -63,7 +63,7 @@ export async function call(path: string, options: Options = {}): Promise<Respons
     sent.set("Content-Type", "application/json");
   }
 
-  return fetch(`${API_URL}${API_PREFIX}${path}`, {
+  return fetch(`${apiUrl()}${API_PREFIX}${path}`, {
     ...rest,
     headers: sent,
     body: json !== undefined ? JSON.stringify(json) : raw,

@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 
-import { FieldError, FormError, SubmitButton } from "@/components/form";
+import { FieldError, SubmitButton } from "@/components/form";
+import { Refusal } from "@/components/refusal";
 import {
   Card,
   CardContent,
@@ -113,7 +114,7 @@ export function AddText({
           </button>
         </div>
 
-        <FormError>{state?.error}</FormError>
+        <Refusal state={state} />
 
         {kind === "text" ? (
           <form action={submitText} className="grid gap-4">

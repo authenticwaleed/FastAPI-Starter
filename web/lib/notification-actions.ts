@@ -20,7 +20,7 @@ export type { FormState };
 
 function failure(error: unknown): FormState {
   if (error instanceof ApiError) {
-    return { error: error.sentence, fields: error.fields };
+    return { error: error.sentence, code: error.code, fields: error.fields };
   }
 
   throw error;

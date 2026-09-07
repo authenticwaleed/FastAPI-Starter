@@ -1,14 +1,31 @@
 /**
  * Where the API is, and how long a cookie may live.
  *
- * Read once, here, so that nothing else in the client has an opinion about
- * the API's address. `API_URL` is server-only on purpose -- it is never
- * prefixed `NEXT_PUBLIC_`, because the browser never calls FastAPI
- * directly. Everything the browser sends goes through this application's
- * own route handlers, which is what keeps the tokens out of JavaScript.
+ * Read in one place, so nothing else in the client has an opinion about
+ * the API's address. It is never prefixed `NEXT_PUBLIC_`, because the
+ * browser never calls FastAPI directly: everything it sends goes through
+ * this application's own route handlers, which is what keeps the tokens
+ * out of JavaScript.
  */
 
-export const API_URL = process.env.API_URL ?? "http://localhost:8000";
+/**
+ * The variable name, held in a constant rather than written inline.
+ *
+ * This is not style. `process.env.API_URL` spelled out is replaced by the
+ * bundler with whatever the variable held when `next build` ran, and the
+ * built server then ignores the environment it is actually started in --
+ * so an image deployed with `API_URL=https://api.example.com` would go on
+ * talking to localhost, silently, with nothing in any log to say why.
+ *
+ * A dynamic lookup cannot be folded into a literal, so the value is read
+ * at request time from the process that is actually running.
+ */
+const API_URL_KEY = "API_URL";
+
+/** Where the API is, as of this request. */
+export function apiUrl(): string {
+  return process.env[API_URL_KEY] ?? "http://localhost:8000";
+}
 
 /** `/api/v1`, spelled once. */
 export const API_PREFIX = "/api/v1";

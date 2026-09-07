@@ -29,6 +29,7 @@ function failure(error: unknown): FormState {
   if (error instanceof ApiError) {
     return {
       error: error.sentence,
+      code: error.code,
       fields: error.fields,
       retryAfter: error.retryAfter ?? undefined,
     };

@@ -43,7 +43,14 @@ const SIGNED_OUT_ONLY = ["/sign-in", "/register", "/forgot-password"];
  * the token they were carrying and leaves somebody clicking a link that
  * appears to do nothing.
  */
-const ALWAYS_PUBLIC = ["/verify-email", "/reset-password", "/invitations"];
+const ALWAYS_PUBLIC = [
+  "/verify-email",
+  "/reset-password",
+  "/invitations",
+  // The price list. Somebody deciding whether to sign up has no account
+  // yet, and somebody signed in may well be comparing plans.
+  "/pricing",
+];
 
 /**
  * A list of what is open rather than of what is closed, so a route added

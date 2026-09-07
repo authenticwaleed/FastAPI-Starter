@@ -13,6 +13,17 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const PORT = Number(process.env.WEB_PORT ?? 3100);
 
+/**
+ * Which API the application under test talks to.
+ *
+ * Passed to the web server explicitly rather than left to inheritance.
+ * It is the same value the specs use for their own fixtures, and having
+ * the two disagree is a suite that fails in ways that look like the
+ * application -- a rate limit from somebody else's server reads exactly
+ * like a bug in the sign-up form.
+ */
+const API_URL = process.env.API_URL ?? "http://localhost:8000";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -30,6 +41,7 @@ export default defineConfig({
     // deployed, and dev's error overlay and lack of minification have hidden
     // a real failure in more than one project.
     command: `pnpm build && pnpm start --port ${PORT}`,
+    env: { API_URL },
     url: `http://localhost:${PORT}/sign-in`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

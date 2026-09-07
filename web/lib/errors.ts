@@ -173,6 +173,8 @@ export const SENTENCES: Record<string, string> = {
   plan_limit_reached: "You have used everything your plan allows this month.",
 
   // --- something we depend on, rather than something you did --------------
+  billing_provider_error:
+    "The payment provider could not be reached. Nothing was charged — try again shortly.",
   reply_provider_error: "The assistant could not be reached. Try again shortly.",
   messaging_provider_error: "WhatsApp could not be reached. Try again shortly.",
   // Reached from adding a document as well as from searching -- both go

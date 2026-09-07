@@ -25,7 +25,7 @@
  * API's rotation check; this is courtesy.
  */
 
-import { API_PREFIX, API_URL } from "@/lib/config";
+import { API_PREFIX, apiUrl } from "@/lib/config";
 import { errorFrom } from "@/lib/errors";
 import type { TokenPair } from "@/lib/session";
 
@@ -49,7 +49,7 @@ export async function spendRefreshToken(refreshToken: string): Promise<TokenPair
 }
 
 async function exchange(refreshToken: string): Promise<TokenPair> {
-  const response = await fetch(`${API_URL}${API_PREFIX}/auth/refresh`, {
+  const response = await fetch(`${apiUrl()}${API_PREFIX}/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refreshToken }),
