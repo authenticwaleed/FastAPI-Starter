@@ -27,22 +27,35 @@ import {
 } from "@/lib/session";
 
 /**
- * Reachable without a session.
+ * Reachable without a session, and pointless with one.
  *
+ * Signing in or registering while already signed in is somebody who has
+ * lost their place, so these bounce to the app.
+ */
+const SIGNED_OUT_ONLY = ["/sign-in", "/register", "/forgot-password"];
+
+/**
+ * Reachable either way.
+ *
+ * These arrive as links in emails, and the common case is a person who is
+ * already signed in -- registering signs you in, and the confirmation link
+ * lands in the inbox a minute later. Bouncing those to the app throws away
+ * the token they were carrying and leaves somebody clicking a link that
+ * appears to do nothing.
+ */
+const ALWAYS_PUBLIC = ["/verify-email", "/reset-password", "/invitations"];
+
+/**
  * A list of what is open rather than of what is closed, so a route added
  * next month is protected by default. Getting that the wrong way round is
  * how a screen ships unguarded.
  */
-const PUBLIC = [
-  "/sign-in",
-  "/register",
-  "/verify-email",
-  "/forgot-password",
-  "/reset-password",
-];
+function matches(paths: string[], pathname: string): boolean {
+  return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 function isPublic(pathname: string): boolean {
-  return PUBLIC.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return matches(SIGNED_OUT_ONLY, pathname) || matches(ALWAYS_PUBLIC, pathname);
 }
 
 export async function proxy(request: NextRequest) {
@@ -89,7 +102,7 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set("next", `${pathname}${search}`);
 
     response = NextResponse.redirect(url);
-  } else if (signedIn && isPublic(pathname)) {
+  } else if (signedIn && matches(SIGNED_OUT_ONLY, pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
