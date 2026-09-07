@@ -15,6 +15,15 @@ import type { AiReply, InvitationCreated, SearchResult } from "@/lib/types";
 export type FormState = {
   /** One sentence, already chosen for the code the API returned. */
   error?: string;
+  /**
+   * The code behind that sentence.
+   *
+   * Carried so a screen can tell a plan refusal from every other kind
+   * without matching on prose. A 402 wants the upgrade prompt and a link
+   * to billing; a 403 wants "ask an owner", which is a different screen
+   * and a different next step.
+   */
+  code?: string;
   /** Per-field messages from a 422, keyed by the input's name. */
   fields?: Record<string, string>;
   /** For the flows that finish without navigating anywhere. */
@@ -39,6 +48,8 @@ export type FormState = {
   invitation?: InvitationCreated;
   /** What the knowledge base returned for a question. */
   search?: SearchResult;
+  /** Where the payment provider wants the customer sent. */
+  checkoutUrl?: string;
 } | null;
 
 /** The shape every action's catch produces. Re-thrown if it is not a refusal. */
