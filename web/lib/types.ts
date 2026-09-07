@@ -524,3 +524,106 @@ export type UsageSummary = {
 
 /** `POST …/subscription/checkout`. Nothing has changed yet. */
 export type CheckoutStarted = { checkout_url: string };
+
+// --- automations and integrations (W8) --------------------------------
+
+/**
+ * Which of the predefined automations a row configures.
+ *
+ * Three, and this is a settings form rather than a workflow builder: the
+ * definition holds settings for a known automation, not a program.
+ */
+export type AutomationKind =
+  | "order_confirmation"
+  | "human_handoff"
+  | "unanswered_lead_followup";
+
+export type AutomationTrigger =
+  | "message_received"
+  | "order_created"
+  /** Not an event: something failing to happen for long enough. */
+  | "schedule";
+
+export type AutomationStatus = "enabled" | "disabled";
+
+/**
+ * How one attempt ended.
+ *
+ * `skipped` is not a failure and is the most common outcome by far — an
+ * automation is considered on every matching event and most events are
+ * not the one it is for.
+ */
+export type RunStatus = "running" | "succeeded" | "failed" | "skipped";
+
+export type Automation = {
+  id: string;
+  kind: AutomationKind;
+  name: string;
+  trigger_type: AutomationTrigger;
+  status: AutomationStatus;
+  definition: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AutomationRun = {
+  id: string;
+  automation_id: string;
+  status: RunStatus;
+  /** What the run was about, when it was about something. */
+  dedupe_key: string | null;
+  attempts: number;
+  started_at: string;
+  completed_at: string | null;
+  error: string | null;
+  metadata: Record<string, unknown>;
+};
+
+/** `ran` is what did something; the gap to `considered` is work left alone. */
+export type SweepReport = { considered: number; ran: number };
+
+export type WhatsAppStatus = "connected" | "disconnected";
+
+/**
+ * The connection, as anybody is ever allowed to see it.
+ *
+ * There is no token field of any kind. A value absent from the schema
+ * cannot be serialised into a response by accident, which is the same
+ * guarantee the user schema makes about passwords.
+ */
+export type WhatsAppAccount = {
+  id: string;
+  provider: string;
+  phone_number: string;
+  external_phone_number_id: string;
+  external_business_account_id: string | null;
+  status: WhatsAppStatus;
+  connected_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StorefrontProvider = "shopify" | "woocommerce";
+export type StorefrontStatus = "connected" | "disconnected";
+
+export type Storefront = {
+  id: string;
+  provider: StorefrontProvider;
+  shop_domain: string;
+  status: StorefrontStatus;
+  /** Null until the first full read finishes — "not synced yet". */
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Where to send the shop owner. Nothing is connected until they approve. */
+export type StorefrontInstall = { authorize_url: string; shop_domain: string };
+
+/** `skipped` counts records already as new here — what a retry looks like. */
+export type SyncReport = {
+  products: number;
+  orders: number;
+  contacts: number;
+  skipped: number;
+};
