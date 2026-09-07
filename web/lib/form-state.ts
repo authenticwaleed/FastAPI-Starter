@@ -10,7 +10,7 @@
  * one map in `lib/errors.ts`, and an action's job is only to carry it.
  */
 
-import type { AiReply, InvitationCreated } from "@/lib/types";
+import type { AiReply, InvitationCreated, SearchResult } from "@/lib/types";
 
 export type FormState = {
   /** One sentence, already chosen for the code the API returned. */
@@ -37,6 +37,8 @@ export type FormState = {
    * screen has to show the link -- nothing emails it yet.
    */
   invitation?: InvitationCreated;
+  /** What the knowledge base returned for a question. */
+  search?: SearchResult;
 } | null;
 
 /** The shape every action's catch produces. Re-thrown if it is not a refusal. */
