@@ -8,7 +8,7 @@
  * fix; a label is not a query and never was.
  */
 
-import type { ConversationState } from "@/lib/types";
+import type { ConversationState, StorefrontProvider } from "@/lib/types";
 
 /**
  * Who is answering, in words a person would use.
@@ -22,4 +22,12 @@ export const STATE_LABEL: Record<ConversationState, string> = {
   suggest_only: "Assistant drafts, you send",
   human_active: "You have this",
   ai_disabled: "Assistant is off",
+};
+
+/** The storefronts this product can connect to. */
+export const STOREFRONTS: StorefrontProvider[] = ["shopify", "woocommerce"];
+
+export const STOREFRONT_LABEL: Record<StorefrontProvider, string> = {
+  shopify: "Shopify",
+  woocommerce: "WooCommerce",
 };
