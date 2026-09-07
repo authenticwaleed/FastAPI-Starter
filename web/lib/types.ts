@@ -627,3 +627,126 @@ export type SyncReport = {
   contacts: number;
   skipped: number;
 };
+
+// --- analytics, audit and API keys (W9) -------------------------------
+
+/** One day of a chart. Days with nothing in them arrive as zero. */
+export type DayPoint = { day: string; count: number };
+
+export type ConversationTotals = {
+  total: number;
+  open: number;
+  pending: number;
+  closed: number;
+  with_a_human: number;
+  unassigned: number;
+};
+
+export type MessageTotals = {
+  total: number;
+  received: number;
+  sent: number;
+  by_ai: number;
+  by_agents: number;
+};
+
+/**
+ * Conversations somebody replied in, split by who.
+ *
+ * A thread both the assistant and an agent spoke in counts in both — it
+ * was handled by both — which is why these do not sum to `answered`.
+ */
+export type HandledTotals = { answered: number; by_ai: number; by_agents: number };
+
+export type Overview = {
+  conversations: ConversationTotals;
+  messages: MessageTotals;
+  handled: HandledTotals;
+  handoffs: number;
+  ai_decisions: number;
+  ai_response_rate: number;
+  /** Null when nothing has been answered — an honest gap, not a zero. */
+  average_first_response_seconds: number | null;
+};
+
+export type ConversationAnalytics = {
+  totals: ConversationTotals;
+  by_day: DayPoint[];
+  average_first_response_seconds: number | null;
+};
+
+export type AiDecisionTotals = {
+  total: number;
+  answered: number;
+  suggested: number;
+  handoff: number;
+  blocked: number;
+  failed: number;
+};
+
+export type HandoffTotals = {
+  total: number;
+  ai_handoff: number;
+  human_takeover: number;
+  ai_released: number;
+};
+
+/** Null where nothing was recorded. */
+export type AiCost = {
+  input_tokens: number | null;
+  output_tokens: number | null;
+  average_latency_ms: number | null;
+  average_confidence: number | null;
+};
+
+export type AiAnalytics = {
+  decisions: AiDecisionTotals;
+  handoffs: HandoffTotals;
+  cost: AiCost;
+  by_day: DayPoint[];
+  /** The share of answered conversations the assistant spoke in. */
+  response_rate: number;
+  /** Of the times it was asked, how often it produced something. */
+  answer_rate: number;
+};
+
+/**
+ * Whoever did it, as much as is still known.
+ *
+ * Present with an address and no id where the account has since been
+ * deleted — the record of what somebody did outliving their account is why
+ * the table exists. Wholly null where no person did it at all.
+ */
+export type AuditActor = {
+  user_id: number | null;
+  name: string | null;
+  email: string | null;
+};
+
+export type AuditEntry = {
+  id: string;
+  event: string;
+  actor: AuditActor | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+/** A key as it can be shown again: everything except the key. */
+export type ApiKey = {
+  id: string;
+  name: string;
+  /** The readable fragment — which of these three is on staging. */
+  key_prefix: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+/**
+ * The one response that carries the key itself.
+ *
+ * Its own type rather than an optional field, so the secret is in the
+ * shape of exactly one endpoint. Nothing stored can reproduce it.
+ */
+export type ApiKeyCreated = ApiKey & { key: string };
