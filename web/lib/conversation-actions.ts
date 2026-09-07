@@ -35,11 +35,12 @@ function failure(error: unknown, path: string): FormState {
     // that was there a moment ago.
     revalidatePath(path);
 
-    return { error: error.sentence, stale: true };
+    return { error: error.sentence, code: error.code, stale: true };
   }
 
   return {
     error: error.sentence,
+    code: error.code,
     fields: error.fields,
     retryAfter: error.retryAfter ?? undefined,
   };
