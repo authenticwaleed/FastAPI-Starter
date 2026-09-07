@@ -343,3 +343,80 @@ export type SearchMatch = {
  * question that produced it is not reproducible.
  */
 export type SearchResult = { query: string; matches: SearchMatch[] };
+
+// --- the catalogue and its orders (W6) --------------------------------
+
+/**
+ * Whether the business is selling this.
+ *
+ * The assistant is told about `active` products only: talking about a
+ * draft is worse than saying nothing, because the customer then asks for
+ * something the business has not decided to sell yet.
+ */
+export type ProductStatus = "active" | "draft" | "archived";
+
+/** One buyable version of a product. */
+export type Variant = {
+  id: string;
+  external_id: string | null;
+  sku: string | null;
+  title: string | null;
+  /** Null means the product's price applies — not that it is free. */
+  price: string | null;
+  /** Null means this business does not track stock, which is not zero. */
+  stock_quantity: number | null;
+  attributes: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Product = {
+  id: string;
+  /** Set by a storefront sync. Its presence is what makes a product theirs. */
+  external_id: string | null;
+  name: string;
+  description: string | null;
+  status: ProductStatus;
+  /** A decimal string. Never parse it — see lib/money.ts. */
+  price: string | null;
+  currency: string | null;
+  metadata: Record<string, unknown>;
+  variants: Variant[];
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Where an order has got to.
+ *
+ * The vocabulary a customer asks about rather than a payment processor's:
+ * "has it shipped" is the question, and these six are the answers a shop
+ * actually gives.
+ */
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "shipped"
+  | "delivered"
+  | "cancelled"
+  | "refunded";
+
+export type Order = {
+  id: string;
+  contact_id: string;
+  external_id: string | null;
+  order_number: string | null;
+  status: OrderStatus;
+  currency: string | null;
+  /** All decimal strings. */
+  subtotal: string | null;
+  shipping_total: string | null;
+  total: string | null;
+  shipping_address: string | null;
+  tracking_number: string | null;
+  tracking_url: string | null;
+  placed_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
