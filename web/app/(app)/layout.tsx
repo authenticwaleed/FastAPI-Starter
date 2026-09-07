@@ -45,9 +45,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <WorkspaceSwitcher />
 
           {/*
-            The three things somebody works in all day. Everything else is
-            reachable from the account menu or from inside a screen that
-            needs it.
+            What somebody works in all day. Everything about the account or
+            the workspace itself is in the menu on the right instead --
+            those are visited, not worked in.
           */}
           <nav className="hidden items-center gap-4 text-sm sm:flex">
             <Link href="/inbox" className="hover:underline underline-offset-4">
@@ -55,6 +55,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Link>
             <Link href="/contacts" className="hover:underline underline-offset-4">
               Contacts
+            </Link>
+            <Link href="/products" className="hover:underline underline-offset-4">
+              Products
+            </Link>
+            <Link href="/orders" className="hover:underline underline-offset-4">
+              Orders
             </Link>
             <Link href="/knowledge" className="hover:underline underline-offset-4">
               Knowledge
