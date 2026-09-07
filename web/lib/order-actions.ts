@@ -28,11 +28,12 @@ function failure(error: unknown, orderId?: string): FormState {
     // it is refetched and the sentence is a statement, not a complaint.
     if (orderId) revalidatePath(`/orders/${orderId}`);
 
-    return { error: error.sentence, stale: true };
+    return { error: error.sentence, code: error.code, stale: true };
   }
 
   return {
     error: error.sentence,
+    code: error.code,
     fields: error.fields,
     retryAfter: error.retryAfter ?? undefined,
   };
