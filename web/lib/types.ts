@@ -420,3 +420,107 @@ export type Order = {
   created_at: string;
   updated_at: string;
 };
+
+// --- plans, billing and usage (W7) ------------------------------------
+
+export type PlanTier = "starter" | "growth" | "business";
+
+/** Something a plan either admits or does not. Checked at the door. */
+export type Feature =
+  | "automations"
+  | "ecommerce"
+  | "advanced_analytics"
+  | "api_access"
+  | "audit_logs";
+
+/** Something a plan allows a number of. Counted, not checked at the door. */
+export type PlanLimit =
+  | "whatsapp_numbers"
+  | "team_members"
+  | "ai_responses_per_month"
+  | "knowledge_documents";
+
+export type Plan = {
+  tier: PlanTier;
+  name: string;
+  description: string;
+  /** A decimal string. `"0"` for the free tier. Never parse it. */
+  price: string;
+  currency: string;
+  features: Feature[];
+  /** Every limit on every plan; `null` means unlimited, never absent. */
+  limits: Record<PlanLimit, number | null>;
+};
+
+/**
+ * Where a subscription stands, in the provider's vocabulary.
+ *
+ * Kept as the provider says it rather than reduced to working/not: the
+ * difference between `past_due` and `canceled` is the whole of how a
+ * billing failure is handled.
+ */
+export type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "unpaid"
+  | "canceled"
+  | "incomplete";
+
+export type Subscription = {
+  id: string;
+  provider: string;
+  /** What is being paid for — which is not always what applies. */
+  plan: PlanTier;
+  status: SubscriptionStatus;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  /** True between somebody cancelling and the period running out. */
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * What a workspace may do, and what it is paying for.
+ *
+ * Two fields because they are two questions and they routinely disagree.
+ * `plan` is what actually applies, after overrides and status; gate on it.
+ * `subscription` is display only, and is null for a workspace that has
+ * never paid — which is not the same as one whose payment failed.
+ */
+export type WorkspacePlan = { plan: Plan; subscription: Subscription | null };
+
+export type UsageMetric =
+  | "ai_responses"
+  | "ai_tokens"
+  | "whatsapp_messages"
+  | "active_contacts"
+  | "team_members"
+  | "whatsapp_numbers"
+  | "knowledge_documents"
+  | "knowledge_tokens";
+
+export type MetricUsage = {
+  metric: UsageMetric;
+  quantity: number;
+  /** Null where nothing refuses this. Means carry on, not zero. */
+  limit: number | null;
+};
+
+/**
+ * What a workspace has used, and over what.
+ *
+ * The period comes from the API rather than being assumed: a subscribed
+ * workspace is metered over the dates the provider is billing it for, and
+ * a page saying "this month" over those figures would be wrong for most
+ * of the month.
+ */
+export type UsageSummary = {
+  period_start: string;
+  period_end: string;
+  metrics: MetricUsage[];
+};
+
+/** `POST …/subscription/checkout`. Nothing has changed yet. */
+export type CheckoutStarted = { checkout_url: string };
