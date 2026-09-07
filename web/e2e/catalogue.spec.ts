@@ -101,7 +101,15 @@ test("saving replaces the variant list, and the form says so", async ({ page }) 
 
   // Remove one and save: the set is replaced rather than merged, which is
   // the API's rule and has to be what the screen actually does.
-  await page.getByRole("button", { name: "Remove this variant" }).last().click();
+  //
+  // The row is named rather than taken by position. The API does not
+  // promise an order for variants, so "the last one" is not the same row
+  // on every read -- which made this pass alone and fail in a full run.
+  await page
+    .locator("[data-variant-row]")
+    .filter({ has: page.locator('input[name="variant_title"][value="Large"]') })
+    .getByRole("button", { name: "Remove this variant" })
+    .click();
   await page.getByRole("button", { name: "Save" }).click();
 
   await expect(page.getByRole("status")).toHaveText("Saved.");
