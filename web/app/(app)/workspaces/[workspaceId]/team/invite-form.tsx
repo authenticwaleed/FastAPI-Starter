@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 
-import { FieldError, FormError, SubmitButton } from "@/components/form";
+import { FieldError, SubmitButton } from "@/components/form";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -116,7 +117,7 @@ export function InviteForm({
         <form action={action} className="grid max-w-md gap-4">
           <input type="hidden" name="workspace_id" value={workspaceId} />
 
-          <FormError>{state?.error}</FormError>
+          <Refusal state={state} />
 
           <div className="grid gap-2">
             <Label htmlFor="invite-email">Email</Label>
