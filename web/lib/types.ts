@@ -286,3 +286,60 @@ export type InvitationPreview = {
   status: InvitationStatus;
   expires_at: string;
 };
+
+// --- knowledge (W5) ---------------------------------------------------
+
+/**
+ * Where a piece of knowledge came from.
+ *
+ * Three of the plan's five: `website` and `product_catalog` are named
+ * there and deliberately absent from the API, because a value it accepted
+ * and nothing could process would be worse than one it refuses.
+ */
+export type SourceType = "text" | "file" | "manual_faq";
+
+export type DocumentStatus = "pending" | "processing" | "ready" | "failed";
+
+export type KnowledgeSource = {
+  id: string;
+  name: string;
+  source_type: SourceType;
+  status: DocumentStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KnowledgeDocument = {
+  id: string;
+  knowledge_source_id: string;
+  title: string;
+  status: DocumentStatus;
+  /** Present only when `failed`, and in plain words rather than a trace. */
+  error: string | null;
+  /**
+   * How many passages it became — the honest measure of whether a document
+   * is doing anything. One that is `ready` with no chunks answers nothing.
+   */
+  chunk_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+/** One passage, and how close it was to the question. */
+export type SearchMatch = {
+  document_id: string;
+  chunk_id: string;
+  score: number;
+  content: string;
+  metadata: Record<string, unknown>;
+};
+
+/**
+ * What was asked, and what came back.
+ *
+ * The query is echoed because it is not always what was sent —
+ * normalisation happens first — and an answer that cannot be tied to the
+ * question that produced it is not reproducible.
+ */
+export type SearchResult = { query: string; matches: SearchMatch[] };
