@@ -10,7 +10,13 @@
  * one map in `lib/errors.ts`, and an action's job is only to carry it.
  */
 
-import type { AiReply, InvitationCreated, SearchResult } from "@/lib/types";
+import type {
+  AiReply,
+  InvitationCreated,
+  SearchResult,
+  SweepReport,
+  SyncReport,
+} from "@/lib/types";
 
 export type FormState = {
   /** One sentence, already chosen for the code the API returned. */
@@ -48,8 +54,18 @@ export type FormState = {
   invitation?: InvitationCreated;
   /** What the knowledge base returned for a question. */
   search?: SearchResult;
-  /** Where the payment provider wants the customer sent. */
+  /**
+   * Where a provider wants the person sent next.
+   *
+   * Shared by the payment checkout and a storefront install, because
+   * they are the same shape: the API answers with a URL somewhere else,
+   * nothing has changed yet, and the screen navigates away.
+   */
   checkoutUrl?: string;
+  /** What one due-run sweep did. */
+  sweep?: SweepReport;
+  /** What one storefront sync did. */
+  sync?: SyncReport;
 } | null;
 
 /** The shape every action's catch produces. Re-thrown if it is not a refusal. */

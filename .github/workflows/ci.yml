@@ -126,6 +126,13 @@ jobs:
       # deployment with no limiter at all would not be the thing under test.
       RATE_LIMIT_AUTH_PER_MINUTE: "500"
       RATE_LIMIT_EMAIL_PER_HOUR: "500"
+      RATE_LIMIT_INVITATIONS_PER_HOUR: "500"
+      RATE_LIMIT_UPLOADS_PER_HOUR: "500"
+      RATE_LIMIT_SEARCH_PER_MINUTE: "500"
+      # A provider credential is encrypted at rest, so connecting one needs
+      # a key. Throwaway and generated for CI -- the real one is a
+      # deployment secret and has never been in this repository.
+      ENCRYPTION_KEY: 8GkQ0DPTPzY3RtsDcRUv0YyBFqPLmPqXbYtdzwXQvbA=
       API_URL: http://localhost:8000
 
     defaults:

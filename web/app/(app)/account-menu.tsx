@@ -1,6 +1,13 @@
 "use client";
 
-import { Building2, CreditCard, LogOut, User as UserIcon } from "lucide-react";
+import {
+  Building2,
+  CreditCard,
+  LogOut,
+  Plug,
+  User as UserIcon,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -58,6 +65,20 @@ export function AccountMenu({ user }: { user: User }) {
           <Link href="/workspaces">
             <Building2 className="size-4" />
             Workspaces
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
+          <Link href="/automations">
+            <Zap className="size-4" />
+            Automations
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
+          <Link href="/integrations">
+            <Plug className="size-4" />
+            Integrations
           </Link>
         </DropdownMenuItem>
 

@@ -152,6 +152,26 @@ export const SENTENCES: Record<string, string> = {
   // the state somebody wanted already holds.
   document_already_ingested: "This is already in your knowledge base.",
 
+  // --- automations and integrations (W8) ----------------------------------
+  automation_not_found: "That automation is no longer here.",
+  automation_already_exists: "That automation is already set up here.",
+  // 422 rather than 400: the request was well formed and what was inside
+  // it did not fit the automation it named -- which is what tells somebody
+  // to fix the form rather than the call.
+  invalid_automation_settings: "Those settings are not valid for this automation.",
+  whatsapp_not_connected: "No WhatsApp number is connected to this workspace.",
+  whatsapp_already_connected: "A WhatsApp number is already connected.",
+  storefront_not_connected: "No storefront is connected to this workspace.",
+  storefront_already_connected: "A storefront is already connected.",
+  ecommerce_provider_error:
+    "The shop could not be reached, or it refused the connection.",
+  // 503, and about this deployment rather than the person: a provider
+  // credential cannot be encrypted because no encryption key is
+  // configured. Nothing they type will fix it, so the sentence does not
+  // suggest trying again differently.
+  integration_unavailable:
+    "Connections are not available on this deployment. Ask whoever runs it.",
+
   // --- the catalogue and its orders (W6) ----------------------------------
   //
   // Both conflicts belong on a field rather than on the page. A SKU

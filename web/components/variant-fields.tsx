@@ -53,7 +53,11 @@ export function VariantFields({ variants = [] }: { variants?: Variant[] }) {
       ) : null}
 
       {rows.map((row, index) => (
-        <div key={row.key} className="grid gap-2 rounded-md border px-3 py-2.5">
+        <div
+          key={row.key}
+          data-variant-row=""
+          className="grid gap-2 rounded-md border px-3 py-2.5"
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor={`variant-title-${index}`} className="text-xs">
