@@ -10,7 +10,7 @@
  * one map in `lib/errors.ts`, and an action's job is only to carry it.
  */
 
-import type { AiReply } from "@/lib/types";
+import type { AiReply, InvitationCreated } from "@/lib/types";
 
 export type FormState = {
   /** One sentence, already chosen for the code the API returned. */
@@ -30,6 +30,13 @@ export type FormState = {
   stale?: boolean;
   /** What the assistant decided, when one was asked for. */
   reply?: AiReply;
+  /**
+   * The invitation just created, token included.
+   *
+   * Carried back because the API returns the token exactly once and the
+   * screen has to show the link -- nothing emails it yet.
+   */
+  invitation?: InvitationCreated;
 } | null;
 
 /** The shape every action's catch produces. Re-thrown if it is not a refusal. */
