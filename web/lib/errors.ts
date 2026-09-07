@@ -152,6 +152,18 @@ export const SENTENCES: Record<string, string> = {
   // the state somebody wanted already holds.
   document_already_ingested: "This is already in your knowledge base.",
 
+  // --- the catalogue and its orders (W6) ----------------------------------
+  //
+  // Both conflicts belong on a field rather than on the page. A SKU
+  // already in use is one input to change; an order that is no longer
+  // pending is somebody else having moved first.
+  product_not_found: "That product is no longer here.",
+  product_conflict: "That SKU or external id is already used in this workspace.",
+  order_not_found: "That order is no longer here.",
+  order_already_exists: "An order with that external id already exists.",
+  order_not_confirmable:
+    "This order is not pending any more, so it cannot be confirmed.",
+
   // --- the plan getting in the way ----------------------------------------
   //
   // 402, not 403. A 403 says "you may not", which sends somebody to an
