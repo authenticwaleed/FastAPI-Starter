@@ -6,7 +6,7 @@ import { Refusal } from "@/components/refusal";
 import { Badge } from "@/components/ui/badge";
 import { listAuditLogs } from "@/lib/analytics";
 import { ApiError } from "@/lib/errors";
-import { describeActor, describeEvent } from "@/lib/labels";
+import { describeEvent, describeTenantActor } from "@/lib/labels";
 import type { AuditEntry, Page as Paged } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -116,7 +116,7 @@ export default async function AuditPage({
               <span className="min-w-0 flex-1 text-sm">{describeEvent(entry.event)}</span>
 
               <span className="text-muted-foreground truncate text-xs">
-                {describeActor(entry.actor)}
+                {describeTenantActor(entry)}
               </span>
 
               <span className="text-muted-foreground text-xs">

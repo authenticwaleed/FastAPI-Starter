@@ -6,7 +6,7 @@ import { consoleRefusal } from "@/components/console/refusal";
 import { Badge } from "@/components/ui/badge";
 import { readWorkspaceAudit } from "@/lib/console";
 import { when } from "@/lib/console-labels";
-import { describeActor, describeEvent } from "@/lib/labels";
+import { describeEvent, describeTenantActor } from "@/lib/labels";
 import type { AuditEntry, Page as Paged } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Their own log" };
@@ -73,7 +73,7 @@ export default async function ConsoleWorkspaceAuditPage({
               </span>
 
               <span className="text-muted-foreground truncate text-xs">
-                {describeActor(entry.actor)}
+                {describeTenantActor(entry)}
               </span>
 
               <span className="text-muted-foreground text-xs">
