@@ -750,3 +750,208 @@ export type ApiKey = {
  * shape of exactly one endpoint. Nothing stored can reproduce it.
  */
 export type ApiKeyCreated = ApiKey & { key: string };
+
+// --- the console, read-only (W10) -------------------------------------
+
+/**
+ * What somebody who runs Baton itself may do, in ascending order.
+ *
+ * Not to be confused with `WorkspaceRole`, which is about a customer's own
+ * team. These three are a ladder rather than a fan: everything support may
+ * do, an admin may do too.
+ */
+export type StaffRole = "support" | "admin" | "owner";
+
+/** `GET /admin/me`. Who you are on this platform, and what you may reach. */
+export type StaffMember = {
+  user_id: number;
+  name: string;
+  email: string;
+  role: StaffRole;
+  /** Null for the first owner, and only for them: nobody granted it. */
+  granted_by_user_id: number | null;
+  granted_at: string;
+  revoked_at: string | null;
+};
+
+/**
+ * One business, as a console search result.
+ *
+ * `plan` is what applies right now, after overrides and status — the same
+ * field §3.4 says to gate on, here shown rather than gated on. `owner_email`
+ * is null where the owner has closed their account, which is a real state
+ * and one somebody would be searching about.
+ */
+export type AdminWorkspaceSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  status: WorkspaceStatus;
+  plan: PlanTier;
+  owner_email: string | null;
+  /**
+   * When a cancelled workspace's records are due to be destroyed.
+   *
+   * Null while it is live. This is the field the customer's own API will
+   * not show at all — a closed workspace is simply gone there — and it is
+   * the answer to "it was closed last week, can we get it back".
+   */
+  erase_after: string | null;
+  created_at: string;
+};
+
+/** How much of everything a workspace holds. Counts, and this phase stops here. */
+export type AdminWorkspaceCounts = {
+  members: number;
+  contacts: number;
+  conversations: number;
+  messages: number;
+  knowledge_documents: number;
+};
+
+export type AdminWorkspaceDetail = AdminWorkspaceSummary & {
+  timezone: string;
+  default_currency: string;
+  counts: AdminWorkspaceCounts;
+  updated_at: string;
+};
+
+/** The same fields the business sees in its own member list, deliberately. */
+export type AdminMember = {
+  user_id: number;
+  name: string;
+  email: string;
+  role: WorkspaceRole;
+  status: MembershipStatus;
+  joined_at: string;
+};
+
+/**
+ * What the payment provider says about a workspace.
+ *
+ * The provider's identifiers are here because they are how somebody finds
+ * the same subscription in the provider's own dashboard, which is where
+ * refunds belong. They are handles rather than secrets.
+ */
+export type AdminSubscription = {
+  id: string;
+  provider: string;
+  provider_customer_id: string | null;
+  provider_subscription_id: string | null;
+  plan: PlanTier;
+  status: SubscriptionStatus;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * What the provider says, and what the workspace actually gets.
+ *
+ * §3.4 again, and the gap between the two is where billing support
+ * happens: a `past_due` subscription still entitles the full plan while
+ * the provider retries. `subscription` is null for a workspace that has
+ * never paid, which is not the same as one whose payment failed.
+ */
+export type AdminBilling = { plan: PlanTier; subscription: AdminSubscription | null };
+
+/** A connected number. There is no field for the token and will not be one. */
+export type AdminWhatsApp = {
+  provider: string;
+  phone_number: string;
+  /** The provider's public handle for the number. Not a credential. */
+  external_phone_number_id: string;
+  status: WhatsAppStatus;
+  connected_at: string;
+};
+
+export type AdminStorefront = {
+  provider: string;
+  shop_domain: string;
+  status: StorefrontStatus;
+  /** Null until the first sync finishes. Stale is what a null or old date is. */
+  last_synced_at: string | null;
+  created_at: string;
+};
+
+/** Each null where nothing is connected, never an absent key. */
+export type AdminIntegrations = {
+  whatsapp: AdminWhatsApp | null;
+  storefront: AdminStorefront | null;
+};
+
+/** One account, as a console search result. No hash, and nowhere to put one. */
+export type AdminUserSummary = {
+  id: number;
+  name: string;
+  email: string;
+  is_active: boolean;
+  email_verified_at: string | null;
+  created_at: string;
+};
+
+/**
+ * One workspace an account belongs to, or used to.
+ *
+ * Removed memberships and cancelled workspaces are both here, which the
+ * person's own view of themselves would not show: "an admin of that
+ * business until it closed" is an answer rather than noise.
+ */
+export type AdminUserMembership = {
+  workspace_id: string;
+  name: string;
+  slug: string;
+  workspace_status: WorkspaceStatus;
+  role: WorkspaceRole;
+  status: MembershipStatus;
+  joined_at: string;
+};
+
+/** One live sign-in, as staff see it. The same fields its owner sees. */
+export type AdminUserSession = {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  user_agent: string | null;
+  ip_address: string | null;
+};
+
+/** Both lists are empty for somebody who registered and stopped there. */
+export type AdminUserDetail = AdminUserSummary & {
+  memberships: AdminUserMembership[];
+  sessions: AdminUserSession[];
+};
+
+/** Whichever staff member did it, as much as is still known. */
+export type AdminAuditActor = {
+  user_id: number | null;
+  name: string | null;
+  email: string | null;
+};
+
+/**
+ * Which business an entry was about, where it was about one.
+ *
+ * Absent for the acts that belong to no workspace, and present with a null
+ * id and a readable slug once the workspace has been erased — which is the
+ * state this log exists to outlive.
+ */
+export type AdminAuditSubject = {
+  workspace_id: string | null;
+  workspace_slug: string | null;
+};
+
+export type AdminAuditEntry = {
+  id: string;
+  action: string;
+  actor: AdminAuditActor | null;
+  subject: AdminAuditSubject | null;
+  target_user_id: number | null;
+  metadata: Record<string, unknown>;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+};
