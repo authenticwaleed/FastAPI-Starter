@@ -52,7 +52,33 @@ function fromAnotherOrigin(request: NextRequest): boolean {
   }
 }
 
+/**
+ * Whether this is somebody's browser asking for the platform surface.
+ *
+ * It has no business here. The relay attaches the *tenant* session, and
+ * the console holds one of its own -- so a request to `/admin` arriving
+ * through this route is either a mistake or somebody's script, and in both
+ * cases forwarding it would be the two surfaces meeting in the one place
+ * principle 7 says they must not.
+ *
+ * The console is rendered on the server and reads through `lib/console.ts`,
+ * which never comes past here, so nothing legitimate is refused by this.
+ * What it buys is that an XSS in the customer application cannot use the
+ * session it is standing in to read a customer's account from the platform
+ * side, however staff the person holding it happens to be.
+ */
+function forThePlatform(path: string[]): boolean {
+  return path[0] === "admin";
+}
+
 async function relay(request: NextRequest, path: string[]) {
+  if (forThePlatform(path)) {
+    return NextResponse.json(
+      { detail: "The platform console is not reachable from here", code: "not_relayed" },
+      { status: 403 },
+    );
+  }
+
   if (fromAnotherOrigin(request)) {
     return NextResponse.json(
       { detail: "This request did not come from here", code: "bad_origin" },
