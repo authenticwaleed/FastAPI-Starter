@@ -33,7 +33,8 @@ export type Session = {
 };
 
 /**
- * The options every session cookie carries.
+ * The options every session cookie carries -- the console's two included,
+ * which is the one thing the two surfaces do share.
  *
  * `sameSite: "lax"` is what stops another origin's form post arriving with
  * these attached, which is most of CSRF. It is not all of it -- a top-level
@@ -41,7 +42,7 @@ export type Session = {
  * the origin. Lax rather than strict because a person following an emailed
  * verification link arrives cross-site and should still be signed in.
  */
-function options(maxAge: number) {
+export function cookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     secure: IS_PRODUCTION,
@@ -55,11 +56,11 @@ export function accessCookieOptions(expiresIn: number) {
   // A little less than the token's own life, so the cookie is gone slightly
   // before the API would start refusing it. Refreshing early costs one
   // request; refreshing late costs a 401 on a page somebody is reading.
-  return options(Math.max(expiresIn - 15, 5));
+  return cookieOptions(Math.max(expiresIn - 15, 5));
 }
 
 export function refreshCookieOptions() {
-  return options(REFRESH_COOKIE_MAX_AGE);
+  return cookieOptions(REFRESH_COOKIE_MAX_AGE);
 }
 
 /** The session on this request, for a server component or action. */
