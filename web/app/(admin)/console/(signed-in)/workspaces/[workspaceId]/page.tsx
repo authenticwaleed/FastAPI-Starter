@@ -32,6 +32,16 @@ const SECTIONS = [
     title: "Their own log",
     body: "What this business's people did to it.",
   },
+  {
+    slug: "support-access",
+    title: "Support access",
+    body: "Ask for a window on their actual data, and see who has had one.",
+  },
+  {
+    slug: "conversations",
+    title: "Their inbox",
+    body: "Their customers' own messages. Only with a live window, and every thread opened is recorded.",
+  },
 ];
 
 /**
@@ -110,8 +120,8 @@ export default async function ConsoleWorkspacePage({
         </StatRow>
         <p className="text-muted-foreground text-xs">
           {workspace.counts.knowledge_documents.toLocaleString()} knowledge
-          documents. Counts only — no conversation, message, contact or
-          document is reachable from this surface.
+          documents. Counts, unless somebody asks for a window on the
+          messages behind them — which the business sees them ask for.
         </p>
       </section>
 
