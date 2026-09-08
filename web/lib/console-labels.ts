@@ -11,6 +11,7 @@
  * formatter means those never disagree from screen to screen.
  */
 
+import type { InboxWording } from "@/lib/labels";
 import type { StaffRole } from "@/lib/types";
 
 /** A moment, to the minute. Local to whoever is reading, not to the business. */
@@ -25,6 +26,58 @@ export function when(value: string): string {
 export function day(value: string): string {
   return new Date(value).toLocaleDateString(undefined, { dateStyle: "medium" });
 }
+
+/**
+ * How long is left, in words, or null once there is nothing left.
+ *
+ * Null rather than "0m", because the two are different facts and the
+ * screen does different things with them: a window with a minute in it is
+ * a nudge, and a window that has closed is a banner saying so and a
+ * request form. Rounding is downwards for the same reason -- somebody
+ * with 59 seconds should read "less than a minute", never "1m".
+ *
+ * Pure and taking `now`, so the countdown that ticks in the browser and
+ * the sentence rendered on the server come out of the same function.
+ */
+export function timeLeft(expiresAt: string, now: number): string | null {
+  const seconds = Math.floor((Date.parse(expiresAt) - now) / 1000);
+
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < 60) return "less than a minute";
+
+  const minutes = Math.floor(seconds / 60);
+
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+/**
+ * The same inbox, worded for somebody it does not belong to.
+ *
+ * Every "you" on a customer's own screen becomes the team here. A thread
+ * telling a staff member they had sent the reply, or that they have this
+ * conversation, would be the first place the console started to look like
+ * a colleague -- and a support engineer who reads it that way is one step
+ * from answering as the business.
+ */
+export const CONSOLE_WORDING: InboxWording = {
+  voice: {
+    customer: "Their customer",
+    agent: "The team",
+    ai: "Assistant",
+    system: "Baton",
+  },
+  state: {
+    ai_active: "Assistant is answering",
+    suggest_only: "Assistant drafts, the team sends",
+    human_active: "The team has this",
+    ai_disabled: "Assistant is off",
+  },
+};
 
 export const STAFF_ROLE_LABEL: Record<StaffRole, string> = {
   support: "Support",
@@ -65,6 +118,11 @@ const ACTIONS: Record<string, string> = {
   "workspace.audit_read": "Read a business's own log",
   "users.searched": "Searched for an account",
   "user.read": "Opened an account",
+  "support_access.granted": "Asked for access to a customer's data",
+  "support_access.revoked": "Ended their own access",
+  "support_access.listed": "Reviewed who has had access",
+  "workspace.conversations_read": "Read a customer's inbox",
+  "workspace.messages_read": "Read one of a customer's threads",
   "staff.listed": "Listed platform staff",
   "staff.granted": "Gave somebody platform access",
   "staff.role_changed": "Changed a colleague's rank",
