@@ -193,6 +193,28 @@ export const SENTENCES: Record<string, string> = {
   order_not_confirmable:
     "This order is not pending any more, so it cannot be confirmed.",
 
+  // --- the platform console (W10) ------------------------------------------
+  //
+  // Every one of these is answered honestly by the API, unlike the tenant
+  // refusals above, and it can afford to be: nobody reaches an /admin
+  // route without a session already matched to a live staff row, so there
+  // is no stranger here to keep in the dark.
+  //
+  // All three are terminal. Nothing the person types, and no form they
+  // change, turns any of them into a yes, so the wording offers nothing to
+  // try -- a "try again" under a refusal that cannot be retried is worse
+  // than silence.
+  not_staff: "This account does not have access to the platform console.",
+  insufficient_staff_role: "Your staff role does not include this.",
+  // An IP allowlist, and a console-only refusal with no tenant equivalent.
+  address_not_allowed: "The console does not accept connections from this address.",
+  // 401, and the one refusal on this surface that signing in again fixes.
+  // Deliberately says what it is about: the console keeps a shorter clock
+  // than the app, and somebody who has just been using the app without
+  // trouble will otherwise read this as a fault.
+  admin_session_expired:
+    "The console signs out sooner than the app does. Sign in again to carry on.",
+
   // --- the plan getting in the way ----------------------------------------
   //
   // 402, not 403. A 403 says "you may not", which sends somebody to an

@@ -17,6 +17,13 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  CONSOLE_ACCESS_COOKIE,
+  CONSOLE_PATH,
+  CONSOLE_REFRESH_COOKIE,
+  CONSOLE_SIGN_IN_PATH,
+  consoleRefreshCookieOptions,
+} from "@/lib/console-session";
 import { isSessionOver } from "@/lib/errors";
 import { spendRefreshToken, type Refreshed } from "@/lib/refresh";
 import {
@@ -26,6 +33,14 @@ import {
   refreshCookieOptions,
 } from "@/lib/session";
 
+/**
+ * The platform console, which is guarded on its own terms below.
+ *
+ * Everything under here is answered by `forTheConsole` and nothing else in
+ * this file, so a console request never spends the tenant refresh token
+ * and a tenant request never spends the console's. The two surfaces do not
+ * share a session, and this is where that starts.
+ */
 /**
  * Reachable without a session, and pointless with one.
  *
@@ -67,6 +82,10 @@ function isPublic(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  if (pathname === CONSOLE_PATH || pathname.startsWith(`${CONSOLE_PATH}/`)) {
+    return forTheConsole(request);
+  }
 
   let accessToken = request.cookies.get(ACCESS_COOKIE)?.value ?? null;
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value ?? null;
@@ -134,6 +153,94 @@ export async function proxy(request: NextRequest) {
   if (sessionEnded) {
     response.cookies.delete(ACCESS_COOKIE);
     response.cookies.delete(REFRESH_COOKIE);
+  }
+
+  return response;
+}
+
+/**
+ * The console's door, and its own idle clock.
+ *
+ * Three things this does that the tenant branch does not.
+ *
+ * It reads and writes only the console's cookies, so a 401 here cannot
+ * end somebody's session in the customer app -- §3.5, and the reason the
+ * console has a pair of its own at all.
+ *
+ * It re-stamps the refresh cookie on every request, which is how the idle
+ * window rolls with use rather than with signing in. Sixty minutes with
+ * nothing opened leaves the browser holding nothing to refresh with, and
+ * the console asks who you are again -- mirroring the rule the API
+ * enforces on `last_used_at` rather than quietly outliving it.
+ *
+ * And it never bounces a signed-in person away from the sign-in screen.
+ * The API ending a console session leaves these cookies in place, so a
+ * bounce would put somebody in a loop between a page that redirects here
+ * and a screen that redirects back.
+ */
+async function forTheConsole(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
+  let accessToken = request.cookies.get(CONSOLE_ACCESS_COOKIE)?.value ?? null;
+  const refreshToken = request.cookies.get(CONSOLE_REFRESH_COOKIE)?.value ?? null;
+
+  let refreshed: Refreshed | null = null;
+  let sessionEnded = false;
+
+  if (!accessToken && refreshToken) {
+    try {
+      refreshed = await spendRefreshToken(refreshToken);
+      accessToken = refreshed.access_token;
+
+      request.cookies.set(CONSOLE_ACCESS_COOKIE, refreshed.access_token);
+      request.cookies.set(CONSOLE_REFRESH_COOKIE, refreshed.refresh_token);
+    } catch (error) {
+      sessionEnded = isSessionOver(error);
+
+      if (sessionEnded) {
+        request.cookies.delete(CONSOLE_ACCESS_COOKIE);
+        request.cookies.delete(CONSOLE_REFRESH_COOKIE);
+      }
+    }
+  }
+
+  let response: NextResponse;
+
+  if (!accessToken && pathname !== CONSOLE_SIGN_IN_PATH) {
+    const url = request.nextUrl.clone();
+    url.pathname = CONSOLE_SIGN_IN_PATH;
+    url.search = "";
+    url.searchParams.set("next", `${pathname}${search}`);
+
+    response = NextResponse.redirect(url);
+  } else {
+    response = NextResponse.next({ request: { headers: request.headers } });
+  }
+
+  if (refreshed) {
+    response.cookies.set(
+      CONSOLE_ACCESS_COOKIE,
+      refreshed.access_token,
+      accessCookieOptions(refreshed.expires_in),
+    );
+    response.cookies.set(
+      CONSOLE_REFRESH_COOKIE,
+      refreshed.refresh_token,
+      consoleRefreshCookieOptions(),
+    );
+  } else if (refreshToken && !sessionEnded) {
+    // The same token, with the idle window started again. Nothing is
+    // spent: this is the browser being told the session is still in use.
+    response.cookies.set(
+      CONSOLE_REFRESH_COOKIE,
+      refreshToken,
+      consoleRefreshCookieOptions(),
+    );
+  }
+
+  if (sessionEnded) {
+    response.cookies.delete(CONSOLE_ACCESS_COOKIE);
+    response.cookies.delete(CONSOLE_REFRESH_COOKIE);
   }
 
   return response;

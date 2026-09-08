@@ -1,3 +1,6 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
 import { expect, type Page } from "@playwright/test";
 
 /**
@@ -130,6 +133,75 @@ export async function closeConversationViaApi(
     method: "POST",
     token,
   });
+}
+
+/**
+ * Promote an account to staff, from a shell.
+ *
+ * The one fixture here that is not an HTTP call, and it cannot be one:
+ * granting platform access is owner-only, so a deployment with no staff at
+ * all has no way to produce the first one through its own API. That is the
+ * whole reason `app/staff_cli.py` exists, and it is what a real deployment
+ * does once before anybody can open the console.
+ *
+ * Run from the repository root, where the API's own environment lives.
+ */
+export async function promoteToStaffViaCli(
+  email: string,
+  role: "support" | "admin" | "owner" = "owner",
+): Promise<void> {
+  await promisify(execFile)(
+    "uv",
+    ["run", "python", "-m", "app.staff_cli", "grant", email, "--role", role],
+    { cwd: "..", env: { ...process.env, LOG_LEVEL: "WARNING" } },
+  );
+}
+
+/**
+ * Sign in at the console's own door.
+ *
+ * A second sign-in for the same account, deliberately: the console keeps a
+ * session of its own so that the API refusing an idle one does not touch
+ * whatever is signed in to Baton itself (§3.5).
+ */
+export async function signInToConsoleThrough(page: Page, person: Person) {
+  await page.goto("/console/sign-in");
+  await page.getByLabel("Email").fill(person.email);
+  await page.getByLabel("Password").fill(person.password);
+  await page.getByRole("button", { name: "Sign in to the console" }).click();
+
+  await expect(page.getByTestId("console-nav")).toBeVisible();
+}
+
+/**
+ * A read straight from the API, for asserting on what the screens caused.
+ *
+ * The console's own claim -- that it issues nothing nobody asked for --
+ * can only be checked against the platform's audit log, which is the
+ * record of every request it made.
+ */
+export async function readViaApi<T>(path: string, token: string): Promise<T> {
+  return call<T>(path, { token });
+}
+
+/**
+ * Delete an account, which is how a workspace ends up with nobody in it.
+ *
+ * Refused while the account is the last owner of a *live* workspace, so
+ * the workspace has to be closed first. The pair is a real sequence -- a
+ * business winds up and its owner leaves -- and it is the only way to
+ * produce the empty team this phase has to render.
+ */
+export async function deleteAccountViaApi(token: string): Promise<void> {
+  await call("/account", { method: "DELETE", token });
+}
+
+/** Close a workspace the way its owner would: cancelled, with a date on it. */
+export async function closeWorkspaceViaApi(
+  ownerToken: string,
+  workspaceId: string,
+): Promise<void> {
+  await call(`/workspaces/${workspaceId}`, { method: "DELETE", token: ownerToken });
 }
 
 /** A number nobody else in the test run will have. */

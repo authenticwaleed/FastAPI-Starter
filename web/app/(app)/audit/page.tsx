@@ -6,6 +6,7 @@ import { Refusal } from "@/components/refusal";
 import { Badge } from "@/components/ui/badge";
 import { listAuditLogs } from "@/lib/analytics";
 import { ApiError } from "@/lib/errors";
+import { describeActor, describeEvent } from "@/lib/labels";
 import type { AuditEntry, Page as Paged } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -16,36 +17,6 @@ function when(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
-}
-
-/** The API's event names, as a sentence. Unknown ones show as they are. */
-function describe(event: string): string {
-  const said: Record<string, string> = {
-    "workspace.created": "Workspace created",
-    "workspace.updated": "Workspace settings changed",
-    "workspace.closed": "Workspace closed",
-    "member.invited": "Somebody was invited",
-    "member.joined": "Somebody joined",
-    "member.role_changed": "A role was changed",
-    "member.removed": "Somebody left or was removed",
-    "whatsapp.connected": "WhatsApp connected",
-    "whatsapp.disconnected": "WhatsApp disconnected",
-    "knowledge.document_uploaded": "A document was added",
-    "knowledge.document_deleted": "A document was deleted",
-    "conversation.assigned": "A conversation was assigned",
-    "conversation.closed": "A conversation was closed",
-    "conversation.ai_disabled": "The assistant was switched off for a thread",
-    "subscription.changed": "The subscription changed",
-    "api_key.created": "An API key was created",
-    "api_key.revoked": "An API key was revoked",
-    "support.access_granted": "Support was given access",
-    "support.access_ended": "Support access ended",
-    "workspace.suspended": "The workspace was suspended",
-    "workspace.unsuspended": "The suspension was lifted",
-    "workspace.restored": "The workspace was restored",
-  };
-
-  return said[event] ?? event;
 }
 
 /**
@@ -142,19 +113,10 @@ export default async function AuditPage({
               data-event={entry.event}
               className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
             >
-              <span className="min-w-0 flex-1 text-sm">{describe(entry.event)}</span>
+              <span className="min-w-0 flex-1 text-sm">{describeEvent(entry.event)}</span>
 
               <span className="text-muted-foreground truncate text-xs">
-                {/*
-                  A null actor is a real entry rather than missing data: a
-                  payment provider changed a subscription, and naming
-                  somebody would put an accusation in the record. An actor
-                  with an address and no id is a deleted account, which is
-                  the case this table exists to outlive.
-                */}
-                {entry.actor === null
-                  ? "Not a person"
-                  : (entry.actor.name ?? entry.actor.email ?? "A deleted account")}
+                {describeActor(entry.actor)}
               </span>
 
               <span className="text-muted-foreground text-xs">
