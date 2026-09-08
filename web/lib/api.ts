@@ -24,6 +24,15 @@ type Options = Omit<RequestInit, "body"> & {
   raw?: BodyInit;
   /** Skip the bearer token, for the handful of endpoints that take none. */
   anonymous?: boolean;
+  /**
+   * A token other than the tenant session's, for a caller holding its own.
+   *
+   * The console does: its session is a second one, in its own cookies (see
+   * `lib/console-session.ts`), and a request to `/admin` carrying the
+   * tenant bearer would be the two surfaces meeting in the one place they
+   * must not. Set, it wins; unset, the tenant session applies as before.
+   */
+  bearer?: string;
 };
 
 /**
@@ -49,11 +58,13 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
 
 /** The same request, handed back unread. For the proxy, which streams it on. */
 export async function call(path: string, options: Options = {}): Promise<Response> {
-  const { json, raw, anonymous, headers, ...rest } = options;
+  const { json, raw, anonymous, bearer, headers, ...rest } = options;
 
   const sent = new Headers(headers);
 
-  if (!anonymous) {
+  if (bearer) {
+    sent.set("Authorization", `Bearer ${bearer}`);
+  } else if (!anonymous) {
     const { accessToken } = await readSession();
 
     if (accessToken) sent.set("Authorization", `Bearer ${accessToken}`);
