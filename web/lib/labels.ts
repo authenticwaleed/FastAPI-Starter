@@ -8,7 +8,12 @@
  * fix; a label is not a query and never was.
  */
 
-import type { ConversationState, StorefrontProvider } from "@/lib/types";
+import type {
+  AuditEntry,
+  ConversationState,
+  SenderType,
+  StorefrontProvider,
+} from "@/lib/types";
 
 /**
  * Who is answering, in words a person would use.
@@ -22,6 +27,33 @@ export const STATE_LABEL: Record<ConversationState, string> = {
   suggest_only: "Assistant drafts, you send",
   human_active: "You have this",
   ai_disabled: "Assistant is off",
+};
+
+/**
+ * Everything an inbox screen says in the second person.
+ *
+ * Gathered into one object because it all changes together and for one
+ * reason: the console reads these same threads and is not the business
+ * whose threads they are. "You have this" and "You: " are true on a
+ * customer's own screen and false on the platform's, and a staff member
+ * being addressed as the team is where a support console starts to look
+ * like a colleague -- the thing the API declines to allow at its end by
+ * refusing support an "assigned to me" filter.
+ */
+export type InboxWording = {
+  voice: Record<SenderType, string>;
+  state: Record<ConversationState, string>;
+};
+
+/** The wording for somebody reading their own inbox. */
+export const TENANT_WORDING: InboxWording = {
+  voice: {
+    customer: "Them",
+    agent: "You",
+    ai: "Assistant",
+    system: "Baton",
+  },
+  state: STATE_LABEL,
 };
 
 /**
@@ -80,6 +112,29 @@ export function describeActor(
   if (actor === null) return "Not a person";
 
   return actor.name ?? actor.email ?? "A deleted account";
+}
+
+/**
+ * The same, for an entry in a *workspace's* own log.
+ *
+ * A support engineer never appears among a customer's colleagues: the API
+ * leaves the actor empty and writes their address into `by_staff`
+ * instead, precisely so that an entry cannot read as one of the
+ * customer's own people having done it.
+ *
+ * Which leaves a screen a choice about how to render the empty actor, and
+ * only one of the answers is honest. "Not a person" is right for a
+ * payment provider changing a subscription; on a support entry it would
+ * tell a business that nobody was in their account when somebody named
+ * was -- and being able to see that is half of what the support-access
+ * design is for.
+ */
+export function describeTenantActor(entry: AuditEntry): string {
+  const staff = entry.metadata?.by_staff;
+
+  if (typeof staff === "string") return `Baton support · ${staff}`;
+
+  return describeActor(entry.actor);
 }
 
 /** The storefronts this product can connect to. */

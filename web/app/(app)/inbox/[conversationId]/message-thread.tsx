@@ -1,12 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import type { Message, SenderType } from "@/lib/types";
-
-const WHO: Record<SenderType, string> = {
-  customer: "Them",
-  agent: "You",
-  ai: "Assistant",
-  system: "Baton",
-};
+import { TENANT_WORDING, type InboxWording } from "@/lib/labels";
+import type { Message } from "@/lib/types";
 
 function when(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -26,13 +20,21 @@ function when(value: string): string {
  * `queued` is shown rather than hidden. Everything this API sends is queued
  * and stays queued until the messaging phase delivers it, so a screen that
  * implied "sent" would be telling an agent their customer has the reply.
+ *
+ * `wording` defaults to the inbox this was written for and the console
+ * passes its own, because the same thread is read by two different
+ * people: here an agent's message is "You", and on the console it is the
+ * team's. A staff member reading a customer's account is not on that
+ * team, and the one word is where a screen would first suggest otherwise.
  */
 export function MessageThread({
   messages,
   total,
+  wording = TENANT_WORDING,
 }: {
   messages: Message[];
   total: number;
+  wording?: InboxWording;
 }) {
   if (messages.length === 0) {
     return (
@@ -82,7 +84,7 @@ export function MessageThread({
                   fromThem ? "" : "justify-end"
                 }`}
               >
-                <span>{WHO[message.sender_type]}</span>
+                <span>{wording.voice[message.sender_type]}</span>
                 <span>{when(message.created_at)}</span>
                 {message.status === "queued" ? (
                   <Badge variant="outline" className="text-[10px]">
