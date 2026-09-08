@@ -1,9 +1,10 @@
 /**
- * The eleven reads the console is allowed to make.
+ * What the console reads.
  *
- * No mutation lives here and none will until W11: this phase is the same
- * decision the API's own A2 took, for the same reason -- a console that is
- * useful and cannot break anything beats a half-built one that can.
+ * Nothing here writes into a customer's workspace, and nothing will: the
+ * two acts this surface does perform -- asking for support access and
+ * ending it -- change a grant on the platform's own side and live in
+ * `lib/console-actions.ts` with the rest of the acts.
  *
  * Every function here writes a row to the platform's audit log, including
  * the ones that look idle. That is the API's design rather than an
@@ -18,11 +19,7 @@
  * only when somebody opens them.
  */
 
-import { redirect } from "next/navigation";
-
-import { api } from "@/lib/api";
-import { CONSOLE_SIGN_IN_PATH, readConsoleSession } from "@/lib/console-session";
-import { ApiError } from "@/lib/errors";
+import { adminApi as read } from "@/lib/console-api";
 import type {
   AdminAuditEntry,
   AdminBilling,
@@ -33,39 +30,14 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceSummary,
   AuditEntry,
+  Conversation,
+  ConversationStatus,
+  Message,
   Page,
   StaffMember,
+  SupportGrant,
   UsageSummary,
 } from "@/lib/types";
-
-/**
- * One read, on the console's own session.
- *
- * The 401 is caught here rather than by each screen because there is one
- * right answer to it and it is the same everywhere: the console signs out
- * on its own schedule (§3.5), and what that needs is the console's sign-in
- * screen. It does not need -- and must not have -- the tenant session
- * cleared, which is why nothing in this file touches those cookies.
- *
- * `403` and `404` are left to the caller. Both mean something on this
- * surface that they do not mean on the other, and the screen is where
- * that gets said.
- */
-async function read<T>(path: string): Promise<T> {
-  const { accessToken } = await readConsoleSession();
-
-  if (!accessToken) redirect(CONSOLE_SIGN_IN_PATH);
-
-  try {
-    return await api<T>(`/admin${path}`, { bearer: accessToken });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
-      redirect(`${CONSOLE_SIGN_IN_PATH}?expired=1`);
-    }
-
-    throw error;
-  }
-}
 
 /**
  * Who you are on this platform.
@@ -179,4 +151,76 @@ export function listPlatformAudit({
   if (workspaceId) parameters.set("workspace_id", workspaceId);
 
   return read<Page<AdminAuditEntry>>(`/audit?${parameters}`);
+}
+
+// --- support access, and the two reads it opens (W11) -------------------
+
+/**
+ * Who has been in this account, when, and why.
+ *
+ * History as well as what is live, because a list of only the live ones is
+ * almost always empty and the question is about the past. Administrators
+ * and above at the API: the rank that answers tickets is the one that
+ * needs access, and the rank that oversees them is the one that reviews
+ * whether they should have had it.
+ */
+export function listSupportGrants(workspaceId: string) {
+  return read<SupportGrant[]>(`/workspaces/${workspaceId}/support-access`);
+}
+
+export const CONSOLE_INBOX_PAGE_SIZE = 20;
+export const CONSOLE_THREAD_PAGE_SIZE = 30;
+
+/**
+ * The customer's inbox, as they see it.
+ *
+ * Through the API's own service and renderer, so what support is looking
+ * at is what the customer is looking at. There is no "assigned to me"
+ * here and the API does not offer one: it has no meaning for somebody who
+ * is not on the team, and it is the first place a staff actor would start
+ * to look like a colleague.
+ *
+ * Refused with `support_access_required` without a live grant, which is
+ * the refusal this whole phase is built around.
+ */
+export function listWorkspaceConversations(
+  workspaceId: string,
+  {
+    page = 1,
+    statuses = [],
+  }: { page?: number; statuses?: ConversationStatus[] } = {},
+) {
+  const parameters = new URLSearchParams({
+    page: String(page),
+    page_size: String(CONSOLE_INBOX_PAGE_SIZE),
+  });
+
+  for (const status of statuses) parameters.append("status", status);
+
+  return read<Page<Conversation>>(
+    `/workspaces/${workspaceId}/conversations?${parameters}`,
+  );
+}
+
+/**
+ * One thread, in full: the deepest anything on this surface reaches.
+ *
+ * The entry the API writes for it names the conversation rather than only
+ * the workspace, because "they read the inbox" and "they read this
+ * customer's thread with this person" are different answers to give
+ * afterwards.
+ */
+export function listWorkspaceMessages(
+  workspaceId: string,
+  conversationId: string,
+  { page = 1 }: { page?: number } = {},
+) {
+  const parameters = new URLSearchParams({
+    page: String(page),
+    page_size: String(CONSOLE_THREAD_PAGE_SIZE),
+  });
+
+  return read<Page<Message>>(
+    `/workspaces/${workspaceId}/conversations/${conversationId}/messages?${parameters}`,
+  );
 }
