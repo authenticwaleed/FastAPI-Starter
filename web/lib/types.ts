@@ -955,3 +955,30 @@ export type AdminAuditEntry = {
   user_agent: string | null;
   created_at: string;
 };
+
+// --- support access (W11) ---------------------------------------------
+
+/**
+ * One time-boxed window over a customer's data, live or historical.
+ *
+ * The staff member's address rather than their id, because whoever reads
+ * this list is asking who was in an account and an id sends them to
+ * another table to find out.
+ *
+ * `live` is computed by the API from `expires_at`, `revoked_at` and the
+ * clock rather than stored — there is no status column, for the same
+ * reason a session has none. A client must not recompute it from
+ * `expires_at` alone: a revoked grant has not expired and is not live.
+ */
+export type SupportGrant = {
+  id: string;
+  workspace_id: string;
+  staff_user_id: number;
+  staff_email: string;
+  /** What was told to the customer. It lands in their own audit log. */
+  reason: string;
+  expires_at: string;
+  revoked_at: string | null;
+  created_at: string;
+  live: boolean;
+};
