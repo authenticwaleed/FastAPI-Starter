@@ -251,6 +251,15 @@ export const SENTENCES: Record<string, string> = {
   already_staff: "That account already has platform access.",
   last_staff_owner: "The platform has to keep at least one owner.",
 
+  // --- the platform's own machinery (W13) ---------------------------------
+  //
+  // `job_not_retryable` carries its particular in the API's prose like the
+  // two above, and the interesting one is `running`: the worker holding
+  // that row does not check back, so moving it would let a second worker
+  // race the first.
+  job_not_found: "That job is no longer in the queue.",
+  job_not_retryable: "That job cannot be moved from where it is.",
+
   // --- the plan getting in the way ----------------------------------------
   //
   // 402, not 403. A 403 says "you may not", which sends somebody to an

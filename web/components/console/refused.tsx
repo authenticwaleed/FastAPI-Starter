@@ -7,17 +7,22 @@ import type { FormState } from "@/lib/form-state";
  * Two of the platform's refusals say something the code cannot.
  *
  * `workspace_lifecycle` covers five different states -- already
- * suspended, never closed, its erasure date has passed -- and
- * `approval_required` covers five different reasons a colleague's
- * agreement does not apply, one of which is that it was yours. The code
- * is the same in each case and the sentence has to be general; the
+ * suspended, never closed, its erasure date has passed --
+ * `approval_required` covers five reasons a colleague's agreement does
+ * not apply, one of which is that it was yours, and `job_not_retryable`
+ * covers a job that is running, finished, or already cancelled. The code
+ * is the same across each set and the sentence has to be general; the
  * particular is in the API's `detail`.
  *
  * So it is shown, on those two and nowhere else. This is not branching on
  * `detail` -- nothing anywhere decides anything from those words, and the
  * decision above is made on the code, which is the stable half.
  */
-const SAYS_MORE = ["workspace_lifecycle", "approval_required"];
+const SAYS_MORE = [
+  "workspace_lifecycle",
+  "approval_required",
+  "job_not_retryable",
+];
 
 export function Refused({ state }: { state: FormState }) {
   if (!state?.error) return null;
