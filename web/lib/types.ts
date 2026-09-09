@@ -982,3 +982,42 @@ export type SupportGrant = {
   created_at: string;
   live: boolean;
 };
+
+// --- lifecycle, and the people who run it (W12) -----------------------
+
+/**
+ * The two acts that need a second person.
+ *
+ * Two, and short on purpose: requiring a colleague for everything means
+ * nobody can do anything alone at three in the morning, and a rule people
+ * cannot follow is one they route around. One of these destroys a
+ * business's records with no way back, and the other creates somebody who
+ * can do the first.
+ */
+export type ApprovableAction = "erase_workspace" | "grant_staff_owner";
+
+/**
+ * One colleague agreeing, in advance, to one specific act.
+ *
+ * `subject` is the workspace id for an erasure and the account id for a
+ * promotion, as text — an approval has to be able to outlive the workspace
+ * it names.
+ *
+ * `usable` is computed by the API from the three timestamps and the clock.
+ * What it does not say is whether *you* may spend it: that depends on who
+ * is asking, and the answer is no if you are the one who approved it.
+ */
+export type Approval = {
+  id: string;
+  action: ApprovableAction;
+  subject: string;
+  reason: string;
+  requested_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  consumed_at: string | null;
+  expires_at: string;
+  created_at: string;
+  metadata: Record<string, unknown>;
+  usable: boolean;
+};

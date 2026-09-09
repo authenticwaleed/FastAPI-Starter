@@ -224,3 +224,19 @@ export function listWorkspaceMessages(
     `/workspaces/${workspaceId}/conversations/${conversationId}/messages?${parameters}`,
   );
 }
+
+// --- the people who run the platform (W12) -----------------------------
+
+/**
+ * Everybody who runs this platform, revoked rows included.
+ *
+ * Unpaginated at the API, like a workspace's member list and for the same
+ * reason: this is people, and there are not going to be thousands of them.
+ * Revoked rows stay because they are the useful half of the screen after
+ * an incident — who used to have this, and when it was taken away.
+ *
+ * Administrator rank to read; only an owner may change any of it.
+ */
+export function listStaff() {
+  return read<StaffMember[]>("/staff");
+}

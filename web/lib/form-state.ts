@@ -31,6 +31,16 @@ export type FormState = {
    * and a different next step.
    */
   code?: string;
+  /**
+   * The API's own prose, where it says something the code cannot.
+   *
+   * Two refusals on the platform surface carry their particulars here --
+   * which state refused a lifecycle move, which colleague already
+   * approved this -- and a screen shows that line beneath the sentence.
+   * Displaying it is not branching on it: nothing anywhere decides
+   * anything from these words, and `code` is still what a screen reads.
+   */
+  detail?: string;
   /** Per-field messages from a 422, keyed by the input's name. */
   fields?: Record<string, string>;
   /** For the flows that finish without navigating anywhere. */
