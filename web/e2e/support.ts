@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHmac } from "node:crypto";
 import { promisify } from "node:util";
 
 import { expect, type Page } from "@playwright/test";
@@ -256,6 +257,92 @@ export async function approveViaApi(
     method: "POST",
     token: otherStaffToken,
   });
+}
+
+/**
+ * Connect a number with a token that is not real.
+ *
+ * Which is the point: the provider refuses it, so sending a message fails
+ * and the API enqueues the retry in the same transaction as the failure.
+ * That is the only honest way to produce a job with an error on it, and
+ * the console's queue screen is judged on showing one.
+ */
+export async function connectWhatsAppViaApi(
+  token: string,
+  workspaceId: string,
+): Promise<void> {
+  await call(`/workspaces/${workspaceId}/integrations/whatsapp/connect`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({
+      phone_number: somePhone(),
+      external_phone_number_id: String(Math.floor(Math.random() * 1e15)),
+      access_token: "a-token-that-is-not-real",
+    }),
+  });
+}
+
+/**
+ * One pass of the worker, which is what turns a queued job into a failed one.
+ *
+ * A shell call like the staff grant, and for the same kind of reason:
+ * there is no HTTP route that runs the queue, because a queue somebody
+ * can drain over the network is one an attacker can too. The process
+ * loops, so it is stopped rather than waited on -- the first pass has
+ * planned and drained long before this returns.
+ */
+export async function runTheWorker(seconds = 15): Promise<void> {
+  try {
+    await promisify(execFile)(
+      "timeout",
+      [String(seconds), "uv", "run", "python", "-m", "app.worker"],
+      { cwd: "..", env: { ...process.env, LOG_LEVEL: "WARNING" } },
+    );
+  } catch (error) {
+    // `timeout` kills it, which is a non-zero exit and the ordinary end.
+    if ((error as { code?: number }).code !== 124) throw error;
+  }
+}
+
+/**
+ * A signed delivery from the payment provider.
+ *
+ * Signed rather than faked past the check, because the check is the
+ * reason the console has a refused-deliveries screen at all. The digest
+ * covers `"{timestamp}.{body}"`, and the timestamp is inside it so a
+ * stale one is refused rather than trusted.
+ *
+ * `invoice.payment_failed` needs no call to the provider to interpret --
+ * it names a subscription and nothing more -- so this records a delivery
+ * this platform can replay and, naming a subscription nobody holds,
+ * cannot apply. Which is exactly the answer the replay screen has to
+ * render as ordinary.
+ */
+export async function deliverBillingEventViaApi(): Promise<string> {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const body = JSON.stringify({
+    id: `evt_${stamp}`,
+    type: "invoice.payment_failed",
+    data: { object: { subscription: `sub_${stamp}`, customer: `cus_${stamp}` } },
+  });
+  const at = Math.floor(Date.now() / 1000);
+  const digest = createHmac("sha256", secret).update(`${at}.${body}`).digest("hex");
+
+  const response = await fetch(`${API}/api/v1/webhooks/billing`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Stripe-Signature": `t=${at},v1=${digest}`,
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(`billing webhook -> ${response.status} ${await response.text()}`);
+  }
+
+  return `evt_${stamp}`;
 }
 
 /** A number nobody else in the test run will have. */
