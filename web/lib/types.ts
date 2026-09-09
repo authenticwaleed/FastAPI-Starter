@@ -1021,3 +1021,215 @@ export type Approval = {
   metadata: Record<string, unknown>;
   usable: boolean;
 };
+
+// --- the platform's own books and machinery (W13) ----------------------
+
+/** One subscription, with the business it belongs to named. */
+export type AdminSubscriptionRow = AdminSubscription & { workspace_slug: string };
+
+/**
+ * One delivery from the payment provider.
+ *
+ * `replayable` is false for deliveries recorded before payloads were
+ * kept: there is genuinely nothing to re-apply, and saying so beats a
+ * button that answers "nothing happened".
+ */
+export type AdminBillingEvent = {
+  id: string;
+  provider: string;
+  provider_event_id: string;
+  /** The provider's own word, so a row can be held up against their dashboard. */
+  event_type: string;
+  received_at: string;
+  replayable: boolean;
+  /** The delivery in this application's words — never the raw body. */
+  payload: Record<string, unknown>;
+};
+
+/**
+ * What a replay did.
+ *
+ * `applied: false` means there was nothing to do — a delivery from before
+ * payloads were kept, or one naming a subscription this platform does not
+ * hold. An ordinary answer, not a failure.
+ */
+export type ReplayResult = { applied: boolean };
+
+/**
+ * A plan granted rather than paid for, and whether it is in force.
+ *
+ * It outranks the subscription and survives every webhook, which is why
+ * it is a row of its own rather than a value written onto the
+ * subscription — that would revert on the next delivery, silently.
+ */
+export type PlanOverride = {
+  workspace_id: string;
+  plan: PlanTier;
+  reason: string;
+  granted_by_user_id: number | null;
+  expires_at: string | null;
+  created_at: string;
+  /** Computed from the expiry and the clock. An expired grant is kept and shown. */
+  applies: boolean;
+  /** True where no date was set: a plan nothing will ever take away. */
+  forever: boolean;
+};
+
+export type JobKind =
+  | "deliver_message"
+  | "sweep_automations"
+  | "run_due_automations"
+  | "sweep_erasures";
+
+export type JobStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+/** One job in the queue. Null `workspace_id` is a platform sweep, not a gap. */
+export type AdminJobSummary = {
+  id: string;
+  kind: JobKind;
+  status: JobStatus;
+  workspace_id: string | null;
+  attempts: number;
+  max_attempts: number;
+  run_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  /** The field the whole screen is for. */
+  last_error: string | null;
+  created_at: string;
+};
+
+/**
+ * One job, with as much of its payload as its kind admits.
+ *
+ * Redacted on a safe-list by the API: a field nobody named for this kind
+ * comes back as `[redacted]` rather than being dropped, so a reader can
+ * tell "something is here I am not being shown" from "nothing is here".
+ */
+export type AdminJobDetail = AdminJobSummary & {
+  payload: Record<string, unknown>;
+  dedupe_key: string | null;
+};
+
+export type WebhookRefusal = "bad_signature" | "unknown_subject" | "malformed";
+
+/** One delivery that was turned away. No body, ever. */
+export type AdminWebhookFailure = {
+  id: string;
+  provider: string;
+  reason: WebhookRefusal;
+  path: string;
+  ip_address: string | null;
+  received_at: string;
+};
+
+export type AdminWhatsAppNumber = {
+  workspace_id: string;
+  workspace_slug: string;
+  provider: string;
+  phone_number: string;
+  external_phone_number_id: string;
+  status: WhatsAppStatus;
+  connected_at: string;
+};
+
+/**
+ * The two numbers that say whether the worker has stopped.
+ *
+ * Depth alone cannot tell a busy afternoon from a dead worker: two
+ * hundred draining in a minute is fine, three where the oldest has waited
+ * an hour is not, and the count looks the same. `oldest_pending_seconds`
+ * is null when nothing is due, which is not zero.
+ */
+export type AdminQueueHealth = {
+  depth: number;
+  oldest_pending_seconds: number | null;
+  running: number;
+  failed: number;
+};
+
+/** `integrations` says whether each is configured, never whether it answers. */
+export type AdminHealth = {
+  database: boolean;
+  queue: AdminQueueHealth;
+  integrations: Record<string, boolean>;
+};
+
+export type PlatformCounts = {
+  users: number;
+  workspaces: number;
+  conversations: number;
+  messages: number;
+};
+
+/** A value with nothing in it is absent rather than zero. Read a gap as zero. */
+export type AdminOverview = {
+  counts: PlatformCounts;
+  workspaces_by_status: Partial<Record<WorkspaceStatus, number>>;
+  workspaces_by_plan: Partial<Record<PlanTier, number>>;
+};
+
+export type DailyPoint = { day: string; count: number };
+
+/**
+ * Signups, closures, and how many businesses actually used the product.
+ *
+ * The third is the one a row count cannot give: counted from messages
+ * sent, so four hundred workspaces and nine active says something the
+ * headline hides.
+ */
+export type AdminGrowth = {
+  days: number;
+  signups: DailyPoint[];
+  closures: DailyPoint[];
+  active_workspaces: number;
+};
+
+/** Counts per plan rather than an amount: what a plan costs lives elsewhere. */
+export type AdminRevenue = {
+  subscriptions_by_status: Partial<Record<SubscriptionStatus, number>>;
+  paying_by_plan: Partial<Record<PlanTier, number>>;
+};
+
+/**
+ * What the assistant cost across every tenant, in tokens rather than money.
+ *
+ * What a token costs is a contract with a model provider and changes
+ * without this application being redeployed; a figure in dollars would
+ * look authoritative and be wrong within a quarter.
+ */
+export type AdminAiSpend = {
+  days: number;
+  replies: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  average_latency_ms: number | null;
+  by_model: Record<string, number>;
+};
+
+/** One staff member, and how many distinct customers they opened. */
+export type BusyReader = {
+  user_id: number | null;
+  email: string | null;
+  workspaces_read: number;
+};
+
+/**
+ * Patterns worth a person looking at, not refusals.
+ *
+ * Nothing here stops anybody doing anything, and that is the design: both
+ * patterns are perfectly ordinary during an incident and worth noticing
+ * afterwards, and a control that refused them would be worked around
+ * within a week by whoever was on call.
+ */
+export type AdminAlerts = {
+  hours: number;
+  threshold: number;
+  busiest_readers: BusyReader[];
+  over_threshold: BusyReader[];
+};

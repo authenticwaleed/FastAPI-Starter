@@ -100,7 +100,18 @@ export default async function ConsoleAuditPage({
     <div className="grid gap-6">
       <ConsoleHeading
         title="Platform log"
-        description="What the people running Baton did, to a business or to each other."
+        description={
+          <span>
+            What the people running Baton did, to a business or to each other.{" "}
+            <ConsoleLink
+              href="/console/alerts"
+              className="underline underline-offset-4"
+            >
+              Who has been reading a lot of accounts
+            </ConsoleLink>{" "}
+            is built from these same rows.
+          </span>
+        }
       />
 
       <form

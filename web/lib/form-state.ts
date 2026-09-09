@@ -14,6 +14,7 @@ import type {
   AiReply,
   ApiKeyCreated,
   InvitationCreated,
+  PlanOverride,
   SearchResult,
   SweepReport,
   SyncReport,
@@ -77,6 +78,23 @@ export type FormState = {
   sweep?: SweepReport;
   /** What one storefront sync did. */
   sync?: SyncReport;
+  /**
+   * What a replay did.
+   *
+   * `false` is an ordinary answer meaning there was nothing to re-apply,
+   * and the screen says so rather than colouring it as a failure. Carried
+   * separately from `done` because the request succeeded either way.
+   */
+  applied?: boolean;
+  /**
+   * The plan just granted.
+   *
+   * Carried back because the API returns a grant when one is made and at
+   * no other time -- there is no route that reads the current one -- so
+   * this response is the only chance to show its expiry, or that it has
+   * none.
+   */
+  override?: PlanOverride;
   /**
    * The key just made, with the secret in it.
    *

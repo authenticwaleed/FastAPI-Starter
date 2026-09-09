@@ -133,6 +133,11 @@ jobs:
       # a key. Throwaway and generated for CI -- the real one is a
       # deployment secret and has never been in this repository.
       ENCRYPTION_KEY: 8GkQ0DPTPzY3RtsDcRUv0YyBFqPLmPqXbYtdzwXQvbA=
+      # The console's billing screens are judged on what a delivery from
+      # the payment provider does, so the suite signs one -- and the
+      # signature is checked, because that check is why there is a
+      # refused-deliveries screen at all. Throwaway, like the key above.
+      STRIPE_WEBHOOK_SECRET: whsec_ci_only_not_a_real_secret
       API_URL: http://localhost:8000
 
     defaults:

@@ -30,7 +30,7 @@ export default function SignedInConsole({
         className="bg-muted/40 border-b"
         data-testid="console-nav"
       >
-        <div className="mx-auto flex h-11 w-full max-w-6xl items-center gap-4 px-4 text-sm">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm">
           <ConsoleLink href="/console" className="hover:underline underline-offset-4">
             Overview
           </ConsoleLink>
@@ -45,6 +45,30 @@ export default function SignedInConsole({
             className="hover:underline underline-offset-4"
           >
             Accounts
+          </ConsoleLink>
+          <ConsoleLink
+            href="/console/billing"
+            className="hover:underline underline-offset-4"
+          >
+            Billing
+          </ConsoleLink>
+          <ConsoleLink
+            href="/console/jobs"
+            className="hover:underline underline-offset-4"
+          >
+            Queue
+          </ConsoleLink>
+          <ConsoleLink
+            href="/console/analytics"
+            className="hover:underline underline-offset-4"
+          >
+            Analytics
+          </ConsoleLink>
+          <ConsoleLink
+            href="/console/approvals"
+            className="hover:underline underline-offset-4"
+          >
+            Approvals
           </ConsoleLink>
           <ConsoleLink
             href="/console/staff"

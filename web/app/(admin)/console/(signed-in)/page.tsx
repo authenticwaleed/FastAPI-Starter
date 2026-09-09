@@ -24,6 +24,31 @@ const SECTIONS = [
     body: "Find a person. Where they belong, whether their account is live, and whether anything is signed in.",
   },
   {
+    href: "/console/billing?status=past_due",
+    title: "Being retried",
+    body: "The subscriptions whose card did not go through. Each is about to pay or about to churn.",
+  },
+  {
+    href: "/console/jobs?kind=deliver_message&status=failed",
+    title: "Messages that failed",
+    body: "Where \"their message never arrived\" becomes a row with a reason on it.",
+  },
+  {
+    href: "/console/approvals",
+    title: "Approvals",
+    body: "Where a colleague's request for a second person gets answered.",
+  },
+  {
+    href: "/console/analytics",
+    title: "Analytics",
+    body: "Where the whole platform stands. Aggregates only, and none of it about one business.",
+  },
+  {
+    href: "/console/health",
+    title: "Health",
+    body: "The queue, the database, and what this deployment is configured for.",
+  },
+  {
     href: "/console/staff",
     title: "Staff",
     body: "Who runs this platform. Administrators read it; only an owner changes it.",
