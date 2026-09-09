@@ -240,6 +240,24 @@ export async function sendMessageViaApi(
   });
 }
 
+/**
+ * Agree to a colleague's approval request, as somebody else.
+ *
+ * Through the API because the screen that does this is W13's. What W12
+ * owns is the other half -- raising the request and spending the
+ * agreement -- and the rule between them is that the two people cannot be
+ * the same, which is why this takes a second staff member's token.
+ */
+export async function approveViaApi(
+  otherStaffToken: string,
+  approvalId: string,
+): Promise<void> {
+  await call(`/admin/approvals/${approvalId}/approve`, {
+    method: "POST",
+    token: otherStaffToken,
+  });
+}
+
 /** A number nobody else in the test run will have. */
 export function somePhone(): string {
   const tail = String(Math.floor(Math.random() * 90_000_000) + 10_000_000);
