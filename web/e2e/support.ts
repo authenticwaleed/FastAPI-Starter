@@ -204,6 +204,42 @@ export async function closeWorkspaceViaApi(
   await call(`/workspaces/${workspaceId}`, { method: "DELETE", token: ownerToken });
 }
 
+/**
+ * Take a staff member's support grant away behind the browser's back.
+ *
+ * A faithful stand-in for a grant that expires mid-read, and the only one
+ * available: the shortest window the API will open is an hour. It is
+ * faithful because the API answers unknown, expired and revoked with the
+ * same refusal on purpose -- all three mean the same thing to the person
+ * asking and lead to the same next step.
+ *
+ * `DELETE` ends the caller's own grant, so this is sent as the staff
+ * member whose window is being closed.
+ */
+export async function endSupportAccessViaApi(
+  staffToken: string,
+  workspaceId: string,
+): Promise<void> {
+  await call(`/admin/workspaces/${workspaceId}/support-access`, {
+    method: "DELETE",
+    token: staffToken,
+  });
+}
+
+/** A message in a customer's thread, put there the way a customer would. */
+export async function sendMessageViaApi(
+  token: string,
+  workspaceId: string,
+  conversationId: string,
+  text: string,
+): Promise<{ id: string }> {
+  return call(`/workspaces/${workspaceId}/conversations/${conversationId}/messages`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ text }),
+  });
+}
+
 /** A number nobody else in the test run will have. */
 export function somePhone(): string {
   const tail = String(Math.floor(Math.random() * 90_000_000) + 10_000_000);

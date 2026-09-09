@@ -215,6 +215,27 @@ export const SENTENCES: Record<string, string> = {
   admin_session_expired:
     "The console signs out sooner than the app does. Sign in again to carry on.",
 
+  // --- support access (W11) ------------------------------------------------
+  //
+  // The first of these is the refusal the whole phase is built around, and
+  // the wording is the phase's own rule: it must read as "ask for access"
+  // rather than as a fault. It covers a grant that never existed, one that
+  // expired and one that was revoked -- unusual on a surface where
+  // everything else is exact, and right, because all three mean the same
+  // thing to the person asking and lead to the same next step.
+  support_access_required:
+    "You do not have a live window on this account. Ask for one, with a reason.",
+  support_access_already_granted:
+    "You already have a live window on this account.",
+  // 422, and the one sentence here that cannot say what the plan asks it
+  // to. The maximum is configured per deployment and the API returns it in
+  // neither the response nor the schema, so naming the number would be the
+  // client inventing a fact -- §7's third refusal. Saying which way to go
+  // is the honest half of it; an endpoint that answers "how long may I
+  // ask for" is the other, and it belongs in the API's plan.
+  support_grant_too_long:
+    "That is longer than this deployment allows. Ask for fewer hours.",
+
   // --- the plan getting in the way ----------------------------------------
   //
   // 402, not 403. A 403 says "you may not", which sends somebody to an
