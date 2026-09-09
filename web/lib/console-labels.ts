@@ -127,6 +127,24 @@ const ACTIONS: Record<string, string> = {
   "staff.granted": "Gave somebody platform access",
   "staff.role_changed": "Changed a colleague's rank",
   "staff.revoked": "Took platform access away",
+  "workspace.suspended": "Suspended a business",
+  "workspace.unsuspended": "Lifted a suspension",
+  "workspace.cancelled": "Closed a business's account",
+  "workspace.restored": "Restored a closed account",
+  "workspace.erase_after_changed": "Moved an erasure date",
+  "workspace.erased": "Erased a business, and everything in it",
+  // The one entry written for something that did not happen. Somebody
+  // typing the wrong name into an erasure is either tired or in the
+  // wrong window, and both are worth reading about afterwards.
+  "workspace.erase_refused": "Mistyped the name of a business being erased",
+  "user.deactivated": "Turned an account off",
+  "user.activated": "Turned an account back on",
+  "user.sessions_revoked": "Signed an account out everywhere",
+  "user.email_verified": "Marked an address confirmed",
+  "approval.requested": "Asked a colleague to agree to something",
+  "approval.granted": "Agreed to a colleague's request",
+  "approval.spent": "Spent a colleague's agreement",
+  "approval.listed": "Read what has been agreed to",
 };
 
 export function describeAction(action: string): string {

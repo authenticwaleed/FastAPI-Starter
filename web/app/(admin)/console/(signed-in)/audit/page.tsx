@@ -27,9 +27,22 @@ const ACTIONS = [
   "users.searched",
   "user.read",
   "audit.read",
+  "workspace.suspended",
+  "workspace.unsuspended",
+  "workspace.cancelled",
+  "workspace.restored",
+  "workspace.erased",
+  "workspace.erase_refused",
+  "user.deactivated",
+  "user.activated",
+  "user.sessions_revoked",
+  "user.email_verified",
   "staff.granted",
   "staff.role_changed",
   "staff.revoked",
+  "approval.requested",
+  "approval.granted",
+  "approval.spent",
 ];
 
 const FIELD =
