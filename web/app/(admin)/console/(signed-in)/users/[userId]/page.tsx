@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AccountActions } from "./account-actions";
 import {
   MembershipStatusBadge,
   WorkspaceStatusBadge,
@@ -86,6 +87,8 @@ export default async function ConsoleUserPage({
           </Fact>
         </Facts>
       </section>
+
+      <AccountActions user={user} />
 
       <section className="grid gap-3">
         <div>
