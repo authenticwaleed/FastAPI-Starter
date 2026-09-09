@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PlanOverrideControls } from "./plan-override";
 import { Fact, Facts } from "@/components/console/facts";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
@@ -128,6 +129,20 @@ export default async function ConsoleWorkspaceSubscriptionPage({
             <Fact label="Last changed">{when(subscription.updated_at)}</Fact>
           </Facts>
         )}
+      </section>
+
+      <section className="grid gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Grant a plan</h2>
+          <p className="text-muted-foreground text-xs">
+            A pilot, a comp, an enterprise contract invoiced offline. It
+            outranks whatever the provider says and survives every delivery
+            that follows — which is exactly why it is worth being careful
+            with.
+          </p>
+        </div>
+
+        <PlanOverrideControls workspaceId={workspaceId} />
       </section>
     </div>
   );
