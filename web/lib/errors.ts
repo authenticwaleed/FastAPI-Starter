@@ -236,6 +236,21 @@ export const SENTENCES: Record<string, string> = {
   support_grant_too_long:
     "That is longer than this deployment allows. Ask for fewer hours.",
 
+  // --- lifecycle, and the people who run it (W12) --------------------------
+  //
+  // Two of these carry their own particulars in `detail` -- which state
+  // refused this, which colleague already approved it -- and the screens
+  // show that line beneath the sentence. Showing `detail` is not branching
+  // on it: nothing anywhere decides anything from those words, and the
+  // code is still what a screen reads.
+  workspace_lifecycle: "That is not possible from where this workspace is.",
+  confirmation_mismatch: "That is not this workspace's address. Check what you typed.",
+  // 403, and neither an error nor a retry: it means find a colleague.
+  approval_required: "This needs a second staff member to agree to it.",
+  staff_member_not_found: "No account with that id, or it has never had access.",
+  already_staff: "That account already has platform access.",
+  last_staff_owner: "The platform has to keep at least one owner.",
+
   // --- the plan getting in the way ----------------------------------------
   //
   // 402, not 403. A 403 says "you may not", which sends somebody to an
