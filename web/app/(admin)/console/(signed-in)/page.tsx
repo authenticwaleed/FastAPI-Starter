@@ -24,6 +24,11 @@ const SECTIONS = [
     body: "Find a person. Where they belong, whether their account is live, and whether anything is signed in.",
   },
   {
+    href: "/console/staff",
+    title: "Staff",
+    body: "Who runs this platform. Administrators read it; only an owner changes it.",
+  },
+  {
     href: "/console/audit",
     title: "Platform log",
     body: "What staff have done, reads included. Administrators and above.",
@@ -83,7 +88,7 @@ export default async function ConsolePage() {
         </Facts>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {SECTIONS.map((section) => (
           <ConsoleLink
             key={section.href}

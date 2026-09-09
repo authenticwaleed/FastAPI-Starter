@@ -47,6 +47,12 @@ export default function SignedInConsole({
             Accounts
           </ConsoleLink>
           <ConsoleLink
+            href="/console/staff"
+            className="hover:underline underline-offset-4"
+          >
+            Staff
+          </ConsoleLink>
+          <ConsoleLink
             href="/console/audit"
             className="hover:underline underline-offset-4"
           >

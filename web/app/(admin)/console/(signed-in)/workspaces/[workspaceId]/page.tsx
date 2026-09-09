@@ -42,6 +42,11 @@ const SECTIONS = [
     title: "Their inbox",
     body: "Their customers' own messages. Only with a live window, and every thread opened is recorded.",
   },
+  {
+    slug: "lifecycle",
+    title: "Lifecycle",
+    body: "Suspend, close, restore, and the date their records go. Administrators and above.",
+  },
 ];
 
 /**
