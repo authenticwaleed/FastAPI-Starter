@@ -131,7 +131,7 @@ test("the feed is empty, and the bell carries no badge", async ({ page }) => {
   await page.goto("/notifications");
 
   await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
-  await expect(page.getByText("Nothing here.")).toBeVisible();
+  await expect(page.getByText("Nothing here")).toBeVisible();
   // The badge is absent rather than a zero: a badge showing nought is a
   // thing to look at that says there is nothing to look at.
   await expect(page.getByTestId("unread-count")).toHaveCount(0);

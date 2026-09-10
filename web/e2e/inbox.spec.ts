@@ -182,7 +182,7 @@ test("a contact with no conversations is an empty state, not an error", async ({
   await page.goto(`/contacts/${contact.id}`);
 
   await expect(page.getByRole("heading", { name: "Nobody Yet" })).toBeVisible();
-  await expect(page.getByText("Nothing yet with this contact.")).toBeVisible();
+  await expect(page.getByText("Nothing yet with this contact")).toBeVisible();
   await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
 });
 
