@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { sentenceFor, type ErrorBody } from "@/lib/errors";
 import {
   ACCEPT_ATTRIBUTE,
@@ -148,17 +149,16 @@ export function UploadDocument({
       >
         <div className="grid gap-2">
           <Label htmlFor="upload-source">Source</Label>
-          <select
+          <NativeSelect
             id="upload-source"
             name="knowledge_source_id"
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
           >
             {sources.map((source) => (
               <option key={source.id} value={source.id}>
                 {source.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <div className="grid gap-2">
@@ -170,7 +170,7 @@ export function UploadDocument({
             type="file"
             accept={ACCEPT_ATTRIBUTE}
             required
-            className="text-sm file:mr-3 file:rounded-md file:border file:bg-transparent file:px-3 file:py-1.5 file:text-sm"
+            className="text-muted-foreground text-sm file:mr-3 file:h-8 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-card file:px-2.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-muted"
           />
           <p className="text-muted-foreground text-xs">
             PDF or plain text, up to {MAX_FILE_LABEL}.
@@ -202,7 +202,7 @@ export function UploadDocument({
             value={upload.percent}
             max={100}
             aria-label={`Uploading ${upload.name}`}
-            className="h-1.5 w-full"
+            className="meter"
           />
         </div>
       ) : null}

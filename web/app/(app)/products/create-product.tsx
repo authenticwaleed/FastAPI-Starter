@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { FieldError, FormError, SubmitButton } from "@/components/form";
+import { NativeSelect } from "@/components/ui/native-select";
 import { VariantFields } from "@/components/variant-fields";
 import {
   Card,
@@ -83,16 +84,15 @@ export function CreateProduct({ workspaceId }: { workspaceId: string }) {
 
             <div className="grid gap-2">
               <Label htmlFor="product-status">Status</Label>
-              <select
+              <NativeSelect
                 id="product-status"
                 name="status"
                 defaultValue="active"
-                className="border-input bg-background h-9 rounded-md border px-2 text-sm"
               >
                 <option value="active">Active</option>
                 <option value="draft">Draft</option>
                 <option value="archived">Archived</option>
-              </select>
+              </NativeSelect>
               <p className="text-muted-foreground text-xs">
                 The assistant is told about active ones only.
               </p>

@@ -1,37 +1,41 @@
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import type { MembershipStatus, WorkspaceStatus } from "@/lib/types";
 
 /**
- * A workspace's status, coloured by what it means for the business.
+ * A workspace's status, toned by what it means for the business.
  *
  * Three states and three different tickets. `suspended` is an operational
  * decision the platform took and the only one that is anybody's fault, so
- * it is the only one coloured as a problem. `cancelled` is a business that
+ * it is the only one toned as a problem. `cancelled` is a business that
  * closed itself: ordinary, and the row that matters most on this surface,
- * because it is the one with a date on it.
+ * because it is the one with a date on it -- so it is quiet rather than
+ * absent.
  */
 export function WorkspaceStatusBadge({ status }: { status: WorkspaceStatus }) {
   return (
-    <Badge
-      variant={
+    <StatusBadge
+      tone={
         status === "suspended"
-          ? "destructive"
+          ? "critical"
           : status === "cancelled"
-            ? "outline"
-            : "secondary"
+            ? "quiet"
+            : "neutral"
       }
-      data-status={status}
+      status={status}
     >
       {status}
-    </Badge>
+    </StatusBadge>
   );
 }
 
 /** Whether somebody is on a team, was invited to one, or has left it. */
 export function MembershipStatusBadge({ status }: { status: MembershipStatus }) {
   return (
-    <Badge variant={status === "active" ? "secondary" : "outline"} data-status={status}>
+    <StatusBadge
+      tone={status === "active" ? "neutral" : "quiet"}
+      status={status}
+    >
       {status}
-    </Badge>
+    </StatusBadge>
   );
 }

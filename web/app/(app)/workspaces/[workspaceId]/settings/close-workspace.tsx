@@ -2,17 +2,9 @@
 
 import { useActionState } from "react";
 
-import { FieldError, FormError } from "@/components/form";
+import { DangerZone, TypedConfirm } from "@/components/danger-zone";
+import { FormError } from "@/components/form";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useFormStatus } from "react-dom";
 import { closeWorkspace } from "@/lib/workspace-actions";
 import type { FormState } from "@/lib/form-state";
@@ -45,42 +37,23 @@ export function CloseWorkspace({ workspace }: { workspace: Workspace }) {
   const [state, action] = useActionState<FormState, FormData>(closeWorkspace, null);
 
   return (
-    <Card className="border-destructive/40">
-      <CardHeader>
-        <CardTitle>
-          <h2>Close this workspace</h2>
-        </CardTitle>
-        <CardDescription>
-          It stops appearing for everyone in it and every address answers as
-          though it is gone. Nothing is deleted — support can restore it for a
-          period afterwards.
-        </CardDescription>
-      </CardHeader>
+    <DangerZone
+      title="Close this workspace"
+      description="It stops appearing for everyone in it and every address answers as though it is gone. Nothing is deleted — support can restore it for a period afterwards."
+    >
+      <form action={action} className="grid gap-4">
+        <input type="hidden" name="workspace_id" value={workspace.id} />
+        <input type="hidden" name="slug" value={workspace.slug} />
 
-      <CardContent>
-        <form action={action} className="grid max-w-md gap-4">
-          <input type="hidden" name="workspace_id" value={workspace.id} />
-          <input type="hidden" name="slug" value={workspace.slug} />
+        <FormError>{state?.error}</FormError>
 
-          <FormError>{state?.error}</FormError>
+        <TypedConfirm
+          phrase={workspace.slug}
+          error={state?.fields?.confirm}
+        />
 
-          <div className="grid gap-2">
-            <Label htmlFor="confirm">
-              Type <span className="font-mono">{workspace.slug}</span> to confirm
-            </Label>
-            <Input
-              id="confirm"
-              name="confirm"
-              autoComplete="off"
-              className="font-mono"
-              required
-            />
-            <FieldError>{state?.fields?.confirm}</FieldError>
-          </div>
-
-          <CloseButton />
-        </form>
-      </CardContent>
-    </Card>
+        <CloseButton />
+      </form>
+    </DangerZone>
   );
 }

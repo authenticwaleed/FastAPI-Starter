@@ -46,7 +46,7 @@ export function SwitcherMenu({
         >
           {active.name}
           {active.status !== "active" ? (
-            <Badge variant="secondary" className="text-[10px] uppercase">
+            <Badge variant="secondary" className="text-2xs uppercase">
               {active.status}
             </Badge>
           ) : null}
@@ -73,7 +73,7 @@ export function SwitcherMenu({
                 />
                 <span className="truncate">{workspace.name}</span>
                 {workspace.status !== "active" ? (
-                  <span className="text-muted-foreground ml-auto text-[10px] uppercase">
+                  <span className="text-muted-foreground ml-auto text-2xs uppercase">
                     {workspace.status}
                   </span>
                 ) : null}

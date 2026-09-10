@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { DeleteProduct } from "./delete-product";
 import { ProductForm } from "./product-form";
+import { BackLink, PageHeader, SectionHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { readProduct } from "@/lib/catalogue";
 import { ApiError } from "@/lib/errors";
 import { money } from "@/lib/money";
+import { PRODUCT_TONE } from "@/lib/tones";
 import type { Member, Product, User } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -49,38 +51,41 @@ export default async function ProductPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <Link
-          href="/products"
-          className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-        >
-          ← Products
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{product.name}</h1>
-          <Badge variant={product.status === "active" ? "default" : "secondary"}>
-            {product.status}
-          </Badge>
-          {product.external_id ? <Badge variant="outline">Synced</Badge> : null}
-        </div>
-        <p className="text-muted-foreground mt-1 text-sm tabular-nums">
-          {/*
-            A dash rather than a zero where there is no price. A product
-            with none takes its variant's, and printing "0.00" here would
-            quote a customer a free item.
-          */}
-          {money(product.price, product.currency)}
-        </p>
-      </div>
+      <PageHeader
+        back={<BackLink href="/products" label="Products" />}
+        title={product.name}
+        meta={
+          <>
+            <StatusBadge tone={PRODUCT_TONE[product.status]} status={product.status}>
+              {product.status}
+            </StatusBadge>
+            {product.external_id ? (
+              <Badge variant="outline" title="Synced from a storefront">
+                Synced
+              </Badge>
+            ) : null}
+          </>
+        }
+        description={
+          <span className="tabular-nums">
+            {/*
+              A dash rather than a zero where there is no price. A product
+              with none takes its variant's, and printing "0.00" here would
+              quote a customer a free item.
+            */}
+            {money(product.price, product.currency)}
+          </span>
+        }
+      />
 
       {product.variants.length > 0 ? (
         <section className="grid gap-2">
-          <h2 className="text-sm font-medium">Variants</h2>
+          <SectionHeader title="Variants" />
           <ul className="grid gap-2" data-testid="variant-list">
             {product.variants.map((variant) => (
               <li
                 key={variant.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2"
+                className="row flex flex-wrap items-center gap-x-3 gap-y-1"
               >
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {variant.title ?? "Unnamed"}

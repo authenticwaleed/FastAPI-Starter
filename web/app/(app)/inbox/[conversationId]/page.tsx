@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AssistantPanel } from "./assistant-panel";
@@ -8,6 +7,9 @@ import { ContactPanel } from "./contact-panel";
 import { MarkRead } from "./mark-read";
 import { MessageThread } from "./message-thread";
 import { ThreadActions } from "./thread-actions";
+import { EmptyState } from "@/components/empty-state";
+import { BackLink, PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
 import {
@@ -66,17 +68,12 @@ export default async function ConversationPage({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
       <div className="grid gap-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Link
-            href="/inbox"
-            className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-          >
-            ← Inbox
-          </Link>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {conversation.contact.name ?? conversation.contact.phone_number}
-          </h1>
-        </div>
+        <PageHeader
+          back={<BackLink href="/inbox" label="Inbox" />}
+          title={
+            conversation.contact.name ?? conversation.contact.phone_number
+          }
+        />
 
         <ThreadActions
           workspaceId={workspace.id}
@@ -99,19 +96,18 @@ export default async function ConversationPage({
           // Somebody else moved first while this page was open. Said
           // plainly, because the reply that was typed did not go anywhere
           // and the screen changing under them does not explain itself.
-          <p
-            role="status"
-            className="text-muted-foreground rounded-md border px-3 py-2 text-sm"
-          >
-            Your reply was not sent — this conversation was closed while you
-            were writing. The thread has been refreshed.
-          </p>
+          <Alert variant="warning" role="status">
+            <AlertDescription>
+              Your reply was not sent — this conversation was closed while
+              you were writing. The thread has been refreshed.
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         {closed ? (
-          <p className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-center text-sm">
-            This conversation is closed. Reopen it to reply.
-          </p>
+          <EmptyState title="This conversation is closed">
+            Reopen it to reply.
+          </EmptyState>
         ) : canWrite ? (
           <Composer workspaceId={workspace.id} conversation={conversation} />
         ) : (

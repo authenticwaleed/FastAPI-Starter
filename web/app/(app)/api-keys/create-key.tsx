@@ -2,8 +2,10 @@
 
 import { useActionState, useState } from "react";
 
+import { CopyField } from "@/components/copy";
 import { FieldError, SubmitButton } from "@/components/form";
 import { Refusal } from "@/components/refusal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,7 +33,6 @@ import type { ApiKeyCreated } from "@/lib/types";
  */
 function TheKey({ created, onDone }: { created: ApiKeyCreated; onDone: () => void }) {
   const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   return (
     <div
@@ -49,29 +50,7 @@ function TheKey({ created, onDone }: { created: ApiKeyCreated; onDone: () => voi
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <code
-          data-testid="api-key-value"
-          className="bg-muted min-w-0 flex-1 truncate rounded px-2 py-1.5 font-mono text-xs select-all"
-        >
-          {created.key}
-        </code>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void navigator.clipboard?.writeText(created.key).then(
-              () => setCopied(true),
-              // A clipboard that refuses is not worth an error: the value
-              // above is selectable, which is what it is there for.
-              () => setCopied(false),
-            );
-          }}
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
+      <CopyField value={created.key} mono data-testid="api-key-value" />
 
       <label className="flex items-start gap-2 text-sm">
         <input
@@ -140,13 +119,12 @@ export function CreateKey({
           <Refusal state={state} />
 
           {!included ? (
-            <p
-              className="text-muted-foreground rounded-md border px-3 py-2 text-sm"
-              data-testid="not-in-plan"
-            >
-              Your plan does not include API access. Keys you already have go
-              on working until you revoke them.
-            </p>
+            <Alert variant="info" role="status" data-testid="not-in-plan">
+              <AlertDescription>
+                Your plan does not include API access. Keys you already have
+                go on working until you revoke them.
+              </AlertDescription>
+            </Alert>
           ) : null}
 
           <div className="grid gap-2">

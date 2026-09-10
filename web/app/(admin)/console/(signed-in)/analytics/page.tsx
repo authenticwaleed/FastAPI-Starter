@@ -5,6 +5,7 @@ import { StatRow, StatTile } from "@/components/charts/stat-tile";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { SectionHeader } from "@/components/page-header";
 import { readPlatformOverview } from "@/lib/platform";
 import type { AdminOverview } from "@/lib/types";
 
@@ -76,10 +77,10 @@ export default async function ConsoleAnalyticsPage() {
 
       <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
         <section className="grid gap-3">
-          <div>
-            <h2 className="text-sm font-medium">Where workspaces stand</h2>
-            <p className="text-muted-foreground text-xs">Right now, not over time.</p>
-          </div>
+          <SectionHeader
+            title="Where workspaces stand"
+            description="Right now, not over time."
+          />
           <MagnitudeBars
             rows={statuses.map((status) => ({
               label: status,
@@ -91,7 +92,7 @@ export default async function ConsoleAnalyticsPage() {
 
         <section className="grid gap-3">
           <div>
-            <h2 className="text-sm font-medium">What they are on</h2>
+            <SectionHeader title="What they are on" />
             <p className="text-muted-foreground text-xs">
               {/*
                 The provider's word rather than what a workspace is
@@ -117,7 +118,7 @@ export default async function ConsoleAnalyticsPage() {
           <ConsoleLink
             key={dashboard.href}
             href={dashboard.href}
-            className="hover:bg-accent/50 grid content-start gap-1 rounded-md border px-4 py-3"
+            className="hover:bg-accent/50 grid content-start gap-1 panel"
           >
             <span className="text-sm font-medium">{dashboard.title}</span>
             <span className="text-muted-foreground text-xs">{dashboard.body}</span>

@@ -5,6 +5,7 @@ import { StatRow, StatTile } from "@/components/charts/stat-tile";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
 import { DaysPicker, windowOf } from "../days-picker";
+import { SectionHeader } from "@/components/page-header";
 import { readGrowth } from "@/lib/platform";
 import type { AdminGrowth } from "@/lib/types";
 
@@ -66,12 +67,12 @@ export default async function ConsoleGrowthPage({
       </StatRow>
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Signups by day</h2>
+        <SectionHeader title="Signups by day" />
         <DaySeries points={growth.signups} label="signups" />
       </section>
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Closures by day</h2>
+        <SectionHeader title="Closures by day" />
         <DaySeries points={growth.closures} label="closures" />
       </section>
     </div>

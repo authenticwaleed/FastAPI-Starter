@@ -3,9 +3,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CreateContact } from "./create-contact";
-import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
+import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { listContacts } from "@/lib/inbox";
+import { CONTACT_TONE } from "@/lib/tones";
 import { activeWorkspace } from "@/lib/workspace";
 
 export const metadata: Metadata = { title: "Contacts" };
@@ -27,44 +31,44 @@ export default async function ContactsPage({
     search: search ?? null,
   });
 
-  const lastPage = Math.max(1, Math.ceil(contacts.total / contacts.page_size));
-
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            The people {workspace.name} talks to.
-          </p>
-        </div>
-
-        <form action="/contacts">
-          <Input
-            type="search"
-            name="search"
-            defaultValue={search ?? ""}
-            placeholder="Name, number or email"
-            className="h-8 w-56"
-            maxLength={150}
-            aria-label="Search contacts"
-          />
-        </form>
-      </div>
+      <PageHeader
+        title="Contacts"
+        description={`The people ${workspace.name} talks to.`}
+        actions={
+          <form action="/contacts">
+            <Input
+              type="search"
+              name="search"
+              defaultValue={search ?? ""}
+              placeholder="Name, number or email"
+              className="w-56"
+              maxLength={150}
+              aria-label="Search contacts"
+            />
+          </form>
+        }
+      />
 
       {contacts.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          {search
-            ? "Nobody matches that."
-            : "No contacts yet. Add one below, or wait for somebody to message the connected number."}
-        </p>
+        search ? (
+          <EmptyState title="Nobody matches that">
+            Search covers names, numbers and email addresses.
+          </EmptyState>
+        ) : (
+          <EmptyState title="No contacts yet">
+            A contact appears the first time somebody messages the connected
+            number. You can also add one below.
+          </EmptyState>
+        )
       ) : (
         <ul className="grid gap-2">
           {contacts.items.map((contact) => (
             <li key={contact.id}>
               <Link
                 href={`/contacts/${contact.id}`}
-                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="text-sm font-medium">
                   {contact.name ?? "No name"}
@@ -72,43 +76,28 @@ export default async function ContactsPage({
                 <span className="text-muted-foreground font-mono text-xs">
                   {contact.phone_number}
                 </span>
-                <Badge
-                  variant={contact.status === "blocked" ? "destructive" : "secondary"}
+                <StatusBadge
+                  tone={CONTACT_TONE[contact.status]}
+                  status={contact.status}
                   className="ml-auto"
                 >
                   {contact.status}
-                </Badge>
+                </StatusBadge>
               </Link>
             </li>
           ))}
         </ul>
       )}
 
-      {lastPage > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Pages">
-          <span className="text-muted-foreground tabular-nums">
-            Page {page} of {lastPage} · {contacts.total} in total
-          </span>
-          <span className="flex gap-3">
-            {page > 1 ? (
-              <Link
-                href={`/contacts?page=${page - 1}${search ? `&search=${search}` : ""}`}
-                className="underline underline-offset-4"
-              >
-                Previous
-              </Link>
-            ) : null}
-            {page < lastPage ? (
-              <Link
-                href={`/contacts?page=${page + 1}${search ? `&search=${search}` : ""}`}
-                className="underline underline-offset-4"
-              >
-                Next
-              </Link>
-            ) : null}
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        total={contacts.total}
+        pageSize={contacts.page_size}
+        noun="contacts"
+        href={(to) =>
+          `/contacts?page=${to}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+        }
+      />
 
       <CreateContact workspaceId={workspace.id} />
     </div>

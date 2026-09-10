@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ContactForm } from "./contact-form";
 import { OpenConversation } from "./open-conversation";
 import { ConversationRow } from "../../inbox/conversation-row";
+import { EmptyState } from "@/components/empty-state";
+import { BackLink, PageHeader, SectionHeader } from "@/components/page-header";
 import { ApiError } from "@/lib/errors";
 import { DEFAULT_STATUSES, listConversations, readContact } from "@/lib/inbox";
 import type { Contact } from "@/lib/types";
@@ -46,33 +47,29 @@ export default async function ContactPage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <Link
-          href="/contacts"
-          className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-        >
-          ← Contacts
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {contact.name ?? contact.phone_number}
-        </h1>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">
-          {contact.phone_number}
-        </p>
-      </div>
+      <PageHeader
+        back={<BackLink href="/contacts" label="Contacts" />}
+        title={contact.name ?? contact.phone_number}
+        description={
+          <span className="font-mono">{contact.phone_number}</span>
+        }
+      />
 
       <section className="grid gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">Conversations</h2>
-          <OpenConversation workspaceId={workspace.id} contact={contact} />
-        </div>
+        <SectionHeader
+          title="Conversations"
+          actions={
+            <OpenConversation workspaceId={workspace.id} contact={contact} />
+          }
+        />
 
         {conversations.items.length === 0 ? (
           // An empty state, not an error. A contact somebody added a moment
           // ago has no threads yet, and that is the ordinary case.
-          <p className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm">
-            Nothing yet with this contact.
-          </p>
+          <EmptyState title="Nothing yet with this contact">
+            Threads appear here when this person messages you, or when
+            somebody opens one from this screen.
+          </EmptyState>
         ) : (
           <ul className="grid gap-2">
             {conversations.items.map((conversation) => (

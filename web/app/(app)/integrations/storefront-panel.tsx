@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { FieldError, SubmitButton } from "@/components/form";
 import { Refusal } from "@/components/refusal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -193,16 +194,12 @@ export function StorefrontPanel({
             <Refusal state={installState} />
 
             {!included ? (
-              <p
-                className="text-muted-foreground rounded-md border px-3 py-2 text-sm"
-                data-testid="not-in-plan"
-              >
-                Your plan does not include storefronts.{" "}
-                <Link href="/billing" className="underline underline-offset-4">
-                  See what each plan includes
-                </Link>
-                .
-              </p>
+              <Alert variant="info" role="status" data-testid="not-in-plan">
+                <AlertDescription>
+                  Your plan does not include storefronts.{" "}
+                  <Link href="/billing">See what each plan includes</Link>.
+                </AlertDescription>
+              </Alert>
             ) : null}
 
             <div className="grid gap-2">

@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Refusal } from "@/components/refusal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -79,16 +80,12 @@ export function CreateAutomation({
         <Refusal state={state} />
 
         {!included ? (
-          <p
-            className="text-muted-foreground rounded-md border px-3 py-2 text-sm"
-            data-testid="not-in-plan"
-          >
-            Your plan does not include automations.{" "}
-            <Link href="/billing" className="underline underline-offset-4">
-              See what each plan includes
-            </Link>
-            .
-          </p>
+          <Alert variant="info" role="status" data-testid="not-in-plan">
+            <AlertDescription>
+              Your plan does not include automations.{" "}
+              <Link href="/billing">See what each plan includes</Link>.
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         <ul className="grid gap-2">
@@ -96,7 +93,7 @@ export function CreateAutomation({
             <li
               key={spec.kind}
               data-kind={spec.kind}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 row"
             >
               <div className="grid min-w-0 flex-1 gap-0.5">
                 <span className="text-sm font-medium">{spec.name}</span>

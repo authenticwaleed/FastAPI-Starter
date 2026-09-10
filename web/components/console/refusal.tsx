@@ -1,5 +1,5 @@
 import { ConsoleHeading } from "@/components/console/heading";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ErrorState } from "@/components/error-state";
 import { ApiError } from "@/lib/errors";
 
 /**
@@ -10,6 +10,10 @@ import { ApiError } from "@/lib/errors";
  * right for the rest too — none of the refusals this surface hands out is
  * fixed by trying again, and a button under one teaches somebody to press
  * it before reading it.
+ *
+ * The shared `ErrorState`, which prints the code under the sentence. On
+ * this surface that is worth having: whoever is reading is staff, and the
+ * stable code is the half of this worth quoting into a ticket.
  */
 export function ConsoleRefused({
   title,
@@ -24,14 +28,11 @@ export function ConsoleRefused({
     <div className="grid gap-6">
       <ConsoleHeading title={title} />
 
-      <Alert
-        variant="destructive"
-        role="alert"
+      <ErrorState
+        title={sentence}
+        code={code}
         data-testid="console-refusal"
-        data-code={code}
-      >
-        <AlertDescription>{sentence}</AlertDescription>
-      </Alert>
+      />
     </div>
   );
 }

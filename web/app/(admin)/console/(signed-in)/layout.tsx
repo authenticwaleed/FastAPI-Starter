@@ -1,4 +1,5 @@
 import { ConsoleLink } from "@/components/console/console-link";
+import { ThemeToggle } from "@/components/theme";
 import { Button } from "@/components/ui/button";
 import { consoleSignOut } from "@/lib/console-actions";
 
@@ -90,11 +91,15 @@ export default function SignedInConsole({
             stays signed in, which is the whole point of the console
             keeping a session of its own.
           */}
-          <form action={consoleSignOut} className="ml-auto">
-            <Button type="submit" variant="ghost" size="sm">
-              Sign out of the console
-            </Button>
-          </form>
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle className="hidden sm:inline-flex" />
+
+            <form action={consoleSignOut}>
+              <Button type="submit" variant="ghost" size="sm">
+                Sign out of the console
+              </Button>
+            </form>
+          </div>
         </div>
       </nav>
 

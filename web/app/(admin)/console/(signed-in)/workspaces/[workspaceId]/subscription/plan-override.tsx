@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { day } from "@/lib/console-labels";
 import type { FormState } from "@/lib/form-state";
@@ -60,7 +61,7 @@ export function PlanOverrideControls({ workspaceId }: { workspaceId: string }) {
       {granted ? (
         <div
           className={`grid gap-1 rounded-md border px-3 py-2.5 text-sm ${
-            granted.forever ? "border-amber-500/60 bg-amber-500/5" : ""
+            granted.forever ? "border-warning/50 bg-warning/8" : ""
           }`}
           data-testid="granted-override"
           data-forever={granted.forever ? "" : undefined}
@@ -99,18 +100,18 @@ export function PlanOverrideControls({ workspaceId }: { workspaceId: string }) {
 
         <div className="grid gap-2">
           <Label htmlFor="plan">Plan to grant</Label>
-          <select
+          <NativeSelect
             id="plan"
             name="plan"
             defaultValue="growth"
-            className="border-input bg-background h-8 w-48 rounded-md border px-2 text-sm shadow-xs"
+            className="w-48"
           >
             {PLANS.map((plan) => (
               <option key={plan} value={plan}>
                 {plan}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <div className="grid gap-2">
@@ -129,7 +130,7 @@ export function PlanOverrideControls({ workspaceId }: { workspaceId: string }) {
 
         <div className="grid gap-2">
           <Label htmlFor="expires_at">Until (optional)</Label>
-          <Input id="expires_at" name="expires_at" type="date" className="h-8 w-44" />
+          <Input id="expires_at" name="expires_at" type="date" className="w-44" />
           <p className="text-muted-foreground text-xs">
             Leaving this empty is allowed and is flagged rather than refused. A
             grant with no date is a plan nothing will ever take away.

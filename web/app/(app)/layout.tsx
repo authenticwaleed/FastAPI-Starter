@@ -5,6 +5,7 @@ import { NotificationBell } from "./notification-bell";
 import { UnverifiedBanner } from "./unverified-banner";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { AccountMenu } from "./account-menu";
+import { ThemeToggle } from "@/components/theme";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
 import type { User } from "@/lib/types";
@@ -67,7 +68,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Link>
           </nav>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
+            {/*
+              Here for now because there is nowhere better yet. Phase 2
+              builds the rail and the account area it belongs in; until
+              then a theme nobody can reach is a theme nobody has tested.
+            */}
+            <ThemeToggle className="hidden sm:inline-flex" />
             <NotificationBell />
             <AccountMenu user={user} />
           </div>

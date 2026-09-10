@@ -30,7 +30,7 @@ export async function NotificationBell() {
       <Bell className="size-4" />
       {unread > 0 ? (
         <span
-          className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 tabular-nums"
+          className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-2xs leading-4 tabular-nums"
           data-testid="unread-count"
         >
           {/*

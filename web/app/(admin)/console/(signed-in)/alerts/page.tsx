@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { readAlerts } from "@/lib/platform";
 import type { AdminAlerts } from "@/lib/types";
@@ -82,7 +84,7 @@ export default async function ConsoleAlertsPage({
       {alerts.over_threshold.length > 0 ? (
         <section className="grid gap-3">
           <div>
-            <h2 className="text-sm font-medium">Over the threshold</h2>
+            <SectionHeader title="Over the threshold" />
             <p className="text-muted-foreground text-xs">
               More than {alerts.threshold} accounts an hour, which is
               configuration rather than a rule. Worth asking about, not worth
@@ -94,10 +96,15 @@ export default async function ConsoleAlertsPage({
             {alerts.over_threshold.map((reader) => (
               <li
                 key={reader.user_id ?? reader.email ?? "unknown"}
-                className="border-destructive/40 flex flex-wrap items-center gap-3 rounded-md border px-3 py-2.5 text-sm"
+                className="border-warning/40 bg-warning/5 flex flex-wrap items-center gap-3 rounded-md border px-3 py-2.5 text-sm"
               >
                 <span className="flex-1">{reader.email ?? "A deleted account"}</span>
-                <Badge variant="destructive" className="tabular-nums">
+                {/*
+                  A count over a threshold is something to look into, not
+                  something that has gone wrong -- an incident week is a
+                  legitimate reason to have read thirty accounts.
+                */}
+                <Badge variant="warning" className="tabular-nums">
                   {reader.workspaces_read} accounts
                 </Badge>
               </li>
@@ -107,23 +114,19 @@ export default async function ConsoleAlertsPage({
       ) : null}
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Busiest readers</h2>
-          <p className="text-muted-foreground text-xs">
-            Distinct businesses opened in the window, newest activity first.
-          </p>
-        </div>
+        <SectionHeader
+          title="Busiest readers"
+          description="Distinct businesses opened in the window, newest activity first."
+        />
 
         {alerts.busiest_readers.length === 0 ? (
-          <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-            Nobody has opened a customer&rsquo;s account in this window.
-          </p>
+          <EmptyState title="Nobody has opened a customer’s account in this window" />
         ) : (
           <ul className="grid gap-2" data-testid="busiest-readers">
             {alerts.busiest_readers.map((reader) => (
               <li
                 key={reader.user_id ?? reader.email ?? "unknown"}
-                className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2.5 text-sm"
+                className="flex flex-wrap items-center gap-3 row text-sm"
               >
                 <span className="flex-1">{reader.email ?? "A deleted account"}</span>
                 <span className="text-muted-foreground tabular-nums text-xs">

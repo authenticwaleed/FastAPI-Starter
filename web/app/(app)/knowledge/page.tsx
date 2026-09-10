@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import { listDocuments, listSources } from "@/lib/knowledge";
 import type { Member, User } from "@/lib/types";
@@ -60,12 +61,10 @@ export default async function KnowledgePage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Knowledge</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          What the assistant can draw on when it answers a customer.
-        </p>
-      </div>
+      <PageHeader
+        title="Knowledge"
+        description="What the assistant can draw on when it answers a customer."
+      />
 
       {maySearch ? <SearchPanel workspaceId={workspace.id} /> : null}
 

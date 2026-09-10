@@ -8,6 +8,7 @@ import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULTS,
@@ -103,16 +104,15 @@ export function SettingsForm({
 
         <div className="grid gap-2">
           <Label htmlFor="status">Runs</Label>
-          <select
+          <NativeSelect
             id="status"
             name="status"
             defaultValue={automation.status}
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
             disabled={!canManage}
           >
             <option value="enabled">Yes</option>
             <option value="disabled">No — switched off</option>
-          </select>
+          </NativeSelect>
         </div>
 
         {automation.kind === "order_confirmation" ? (

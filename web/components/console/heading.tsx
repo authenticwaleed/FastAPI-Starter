@@ -1,40 +1,46 @@
 import { ConsoleLink } from "@/components/console/console-link";
+import { BackLink, PageHeader } from "@/components/page-header";
 
 /**
  * The top of a console screen.
  *
- * Shared because ten screens want the same three lines, and because the
- * back link is load-bearing here in a way it is not in the customer app: a
- * workspace's members, subscription, usage and integrations are four
- * separate screens precisely so that opening one does not read the other
- * three, and the way back to the workspace has to be a link somebody
- * follows rather than a fan-out somebody pays for.
+ * Now the same component the customer app uses, with the console's own
+ * link passed in. Sharing the primitive is allowed and sharing navigation
+ * is not -- these are the two surfaces' *headings*, not their menus, and a
+ * page title that behaved differently on one of them would be a difference
+ * with nothing behind it.
+ *
+ * The back link is load-bearing here in a way it is not in the customer
+ * app: a workspace's members, subscription, usage and integrations are
+ * four separate screens precisely so that opening one does not read the
+ * other three, and the way back has to be a link somebody follows rather
+ * than a fan-out somebody pays for. Hence `ConsoleLink`, which does not
+ * prefetch.
  */
 export function ConsoleHeading({
   title,
   description,
   back,
+  actions,
+  meta,
 }: {
   title: string;
   description?: React.ReactNode;
   back?: { href: string; label: string };
+  actions?: React.ReactNode;
+  meta?: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-1">
-      {back ? (
-        <ConsoleLink
-          href={back.href}
-          className="text-muted-foreground w-fit text-xs underline-offset-4 hover:underline"
-        >
-          ← {back.label}
-        </ConsoleLink>
-      ) : null}
-
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-
-      {description ? (
-        <p className="text-muted-foreground text-sm">{description}</p>
-      ) : null}
-    </div>
+    <PageHeader
+      title={title}
+      description={description}
+      meta={meta}
+      actions={actions}
+      back={
+        back ? (
+          <BackLink href={back.href} label={back.label} as={ConsoleLink} />
+        ) : null
+      }
+    />
   );
 }

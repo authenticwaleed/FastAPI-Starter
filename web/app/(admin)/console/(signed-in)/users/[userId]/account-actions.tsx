@@ -6,6 +6,7 @@ import {
   revokeUserSessions,
   verifyUserEmail,
 } from "@/lib/lifecycle-actions";
+import { SectionHeader } from "@/components/page-header";
 import type { AdminUserDetail } from "@/lib/types";
 
 /**
@@ -25,12 +26,10 @@ import type { AdminUserDetail } from "@/lib/types";
 export function AccountActions({ user }: { user: AdminUserDetail }) {
   return (
     <section className="grid gap-4">
-      <div>
-        <h2 className="text-sm font-medium">What can be done here</h2>
-        <p className="text-muted-foreground text-xs">
-          Administrator rank, all of it, and none of it destroys anything.
-        </p>
-      </div>
+      <SectionHeader
+        title="What can be done here"
+        description="Administrator rank, all of it, and none of it destroys anything."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {user.is_active ? (

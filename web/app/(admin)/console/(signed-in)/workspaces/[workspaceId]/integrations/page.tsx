@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Fact, Facts } from "@/components/console/facts";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { readWorkspaceIntegrations } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -51,15 +53,10 @@ export default async function ConsoleWorkspaceIntegrationsPage({
       />
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">WhatsApp</h2>
+        <SectionHeader title="WhatsApp" />
 
         {whatsapp === null ? (
-          <p
-            className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm"
-            data-testid="no-whatsapp"
-          >
-            No number is connected.
-          </p>
+          <EmptyState title="No number is connected" data-testid="no-whatsapp" />
         ) : (
           <Facts>
             <Fact label="Status">
@@ -82,15 +79,10 @@ export default async function ConsoleWorkspaceIntegrationsPage({
       </section>
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Storefront</h2>
+        <SectionHeader title="Storefront" />
 
         {storefront === null ? (
-          <p
-            className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm"
-            data-testid="no-storefront"
-          >
-            No shop is connected.
-          </p>
+          <EmptyState title="No shop is connected" data-testid="no-storefront" />
         ) : (
           <Facts>
             <Fact label="Status">

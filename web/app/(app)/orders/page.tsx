@@ -3,11 +3,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CreateOrder } from "./create-order";
-import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/empty-state";
+import { FilterTabs } from "@/components/filter-tabs";
+import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
+import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { listContactsForOrders, listOrders } from "@/lib/catalogue";
 import { money } from "@/lib/money";
+import { ORDER_TONE } from "@/lib/tones";
 import type { Member, OrderStatus, User } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -23,12 +28,6 @@ const STATUSES: OrderStatus[] = [
   "cancelled",
   "refunded",
 ];
-
-function tab(active: boolean) {
-  return active
-    ? "font-medium underline underline-offset-4"
-    : "text-muted-foreground underline-offset-4 hover:underline";
-}
 
 function when(value: string): string {
   return new Date(value).toLocaleDateString(undefined, { dateStyle: "medium" });
@@ -70,59 +69,64 @@ export default async function OrdersPage({
     ]),
   );
 
-  const lastPage = Math.max(1, Math.ceil(orders.total / orders.page_size));
   const keep = search ? `&search=${encodeURIComponent(search)}` : "";
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            What {workspace.name}&rsquo;s customers have bought.
-          </p>
-        </div>
+      <PageHeader
+        title="Orders"
+        description={`What ${workspace.name}’s customers have bought.`}
+        actions={
+          <form action="/orders">
+            <Input
+              type="search"
+              name="search"
+              defaultValue={search ?? ""}
+              placeholder="Order number"
+              className="w-56"
+              maxLength={128}
+              aria-label="Search orders"
+            />
+          </form>
+        }
+      />
 
-        <form action="/orders">
-          <Input
-            type="search"
-            name="search"
-            defaultValue={search ?? ""}
-            placeholder="Order number"
-            className="h-8 w-56"
-            maxLength={128}
-            aria-label="Search orders"
-          />
-        </form>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 border-y py-3 text-sm">
-        <span className="text-muted-foreground text-xs uppercase">Status</span>
-        <Link href={`/orders?${keep.slice(1)}`} className={tab(filter === null)}>
-          All
-        </Link>
-        {STATUSES.map((value) => (
-          <Link
-            key={value}
-            href={`/orders?status=${value}${keep}`}
-            className={tab(filter === value)}
-          >
-            {value}
-          </Link>
-        ))}
-      </div>
+      <FilterTabs
+        label="Status"
+        options={[
+          {
+            value: "all",
+            label: "All",
+            href: `/orders?${keep.slice(1)}`,
+            active: filter === null,
+          },
+          ...STATUSES.map((value) => ({
+            value,
+            label: value,
+            href: `/orders?status=${value}${keep}`,
+            active: filter === value,
+          })),
+        ]}
+      />
 
       {orders.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          {search || filter ? "Nothing matches that." : "No orders yet."}
-        </p>
+        search || filter ? (
+          <EmptyState title="Nothing matches that">
+            Try a different order number, or clear the status filter.
+          </EmptyState>
+        ) : (
+          <EmptyState title="No orders yet">
+            An order is what a conversation turns into. Take one below, or let
+            a connected storefront bring them across.
+          </EmptyState>
+        )
       ) : (
         <ul className="grid gap-2" data-testid="order-list">
           {orders.items.map((order) => (
             <li key={order.id} data-status={order.status}>
               <Link
                 href={`/orders/${order.id}`}
-                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {order.order_number ?? "No order number"}
@@ -140,48 +144,22 @@ export default async function OrdersPage({
                   {money(order.total, order.currency)}
                 </span>
 
-                <Badge
-                  variant={
-                    order.status === "cancelled" || order.status === "refunded"
-                      ? "outline"
-                      : order.status === "pending"
-                        ? "secondary"
-                        : "default"
-                  }
-                >
+                <StatusBadge tone={ORDER_TONE[order.status]} status={order.status}>
                   {order.status}
-                </Badge>
+                </StatusBadge>
               </Link>
             </li>
           ))}
         </ul>
       )}
 
-      {lastPage > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Pages">
-          <span className="text-muted-foreground tabular-nums">
-            Page {page} of {lastPage} · {orders.total} in total
-          </span>
-          <span className="flex gap-3">
-            {page > 1 ? (
-              <Link
-                href={`/orders?page=${page - 1}${keep}`}
-                className="underline underline-offset-4"
-              >
-                Previous
-              </Link>
-            ) : null}
-            {page < lastPage ? (
-              <Link
-                href={`/orders?page=${page + 1}${keep}`}
-                className="underline underline-offset-4"
-              >
-                Next
-              </Link>
-            ) : null}
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        total={orders.total}
+        pageSize={orders.page_size}
+        noun="orders"
+        href={(to) => `/orders?page=${to}${keep}`}
+      />
 
       {canWrite ? (
         <CreateOrder workspaceId={workspace.id} contacts={contacts.items} />

@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { RUN_LABEL } from "@/lib/automations";
 import type { AutomationRun } from "@/lib/types";
@@ -22,26 +24,22 @@ export function RunHistory({ runs, total }: { runs: AutomationRun[]; total: numb
   if (runs.length === 0) {
     return (
       <section className="grid gap-2">
-        <h2 className="text-sm font-medium">History</h2>
+        <SectionHeader title="History" />
         {/*
           An empty state rather than an error. A brand-new automation has
           run nothing, and so has one whose trigger has not happened yet --
           both are ordinary.
         */}
-        <p
-          className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm"
-          data-testid="run-history"
-        >
-          It has not run yet. Nothing is wrong — it is waiting for something
-          to happen.
-        </p>
+        <EmptyState title="It has not run yet" data-testid="run-history">
+          Nothing is wrong — it is waiting for something to happen.
+        </EmptyState>
       </section>
     );
   }
 
   return (
     <section className="grid gap-2">
-      <h2 className="text-sm font-medium">History</h2>
+      <SectionHeader title="History" />
       <p className="text-muted-foreground text-xs">
         {total} attempt{total === 1 ? "" : "s"}. Most will say &ldquo;not for
         this one&rdquo; — it is considered on every matching event.
@@ -55,7 +53,7 @@ export function RunHistory({ runs, total }: { runs: AutomationRun[]; total: numb
             <li
               key={run.id}
               data-status={run.status}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2"
+              className="row flex flex-wrap items-center gap-x-3 gap-y-1"
             >
               <Badge
                 variant={

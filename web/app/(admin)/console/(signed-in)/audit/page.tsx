@@ -4,9 +4,11 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { listPlatformAudit } from "@/lib/console";
 import { describeAction, when } from "@/lib/console-labels";
 import { describeActor } from "@/lib/labels";
@@ -44,9 +46,6 @@ const ACTIONS = [
   "approval.granted",
   "approval.spent",
 ];
-
-const FIELD =
-  "border-input bg-background h-8 rounded-md border px-2 text-sm shadow-xs";
 
 /**
  * What staff have done, newest first, reads included.
@@ -128,11 +127,10 @@ export default async function ConsoleAuditPage({
           <Label htmlFor="action" className="text-xs">
             Action
           </Label>
-          <select
+          <NativeSelect
             id="action"
             name="action"
             defaultValue={action ?? ""}
-            className={FIELD}
           >
             <option value="">Anything</option>
             {ACTIONS.map((value) => (
@@ -140,7 +138,7 @@ export default async function ConsoleAuditPage({
                 {describeAction(value)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <Button type="submit" variant="outline" size="sm">
@@ -164,16 +162,14 @@ export default async function ConsoleAuditPage({
       </form>
 
       {log.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing recorded yet.
-        </p>
+        <EmptyState title="Nothing recorded yet" />
       ) : (
         <ul className="grid gap-2" data-testid="platform-log">
           {log.items.map((entry) => (
             <li
               key={entry.id}
               data-action={entry.action}
-              className="grid gap-1 rounded-md border px-3 py-2.5"
+              className="grid gap-1 row"
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="min-w-0 flex-1 text-sm">
@@ -195,7 +191,7 @@ export default async function ConsoleAuditPage({
                   {when(entry.created_at)}
                 </span>
 
-                <Badge variant="outline" className="font-mono text-[10px]">
+                <Badge variant="outline" className="font-mono text-2xs">
                   {entry.action}
                 </Badge>
               </div>

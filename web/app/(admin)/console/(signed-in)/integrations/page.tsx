@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { when } from "@/lib/console-labels";
 import { listWhatsAppNumbers } from "@/lib/platform";
@@ -39,26 +41,23 @@ export default async function ConsoleNumbersPage() {
       />
 
       {broken.length > 0 ? (
-        <p
-          className="border-destructive/40 text-destructive rounded-md border px-4 py-3 text-sm"
-          data-testid="broken-numbers"
-        >
-          {broken.length} number{broken.length === 1 ? " is" : "s are"} not
-          connected. Their customers&rsquo; messages are not being answered.
-        </p>
+        <Alert variant="destructive" role="status" data-testid="broken-numbers">
+          <AlertDescription>
+            {broken.length} number{broken.length === 1 ? " is" : "s are"} not
+            connected. Their customers&rsquo; messages are not being answered.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {numbers.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nobody has connected a number.
-        </p>
+        <EmptyState title="Nobody has connected a number" />
       ) : (
         <ul className="grid gap-2" data-testid="number-list">
           {numbers.map((number) => (
             <li key={number.external_phone_number_id}>
               <ConsoleLink
                 href={`/console/workspaces/${number.workspace_id}`}
-                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="text-sm">{number.phone_number}</span>
                 <span className="text-muted-foreground font-mono text-xs">

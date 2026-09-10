@@ -4,8 +4,10 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { FormError } from "@/components/form";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { changeMemberRole, removeMember } from "@/lib/member-actions";
 import type { FormState } from "@/lib/form-state";
 import { ROLE_DESCRIPTION, grantableBy, mayManage } from "@/lib/roles";
@@ -60,7 +62,7 @@ export function MemberList({
 
   return (
     <section className="grid gap-3">
-      <h2 className="text-sm font-medium">Members</h2>
+      <SectionHeader title="Members" />
 
       <FormError>{roleState?.error ?? removeState?.error}</FormError>
 
@@ -75,7 +77,7 @@ export function MemberList({
               <li
                 key={member.user_id}
                 data-role={member.role}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2.5"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 row"
               >
                 <div className="grid min-w-0 flex-1 gap-0.5">
                   <span className="flex items-center gap-2 text-sm">
@@ -94,18 +96,17 @@ export function MemberList({
                     <label htmlFor={`role-${member.user_id}`} className="sr-only">
                       Role for {member.name}
                     </label>
-                    <select
+                    <NativeSelect
                       id={`role-${member.user_id}`}
                       name="role"
                       defaultValue={member.role}
-                      className="border-input bg-background h-8 rounded-md border px-2 text-sm"
                     >
                       {grantable.map((role) => (
                         <option key={role} value={role}>
                           {role}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                     <Saving>Save</Saving>
                   </form>
                 ) : (

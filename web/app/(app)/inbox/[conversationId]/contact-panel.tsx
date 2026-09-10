@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import type { ContactSummary, ConversationEvent } from "@/lib/types";
 
@@ -37,8 +38,8 @@ export function ContactPanel({
   events: ConversationEvent[];
 }) {
   return (
-    <section className="grid gap-3 rounded-md border px-3 py-3">
-      <h2 className="text-sm font-medium">Contact</h2>
+    <section className="grid gap-3 panel">
+      <SectionHeader title="Contact" />
 
       <div className="grid gap-1">
         <div className="flex items-center gap-2">

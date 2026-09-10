@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { InvitationList } from "./invitation-list";
 import { InviteForm } from "./invite-form";
 import { LeaveWorkspace } from "./leave-workspace";
 import { MemberList } from "./member-list";
+import { BackLink, PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
 import { listInvitations, listMembers } from "@/lib/team";
@@ -61,25 +62,29 @@ export default async function TeamPage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <Link
-          href={`/workspaces/${workspace.id}/settings`}
-          className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-        >
-          ← {workspace.name}
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Team</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {members.length} {members.length === 1 ? "person" : "people"} in{" "}
-          {workspace.name}.
-        </p>
-      </div>
+      <PageHeader
+        back={
+          <BackLink
+            href={`/workspaces/${workspace.id}/settings`}
+            label={workspace.name}
+          />
+        }
+        title="Team"
+        description={
+          <>
+            {members.length} {members.length === 1 ? "person" : "people"} in{" "}
+            {workspace.name}.
+          </>
+        }
+      />
 
       {frozen ? (
-        <p className="border-destructive/40 text-muted-foreground rounded-md border px-3 py-2 text-sm">
-          This workspace is suspended, so the team cannot be changed. It can
-          still be read.
-        </p>
+        <Alert variant="warning" role="status">
+          <AlertDescription>
+            This workspace is suspended, so the team cannot be changed. It
+            can still be read.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <MemberList

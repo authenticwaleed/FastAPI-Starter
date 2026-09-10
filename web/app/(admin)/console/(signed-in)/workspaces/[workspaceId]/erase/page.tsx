@@ -5,7 +5,9 @@ import { EraseWorkspace } from "./erase-workspace";
 import { WorkspaceStatusBadge } from "@/components/console/badges";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
-import { Badge } from "@/components/ui/badge";
+import { SectionHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { approvalsFor, pendingApproval, usableApproval } from "@/lib/approvals";
 import { readWorkspace } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -85,17 +87,19 @@ export default async function ConsoleErasePage({
         }
       />
 
-      <p className="border-destructive/40 text-destructive rounded-md border px-4 py-3 text-sm">
-        {/*
-          Said plainly and once. Everything on the screen below is about
-          slowing this down; the sentence is about what it does.
-        */}
-        This destroys the workspace and everything in it — its contacts,
-        conversations, messages, documents and its own audit log — with no
-        way back. {workspace.counts.messages.toLocaleString()} messages and{" "}
-        {workspace.counts.contacts.toLocaleString()} contacts are in it now.
-        What survives is the entry in the platform log naming it.
-      </p>
+      {/*
+        Said plainly and once. Everything on the screen below is about
+        slowing this down; the sentence is about what it does.
+      */}
+      <Alert variant="destructive">
+        <AlertDescription>
+          This destroys the workspace and everything in it — its contacts,
+          conversations, messages, documents and its own audit log — with no
+          way back. {workspace.counts.messages.toLocaleString()} messages
+          and {workspace.counts.contacts.toLocaleString()} contacts are in
+          it now. What survives is the entry in the platform log naming it.
+        </AlertDescription>
+      </Alert>
 
       {approvalsRefusal !== null ? (
         <p className="text-muted-foreground text-sm" data-testid="approvals-refused">
@@ -103,15 +107,20 @@ export default async function ConsoleErasePage({
         </p>
       ) : ready ? (
         <section className="grid gap-4">
-          <div>
-            <h2 className="text-sm font-medium">A colleague has agreed</h2>
-            <p className="text-muted-foreground text-xs">
-              {ready.approved_by ?? "Somebody"} agreed to this on{" "}
-              {ready.approved_at ? when(ready.approved_at) : "an unknown date"},
-              and it lapses at {when(ready.expires_at)}. If that colleague was
-              you, the API refuses — it takes two people, not two clicks.
-            </p>
-          </div>
+          <SectionHeader
+            title="A colleague has agreed"
+            description={
+              <>
+                {ready.approved_by ?? "Somebody"} agreed to this on{" "}
+                {ready.approved_at
+                  ? when(ready.approved_at)
+                  : "an unknown date"}
+                , and it lapses at {when(ready.expires_at)}. If that colleague
+                was you, the API refuses — it takes two people, not two
+                clicks.
+              </>
+            }
+          />
 
           <EraseWorkspace
             workspaceId={workspaceId}
@@ -121,10 +130,10 @@ export default async function ConsoleErasePage({
         </section>
       ) : waiting ? (
         <section className="grid gap-3" data-testid="approval-pending">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-medium">Waiting for a colleague</h2>
-            <Badge variant="outline">pending</Badge>
-          </div>
+          <SectionHeader
+            title="Waiting for a colleague"
+            actions={<StatusBadge tone="pending">pending</StatusBadge>}
+          />
 
           <p className="text-sm">{waiting.reason}</p>
 
@@ -137,16 +146,18 @@ export default async function ConsoleErasePage({
         </section>
       ) : (
         <section className="grid gap-4">
-          <div>
-            <h2 className="text-sm font-medium">Ask a colleague first</h2>
-            <p className="text-muted-foreground text-xs">
-              An approval is for <em>this</em> workspace: agreeing to erase a
-              test account is not agreeing to erase any of them. It is
-              short-lived, because two people looking at the same situation is
-              the point — one collected this morning and spent tonight is one
-              signature, not two.
-            </p>
-          </div>
+          <SectionHeader
+            title="Ask a colleague first"
+            description={
+              <>
+                An approval is for <em>this</em> workspace: agreeing to erase
+                a test account is not agreeing to erase any of them. It is
+                short-lived, because two people looking at the same situation
+                is the point — one collected this morning and spent tonight is
+                one signature, not two.
+              </>
+            }
+          />
 
           <AskForErasure workspaceId={workspaceId} />
         </section>

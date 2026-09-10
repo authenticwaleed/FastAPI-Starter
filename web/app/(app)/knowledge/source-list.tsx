@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { EmptyState } from "@/components/empty-state";
 import { FormError } from "@/components/form";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,25 +50,30 @@ export function SourceList({
   if (sources.length === 0) {
     return (
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Sources</h2>
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm">
-          None yet. A source is a grouping — “our returns policy”, “the autumn
+        <SectionHeader title="Sources" />
+        <EmptyState title="No sources yet">
+          A source is a grouping — “our returns policy”, “the autumn
           catalogue” — and every document belongs to one.
-        </p>
+        </EmptyState>
       </section>
     );
   }
 
   return (
     <section className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-medium">Sources</h2>
-        {activeSourceId ? (
-          <Link href="/knowledge" className="text-xs underline underline-offset-4">
-            Show all documents
-          </Link>
-        ) : null}
-      </div>
+      <SectionHeader
+        title="Sources"
+        actions={
+          activeSourceId ? (
+            <Link
+              href="/knowledge"
+              className="hover:text-foreground text-xs underline underline-offset-4"
+            >
+              Show all documents
+            </Link>
+          ) : null
+        }
+      />
 
       <FormError>{state?.error}</FormError>
 
@@ -74,7 +81,7 @@ export function SourceList({
         {sources.map((source) => (
           <li
             key={source.id}
-            className="grid gap-2 rounded-md border px-3 py-2.5"
+            className="grid gap-2 row"
             data-source-type={source.source_type}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

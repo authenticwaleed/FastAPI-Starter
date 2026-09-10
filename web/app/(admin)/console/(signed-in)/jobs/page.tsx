@@ -4,9 +4,11 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { when } from "@/lib/console-labels";
 import { PLATFORM_PAGE_SIZE, searchJobs } from "@/lib/platform";
 import type { AdminJobSummary, Page as Paged } from "@/lib/types";
@@ -20,9 +22,6 @@ const KINDS = [
   "sweep_erasures",
 ];
 const STATUSES = ["pending", "running", "succeeded", "failed", "cancelled"];
-
-const FIELD =
-  "border-input bg-background h-8 rounded-md border px-2 text-sm shadow-xs";
 
 /**
  * The queue, across every workspace.
@@ -96,28 +95,28 @@ export default async function ConsoleJobsPage({
           <Label htmlFor="kind" className="text-xs">
             Kind
           </Label>
-          <select id="kind" name="kind" defaultValue={kind ?? ""} className={FIELD}>
+          <NativeSelect id="kind" name="kind" defaultValue={kind ?? ""}>
             <option value="">Any</option>
             {KINDS.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <div className="grid gap-1.5">
           <Label htmlFor="status" className="text-xs">
             Status
           </Label>
-          <select id="status" name="status" defaultValue={status ?? ""} className={FIELD}>
+          <NativeSelect id="status" name="status" defaultValue={status ?? ""}>
             <option value="">Any</option>
             {STATUSES.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <Button type="submit" variant="outline" size="sm">
@@ -135,16 +134,14 @@ export default async function ConsoleJobsPage({
       </form>
 
       {jobs.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing matches that.
-        </p>
+        <EmptyState title="Nothing matches that" />
       ) : (
         <ul className="grid gap-2" data-testid="job-list">
           {jobs.items.map((job) => (
             <li key={job.id}>
               <ConsoleLink
                 href={`/console/jobs/${job.id}`}
-                className="hover:bg-accent/50 grid gap-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 grid gap-1 row"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="font-mono text-sm">{job.kind}</span>

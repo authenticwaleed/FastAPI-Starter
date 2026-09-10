@@ -2,9 +2,9 @@
 
 import { useActionState, useState } from "react";
 
+import { CopyField } from "@/components/copy";
 import { FieldError, SubmitButton } from "@/components/form";
 import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { inviteMember } from "@/lib/invitation-actions";
 import type { FormState } from "@/lib/form-state";
 import { ROLE_DESCRIPTION, grantableBy } from "@/lib/roles";
@@ -30,43 +31,19 @@ import type { WorkspaceRole } from "@/lib/types";
  * This whole component should be deleted the day the API emails these.
  */
 function TheLink({ token }: { token: string }) {
-  const [copied, setCopied] = useState(false);
-
   const link =
     typeof window === "undefined"
       ? `/invitations/${token}`
       : `${window.location.origin}/invitations/${token}`;
 
   return (
-    <div className="grid gap-2 rounded-md border px-3 py-3">
+    <div className="grid gap-2 panel">
       <p className="text-sm font-medium">Send them this link</p>
       <p className="text-muted-foreground text-xs">
         It is shown once and cannot be shown again. Nothing emails it yet, so
         it has to be handed over.
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <code
-          data-testid="invitation-link"
-          className="bg-muted min-w-0 flex-1 truncate rounded px-2 py-1.5 text-xs select-all"
-        >
-          {link}
-        </code>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void navigator.clipboard?.writeText(link).then(
-              () => setCopied(true),
-              // A clipboard that refuses is not worth an error: the code
-              // above is selectable, which is what it is there for.
-              () => setCopied(false),
-            );
-          }}
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
+      <CopyField value={link} data-testid="invitation-link" />
     </div>
   );
 }
@@ -136,11 +113,10 @@ export function InviteForm({
 
           <div className="grid gap-2">
             <Label htmlFor="invite-role">Role</Label>
-            <select
+            <NativeSelect
               id="invite-role"
               name="role"
               defaultValue={grantable.includes("agent") ? "agent" : grantable[0]}
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
               disabled={disabled}
             >
               {grantable.map((role) => (
@@ -148,7 +124,7 @@ export function InviteForm({
                   {role}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <dl className="text-muted-foreground grid gap-1 text-xs">
               {grantable.map((role) => (
                 <div key={role} className="flex gap-2">

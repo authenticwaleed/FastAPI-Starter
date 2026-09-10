@@ -3,10 +3,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { DeleteDocument } from "./delete-document";
-import { Badge } from "@/components/ui/badge";
+import { BackLink, PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
 import { readDocument, readSource } from "@/lib/knowledge";
+import { DOCUMENT_TONE } from "@/lib/tones";
 import type { KnowledgeDocument, KnowledgeSource, Member, User } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -64,46 +67,36 @@ export default async function DocumentPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <Link
-          href="/knowledge"
-          className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-        >
-          ← Knowledge
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {document.title}
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {source ? (
-            <Link
-              href={`/knowledge?source=${source.id}`}
-              className="underline underline-offset-4"
-            >
-              {source.name}
-            </Link>
-          ) : (
-            "Its source has been removed"
-          )}{" "}
-          · added {when(document.created_at)}
-        </p>
-      </div>
+      <PageHeader
+        back={<BackLink href="/knowledge" label="Knowledge" />}
+        title={document.title}
+        description={
+          <>
+            {source ? (
+              <Link
+                href={`/knowledge?source=${source.id}`}
+                className="hover:text-foreground underline underline-offset-4"
+              >
+                {source.name}
+              </Link>
+            ) : (
+              "Its source has been removed"
+            )}{" "}
+            · added {when(document.created_at)}
+          </>
+        }
+      />
 
-      <dl className="grid gap-3 rounded-md border px-3 py-3 sm:grid-cols-3">
+      <dl className="grid gap-3 panel sm:grid-cols-3">
         <div className="grid gap-0.5">
           <dt className="text-muted-foreground text-xs uppercase">Status</dt>
           <dd>
-            <Badge
-              variant={
-                document.status === "failed"
-                  ? "destructive"
-                  : document.status === "ready"
-                    ? "default"
-                    : "secondary"
-              }
+            <StatusBadge
+              tone={DOCUMENT_TONE[document.status]}
+              status={document.status}
             >
               {document.status}
-            </Badge>
+            </StatusBadge>
           </dd>
         </div>
 
@@ -122,18 +115,21 @@ export default async function DocumentPage({
         // The API puts plain words here rather than a trace, because a scan
         // with no text in it is the ordinary case and "it failed" would
         // send somebody looking for a bug rather than a different file.
-        <p className="border-destructive/40 rounded-md border px-3 py-2 text-sm">
-          {document.error}
-        </p>
+        <Alert variant="destructive" role="status">
+          <AlertDescription>{document.error}</AlertDescription>
+        </Alert>
       ) : null}
 
       {document.status === "ready" && document.chunk_count === 0 ? (
         // Ready and empty is the quiet failure: nothing is wrong, and the
-        // document answers nothing.
-        <p className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm">
-          This document produced no passages, so the assistant cannot
-          retrieve anything from it. It may have been empty.
-        </p>
+        // document answers nothing. A warning rather than an empty state --
+        // there is something here, and it is not doing what was expected.
+        <Alert variant="warning" role="status">
+          <AlertDescription>
+            This document produced no passages, so the assistant cannot
+            retrieve anything from it. It may have been empty.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {administers ? (

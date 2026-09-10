@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { CreateKey } from "./create-key";
 import { KeyList } from "./key-list";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
 import { listApiKeys } from "@/lib/analytics";
@@ -58,12 +59,10 @@ export default async function ApiKeysPage() {
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">API keys</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          For reaching {workspace.name} from your own software.
-        </p>
-      </div>
+      <PageHeader
+        title="API keys"
+        description={`For reaching ${workspace.name} from your own software.`}
+      />
 
       {mayList ? (
         <KeyList workspaceId={workspace.id} keys={keys} canManage={administers} />

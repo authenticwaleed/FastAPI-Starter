@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { FieldError, FormError, SubmitButton } from "@/components/form";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { requestSupportAccess } from "@/lib/console-actions";
 import type { FormState } from "@/lib/form-state";
@@ -76,18 +77,18 @@ export function RequestAccess({ workspaceId }: { workspaceId: string }) {
 
       <div className="grid gap-2">
         <Label htmlFor="hours">For how long</Label>
-        <select
+        <NativeSelect
           id="hours"
           name="hours"
           defaultValue={String(DEFAULT_HOURS)}
-          className="border-input bg-background h-8 w-40 rounded-md border px-2 text-sm shadow-xs"
+          className="w-40"
         >
           {DURATIONS.map((hours) => (
             <option key={hours} value={hours}>
               {hours === 1 ? "1 hour" : `${hours} hours`}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldError>{state?.fields?.hours}</FieldError>
       </div>
 

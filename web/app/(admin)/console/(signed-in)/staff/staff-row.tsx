@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Refused } from "@/components/console/refused";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { STAFF_ROLE_LABEL, when } from "@/lib/console-labels";
 import type { FormState } from "@/lib/form-state";
 import { changeStaffRole, revokeStaffAccess } from "@/lib/staff-actions";
@@ -53,7 +54,7 @@ export function StaffRow({
 
   return (
     <li
-      className="grid gap-2 rounded-md border px-3 py-2.5"
+      className="grid gap-2 row"
       data-testid="staff-row"
       data-user={member.user_id}
     >
@@ -91,18 +92,17 @@ export function StaffRow({
             <label className="text-muted-foreground text-xs" htmlFor={`role-${member.user_id}`}>
               Rank
             </label>
-            <select
+            <NativeSelect
               id={`role-${member.user_id}`}
               name="role"
               defaultValue={member.role}
-              className="border-input bg-background h-7 rounded-md border px-2 text-xs shadow-xs"
             >
               {RANKS.map((rank) => (
                 <option key={rank} value={rank}>
                   {STAFF_ROLE_LABEL[rank]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <Button type="submit" variant="outline" size="xs">
               Change
             </Button>

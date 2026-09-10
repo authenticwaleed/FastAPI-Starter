@@ -6,6 +6,7 @@ import { NeedsAccess } from "@/components/console/needs-access";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
 import { SupportWindow } from "@/components/console/support-window";
+import { EmptyState } from "@/components/empty-state";
 import { CONSOLE_INBOX_PAGE_SIZE, listWorkspaceConversations } from "@/lib/console";
 import { CONSOLE_WORDING } from "@/lib/console-labels";
 import { ApiError } from "@/lib/errors";
@@ -81,7 +82,7 @@ export default async function ConsoleConversationsPage({
           now={supportWindow.now}
         />
       ) : (
-        <p className="text-muted-foreground rounded-md border px-4 py-3 text-sm">
+        <p className="text-muted-foreground panel text-sm">
           You hold a window on this account that was opened somewhere else,
           so this console cannot say how long is left. It will stop working
           when it closes.
@@ -89,9 +90,7 @@ export default async function ConsoleConversationsPage({
       )}
 
       {inbox.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          This business has no conversations.
-        </p>
+        <EmptyState title="This business has no conversations" />
       ) : (
         <ul className="grid gap-2" data-testid="console-inbox">
           {inbox.items.map((conversation) => (

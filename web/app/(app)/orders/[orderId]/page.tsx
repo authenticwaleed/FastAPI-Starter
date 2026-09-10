@@ -4,12 +4,14 @@ import { notFound, redirect } from "next/navigation";
 
 import { ConfirmOrder } from "./confirm-order";
 import { OrderForm } from "./order-form";
-import { Badge } from "@/components/ui/badge";
+import { BackLink, PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
 import { api } from "@/lib/api";
 import { readOrder } from "@/lib/catalogue";
 import { ApiError } from "@/lib/errors";
 import { readContact } from "@/lib/inbox";
 import { money } from "@/lib/money";
+import { ORDER_TONE } from "@/lib/tones";
 import type { Contact, Member, Order, User } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -67,45 +69,32 @@ export default async function OrderPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <Link
-          href="/orders"
-          className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-        >
-          ← Orders
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {order.order_number ?? "Order"}
-          </h1>
-          <Badge
-            variant={
-              order.status === "cancelled" || order.status === "refunded"
-                ? "outline"
-                : order.status === "pending"
-                  ? "secondary"
-                  : "default"
-            }
-          >
+      <PageHeader
+        back={<BackLink href="/orders" label="Orders" />}
+        title={order.order_number ?? "Order"}
+        meta={
+          <StatusBadge tone={ORDER_TONE[order.status]} status={order.status}>
             {order.status}
-          </Badge>
-        </div>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {contact ? (
-            <Link
-              href={`/contacts/${contact.id}`}
-              className="underline underline-offset-4"
-            >
-              {contact.name ?? contact.phone_number}
-            </Link>
-          ) : (
-            "The contact has been removed"
-          )}{" "}
-          · {when(order.placed_at ?? order.created_at)}
-        </p>
-      </div>
+          </StatusBadge>
+        }
+        description={
+          <>
+            {contact ? (
+              <Link
+                href={`/contacts/${contact.id}`}
+                className="hover:text-foreground underline underline-offset-4"
+              >
+                {contact.name ?? contact.phone_number}
+              </Link>
+            ) : (
+              "The contact has been removed"
+            )}{" "}
+            · {when(order.placed_at ?? order.created_at)}
+          </>
+        }
+      />
 
-      <dl className="grid gap-3 rounded-md border px-3 py-3 sm:grid-cols-3">
+      <dl className="grid gap-3 panel sm:grid-cols-3">
         {(
           [
             ["Subtotal", order.subtotal],

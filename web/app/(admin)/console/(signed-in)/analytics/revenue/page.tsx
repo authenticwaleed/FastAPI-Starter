@@ -4,6 +4,7 @@ import { MagnitudeBars } from "@/components/charts/magnitude-bars";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { SectionHeader } from "@/components/page-header";
 import { readRevenue } from "@/lib/platform";
 import type { AdminRevenue, SubscriptionStatus } from "@/lib/types";
 
@@ -51,7 +52,7 @@ export default async function ConsoleRevenuePage() {
       />
 
       {retrying > 0 ? (
-        <p className="rounded-md border px-4 py-3 text-sm" data-testid="past-due-note">
+        <p className="panel text-sm" data-testid="past-due-note">
           {retrying} subscription{retrying === 1 ? " is" : "s are"} being
           retried by the provider.{" "}
           <ConsoleLink
@@ -65,7 +66,7 @@ export default async function ConsoleRevenuePage() {
       ) : null}
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Subscriptions by status</h2>
+        <SectionHeader title="Subscriptions by status" />
         <MagnitudeBars
           rows={STATUSES.map((status) => ({
             label: status,
@@ -76,13 +77,10 @@ export default async function ConsoleRevenuePage() {
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Paying, by plan</h2>
-          <p className="text-muted-foreground text-xs">
-            A business comped onto a plan is not counted here. It is not
-            revenue.
-          </p>
-        </div>
+        <SectionHeader
+          title="Paying, by plan"
+          description="A business comped onto a plan is not counted here. It is not revenue."
+        />
         <MagnitudeBars
           rows={(["starter", "growth", "business"] as const).map((plan) => ({
             label: plan,

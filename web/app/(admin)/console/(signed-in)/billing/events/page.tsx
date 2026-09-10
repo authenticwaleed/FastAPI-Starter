@@ -5,6 +5,7 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,20 +88,18 @@ export default async function ConsoleBillingEventsPage({
       </form>
 
       {events.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing has arrived.
-        </p>
+        <EmptyState title="Nothing has arrived" />
       ) : (
         <ul className="grid gap-2" data-testid="billing-events">
           {events.items.map((event) => (
             <li
               key={event.id}
               data-event-type={event.event_type}
-              className="grid gap-2 rounded-md border px-3 py-2.5"
+              className="grid gap-2 row"
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="font-mono text-sm">{event.event_type}</span>
-                <Badge variant="outline" className="font-mono text-[10px]">
+                <Badge variant="outline" className="font-mono text-2xs">
                   {event.provider}
                 </Badge>
                 <span className="text-muted-foreground ml-auto text-xs">

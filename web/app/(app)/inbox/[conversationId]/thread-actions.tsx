@@ -11,6 +11,7 @@ import {
   handoff,
   setStatus,
 } from "@/lib/conversation-actions";
+import { NativeSelect } from "@/components/ui/native-select";
 import type { FormState } from "@/lib/form-state";
 import { STATE_LABEL } from "@/lib/labels";
 import type { Conversation, Member } from "@/lib/types";
@@ -73,7 +74,7 @@ export function ThreadActions({
   const error = statusState?.error ?? assignState?.error ?? handoffState?.error;
 
   return (
-    <div className="grid gap-3 rounded-md border px-3 py-2.5">
+    <div className="grid gap-3 row">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Badge variant={closed ? "outline" : "secondary"}>
           {closed ? "Closed" : conversation.status === "pending" ? "Pending" : "Open"}
@@ -139,11 +140,10 @@ export function ThreadActions({
                 <label htmlFor="assignee" className="text-muted-foreground text-sm">
                   Assigned
                 </label>
-                <select
+                <NativeSelect
                   id="assignee"
                   name="user_id"
                   defaultValue={conversation.assigned_user?.id ?? ""}
-                  className="border-input bg-background h-8 rounded-md border px-2 text-sm"
                 >
                   <option value="">Nobody</option>
                   {members
@@ -153,7 +153,7 @@ export function ThreadActions({
                         {member.name}
                       </option>
                     ))}
-                </select>
+                </NativeSelect>
                 <Pending>Save</Pending>
               </form>
             </>

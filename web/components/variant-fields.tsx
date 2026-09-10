@@ -56,7 +56,7 @@ export function VariantFields({ variants = [] }: { variants?: Variant[] }) {
         <div
           key={row.key}
           data-variant-row=""
-          className="grid gap-2 rounded-md border px-3 py-2.5"
+          className="grid gap-2 row"
         >
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1.5">

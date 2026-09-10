@@ -19,7 +19,7 @@ export function StatTile({
   hint?: string;
 }) {
   return (
-    <div className="grid gap-0.5 rounded-md border px-3 py-2.5" data-stat={label}>
+    <div className="grid gap-0.5 row" data-stat={label}>
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd className="text-xl font-semibold tracking-tight tabular-nums">
         {value === null ? "—" : typeof value === "number" ? value.toLocaleString() : value}

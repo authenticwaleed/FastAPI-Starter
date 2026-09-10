@@ -5,6 +5,8 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { Fact, Facts } from "@/components/console/facts";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { SectionHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { when } from "@/lib/console-labels";
 import { readJob } from "@/lib/platform";
@@ -67,20 +69,19 @@ export default async function ConsoleJobPage({
 
       {job.last_error ? (
         <section className="grid gap-2">
-          <h2 className="text-sm font-medium">Why it failed</h2>
-          <p
-            className="border-destructive/40 text-destructive rounded-md border px-4 py-3 font-mono text-xs break-all"
-            data-testid="job-error"
-          >
-            {job.last_error}
-          </p>
+          <SectionHeader title="Why it failed" />
+          <Alert variant="destructive" role="status" data-testid="job-error">
+            <AlertDescription className="text-destructive font-mono text-xs break-all">
+              {job.last_error}
+            </AlertDescription>
+          </Alert>
         </section>
       ) : null}
 
       <JobControls jobId={job.id} status={job.status} />
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">The job</h2>
+        <SectionHeader title="The job" />
         <Facts>
           <Fact label="Due">{when(job.run_at)}</Fact>
           <Fact label="Started">{job.started_at ? when(job.started_at) : null}</Fact>
@@ -110,13 +111,10 @@ export default async function ConsoleJobPage({
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Payload</h2>
-          <p className="text-muted-foreground text-xs">
-            As much as this kind of job admits. Anything shown as
-            &ldquo;[redacted]&rdquo; is there and not being shown.
-          </p>
-        </div>
+        <SectionHeader
+          title="Payload"
+          description="As much as this kind of job admits. Anything shown as “[redacted]” is there and not being shown."
+        />
         <pre className="bg-muted overflow-x-auto rounded-md px-3 py-2.5 text-xs">
           {JSON.stringify(job.payload, null, 2)}
         </pre>

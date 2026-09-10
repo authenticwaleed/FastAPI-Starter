@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { RunHistory } from "./run-history";
 import { SettingsForm } from "./settings-form";
-import { Badge } from "@/components/ui/badge";
+import { BackLink, PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
 import { api } from "@/lib/api";
 import { STATUS_LABEL, TRIGGER_LABEL, specFor } from "@/lib/automations";
 import { ApiError } from "@/lib/errors";
@@ -50,26 +50,24 @@ export default async function AutomationPage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <Link
-          href="/automations"
-          className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-        >
-          ← Automations
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {automation.name}
-          </h1>
-          <Badge variant={automation.status === "enabled" ? "default" : "outline"}>
+      <PageHeader
+        back={<BackLink href="/automations" label="Automations" />}
+        title={automation.name}
+        meta={
+          <StatusBadge
+            tone={automation.status === "enabled" ? "neutral" : "quiet"}
+            status={automation.status}
+          >
             {STATUS_LABEL[automation.status]}
-          </Badge>
-        </div>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {TRIGGER_LABEL[automation.trigger_type]} ·{" "}
-          {specFor(automation.kind).summary}
-        </p>
-      </div>
+          </StatusBadge>
+        }
+        description={
+          <>
+            {TRIGGER_LABEL[automation.trigger_type]} ·{" "}
+            {specFor(automation.kind).summary}
+          </>
+        }
+      />
 
       <SettingsForm
         workspaceId={workspace.id}

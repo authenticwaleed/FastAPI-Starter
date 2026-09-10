@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { FormError } from "@/components/form";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requestAiReply } from "@/lib/conversation-actions";
@@ -84,8 +85,8 @@ export function AssistantPanel({
   const latest = history[0];
 
   return (
-    <section className="grid gap-3 rounded-md border px-3 py-3">
-      <h2 className="text-sm font-medium">Assistant</h2>
+    <section className="grid gap-3 panel">
+      <SectionHeader title="Assistant" />
 
       <FormError>{state?.error}</FormError>
 

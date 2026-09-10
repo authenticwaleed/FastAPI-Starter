@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { CancelSubscription } from "./cancel-subscription";
 import { PlanPicker } from "./plan-picker";
 import { UsageMeters } from "./usage-meters";
+import { PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { listPlans, readSubscription, readUsage } from "@/lib/billing";
@@ -54,14 +56,12 @@ export default async function BillingPage() {
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Plan and billing</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          What {workspace.name} may do, and what it has used.
-        </p>
-      </div>
+      <PageHeader
+        title="Plan and billing"
+        description={`What ${workspace.name} may do, and what it has used.`}
+      />
 
-      <section className="grid gap-3 rounded-md border px-4 py-4">
+      <section className="grid gap-3 panel">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-medium">{plan.name}</h2>
           {/*
@@ -105,26 +105,26 @@ export default async function BillingPage() {
           // go through and a provider still retrying, so the plan keeps
           // applying -- taking a business's features away over a bank's
           // fraud check is the wrong way to lose a customer.
-          <p
-            className="border-destructive/40 rounded-md border px-3 py-2 text-sm"
-            data-testid="payment-warning"
-          >
-            A payment did not go through. Nothing has been switched off — the
-            plan still applies while it is retried. Updating the card on file
-            is what stops it becoming a problem.
-          </p>
+          <Alert variant="warning" role="status" data-testid="payment-warning">
+            <AlertDescription>
+              A payment did not go through. Nothing has been switched off —
+              the plan still applies while it is retried. Updating the card
+              on file is what stops it becoming a problem.
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         {ending ? (
-          <p className="text-muted-foreground rounded-md border px-3 py-2 text-sm">
-            {/*
-              Stopping, not stopped. The month has been paid for, so
-              everything keeps working until it runs out.
-            */}
-            This subscription ends on {when(subscription?.current_period_end ?? null)}.
-            Everything keeps working until then, and it falls back to the free
-            plan afterwards rather than to nothing.
-          </p>
+          // Stopping, not stopped. The month has been paid for, so
+          // everything keeps working until it runs out.
+          <Alert role="status">
+            <AlertDescription>
+              This subscription ends on{" "}
+              {when(subscription?.current_period_end ?? null)}. Everything
+              keeps working until then, and it falls back to the free plan
+              afterwards rather than to nothing.
+            </AlertDescription>
+          </Alert>
         ) : null}
       </section>
 

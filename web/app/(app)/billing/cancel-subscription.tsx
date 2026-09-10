@@ -3,17 +3,9 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { DangerZone, TypedConfirm } from "@/components/danger-zone";
 import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cancelSubscription } from "@/lib/billing-actions";
 import type { FormState } from "@/lib/form-state";
 
@@ -46,46 +38,25 @@ export function CancelSubscription({ workspaceId }: { workspaceId: string }) {
   );
 
   return (
-    <Card className="border-destructive/40">
-      <CardHeader>
-        <CardTitle>
-          <h2>Cancel the subscription</h2>
-        </CardTitle>
-        <CardDescription>
-          Nothing stops today. It runs to the end of the period you have paid
-          for, and then this workspace goes back to the free plan — it does
-          not go away, and neither does anything in it.
-        </CardDescription>
-      </CardHeader>
+    <DangerZone
+      title="Cancel the subscription"
+      description="Nothing stops today. It runs to the end of the period you have paid for, and then this workspace goes back to the free plan — it does not go away, and neither does anything in it."
+    >
+      <form action={action} className="grid gap-4">
+        <input type="hidden" name="workspace_id" value={workspaceId} />
 
-      <CardContent>
-        <form action={action} className="grid max-w-md gap-4">
-          <input type="hidden" name="workspace_id" value={workspaceId} />
+        <Refusal state={state} />
 
-          <Refusal state={state} />
+        {state?.done ? (
+          <p className="text-muted-foreground text-sm" role="status">
+            Cancelled. It ends at the close of the current period.
+          </p>
+        ) : null}
 
-          {state?.done ? (
-            <p className="text-muted-foreground text-sm" role="status">
-              Cancelled. It ends at the close of the current period.
-            </p>
-          ) : null}
+        <TypedConfirm phrase="CANCEL" id="cancel-confirm" />
 
-          <div className="grid gap-2">
-            <Label htmlFor="cancel-confirm">
-              Type <span className="font-mono">CANCEL</span> to confirm
-            </Label>
-            <Input
-              id="cancel-confirm"
-              name="confirm"
-              autoComplete="off"
-              className="font-mono"
-              required
-            />
-          </div>
-
-          <CancelButton />
-        </form>
-      </CardContent>
-    </Card>
+        <CancelButton />
+      </form>
+    </DangerZone>
   );
 }

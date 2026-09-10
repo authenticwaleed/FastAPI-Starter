@@ -9,6 +9,9 @@ import {
   INBOX_PAGE_SIZE,
   listConversations,
 } from "@/lib/inbox";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import type { ConversationStatus } from "@/lib/types";
 import { activeWorkspace } from "@/lib/workspace";
 
@@ -58,7 +61,6 @@ export default async function InboxPage({
     search: search ?? null,
   });
 
-  const lastPage = Math.max(1, Math.ceil(feed.total / INBOX_PAGE_SIZE));
   const query = new URLSearchParams();
 
   for (const value of statuses) query.append("status", value);
@@ -67,19 +69,23 @@ export default async function InboxPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+      <PageHeader
+        title="Inbox"
+        description={
+          <>
             {workspace.name} · {feed.total} conversation
             {feed.total === 1 ? "" : "s"}
-          </p>
-        </div>
-
-        <Link href="/contacts" className="text-sm underline underline-offset-4">
-          Contacts
-        </Link>
-      </div>
+          </>
+        }
+        actions={
+          <Link
+            href="/contacts"
+            className="hover:text-foreground text-sm underline underline-offset-4"
+          >
+            Contacts
+          </Link>
+        }
+      />
 
       <InboxFilters
         statuses={statuses}
@@ -88,10 +94,10 @@ export default async function InboxPage({
       />
 
       {feed.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing matches. Conversations arrive when a customer messages the
-          connected number, or when somebody opens one from a contact.
-        </p>
+        <EmptyState title="Nothing matches">
+          Conversations arrive when a customer messages the connected number,
+          or when somebody opens one from a contact.
+        </EmptyState>
       ) : (
         <ul className="grid gap-2" data-testid="conversation-list">
           {feed.items.map((conversation) => (
@@ -102,31 +108,14 @@ export default async function InboxPage({
         </ul>
       )}
 
-      {lastPage > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Pages">
-          <span className="text-muted-foreground tabular-nums">
-            Page {page} of {lastPage}
-          </span>
-          <span className="flex gap-3">
-            {page > 1 ? (
-              <Link
-                href={`/inbox?${query}&page=${page - 1}`}
-                className="underline underline-offset-4"
-              >
-                Newer
-              </Link>
-            ) : null}
-            {page < lastPage ? (
-              <Link
-                href={`/inbox?${query}&page=${page + 1}`}
-                className="underline underline-offset-4"
-              >
-                Older
-              </Link>
-            ) : null}
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        total={feed.total}
+        pageSize={INBOX_PAGE_SIZE}
+        noun="conversations"
+        labels={{ previous: "Newer", next: "Older" }}
+        href={(to) => `/inbox?${query}&page=${to}`}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { readWorkspaceAudit } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -57,16 +58,14 @@ export default async function ConsoleWorkspaceAuditPage({
       />
 
       {log.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing recorded yet.
-        </p>
+        <EmptyState title="Nothing recorded yet" />
       ) : (
         <ul className="grid gap-2" data-testid="tenant-audit-log">
           {log.items.map((entry) => (
             <li
               key={entry.id}
               data-event={entry.event}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 row"
             >
               <span className="min-w-0 flex-1 text-sm">
                 {describeEvent(entry.event)}
@@ -80,7 +79,7 @@ export default async function ConsoleWorkspaceAuditPage({
                 {when(entry.created_at)}
               </span>
 
-              <Badge variant="outline" className="font-mono text-[10px]">
+              <Badge variant="outline" className="font-mono text-2xs">
                 {entry.event}
               </Badge>
             </li>

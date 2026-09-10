@@ -4,6 +4,7 @@ import { DeleteAccount } from "./delete-account";
 import { PasswordForm } from "./password-form";
 import { ProfileForm } from "./profile-form";
 import { SessionsList } from "./sessions-list";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import type { Session, User } from "@/lib/types";
 
@@ -25,12 +26,10 @@ export default async function AccountPage() {
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Your account</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Your details, your password, and where you are signed in.
-        </p>
-      </div>
+      <PageHeader
+        title="Your account"
+        description="Your details, your password, and where you are signed in."
+      />
 
       <ProfileForm user={user} />
       <PasswordForm />

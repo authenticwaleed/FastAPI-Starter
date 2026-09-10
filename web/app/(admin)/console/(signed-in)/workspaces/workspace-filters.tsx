@@ -2,6 +2,7 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /**
  * The three narrowings a support ticket needs, in the address bar.
@@ -17,9 +18,6 @@ import { Label } from "@/components/ui/label";
  */
 const STATUSES = ["active", "suspended", "cancelled"];
 const PLANS = ["starter", "growth", "business"];
-
-const FIELD =
-  "border-input bg-background h-8 rounded-md border px-2 text-sm shadow-xs";
 
 export function WorkspaceFilters({
   q,
@@ -45,7 +43,7 @@ export function WorkspaceFilters({
           type="search"
           defaultValue={q ?? ""}
           maxLength={320}
-          className="h-8 w-72"
+          className="w-72"
         />
       </div>
 
@@ -53,28 +51,28 @@ export function WorkspaceFilters({
         <Label htmlFor="status" className="text-xs">
           Status
         </Label>
-        <select id="status" name="status" defaultValue={status ?? ""} className={FIELD}>
+        <NativeSelect id="status" name="status" defaultValue={status ?? ""}>
           <option value="">Any</option>
           {STATUSES.map((value) => (
             <option key={value} value={value}>
               {value}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       <div className="grid gap-1.5">
         <Label htmlFor="plan" className="text-xs">
           Plan
         </Label>
-        <select id="plan" name="plan" defaultValue={plan ?? ""} className={FIELD}>
+        <NativeSelect id="plan" name="plan" defaultValue={plan ?? ""}>
           <option value="">Any</option>
           {PLANS.map((value) => (
             <option key={value} value={value}>
               {value}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       <Button type="submit" variant="outline" size="sm">

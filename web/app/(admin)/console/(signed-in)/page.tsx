@@ -118,7 +118,7 @@ export default async function ConsolePage() {
           <ConsoleLink
             key={section.href}
             href={section.href}
-            className="hover:bg-accent/50 grid content-start gap-1 rounded-md border px-4 py-3"
+            className="hover:bg-accent/50 grid content-start gap-1 panel"
           >
             <span className="text-sm font-medium">{section.title}</span>
             <span className="text-muted-foreground text-xs">{section.body}</span>

@@ -84,7 +84,7 @@ export default async function ConsoleThreadPage({
           now={supportWindow.now}
         />
       ) : (
-        <p className="text-muted-foreground rounded-md border px-4 py-3 text-sm">
+        <p className="text-muted-foreground panel text-sm">
           You hold a window on this account that was opened somewhere else,
           so this console cannot say how long is left. It will stop working
           when it closes.

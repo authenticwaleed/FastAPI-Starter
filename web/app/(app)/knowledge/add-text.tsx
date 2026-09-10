@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { addFaq, addText } from "@/lib/knowledge-actions";
 import type { FormState } from "@/lib/form-state";
@@ -59,17 +60,16 @@ export function AddText({
   const sourcePicker = (
     <div className="grid gap-2">
       <Label htmlFor={`${kind}-source`}>Source</Label>
-      <select
+      <NativeSelect
         id={`${kind}-source`}
         name="knowledge_source_id"
-        className="border-input bg-background h-9 rounded-md border px-2 text-sm"
       >
         {sources.map((source) => (
           <option key={source.id} value={source.id}>
             {source.name}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </div>
   );
 

@@ -4,6 +4,7 @@ import { StatRow, StatTile } from "@/components/charts/stat-tile";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { duration } from "@/lib/analytics";
 import { readHealth } from "@/lib/platform";
@@ -45,7 +46,7 @@ export default async function ConsoleHealthPage() {
       />
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">The queue</h2>
+        <SectionHeader title="The queue" />
         <StatRow>
           <StatTile label="Waiting" value={health.queue.depth} />
           <StatTile
@@ -72,10 +73,10 @@ export default async function ConsoleHealthPage() {
       </section>
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">This deployment</h2>
+        <SectionHeader title="This deployment" />
 
         <ul className="grid gap-2" data-testid="health-checks">
-          <li className="flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm">
+          <li className="flex items-center gap-3 row text-sm">
             <span className="flex-1">Database</span>
             <Badge variant={health.database ? "secondary" : "destructive"}>
               {health.database ? "answering" : "not answering"}
@@ -85,7 +86,7 @@ export default async function ConsoleHealthPage() {
           {Object.entries(health.integrations).map(([name, configured]) => (
             <li
               key={name}
-              className="flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm"
+              className="flex items-center gap-3 row text-sm"
               data-integration={name}
             >
               <span className="flex-1 font-mono text-xs">{name}</span>

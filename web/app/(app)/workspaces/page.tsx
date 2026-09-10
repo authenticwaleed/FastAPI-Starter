@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CreateWorkspace } from "./create-workspace";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -27,12 +28,10 @@ export default async function WorkspacesPage() {
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Workspaces</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          A workspace is one business. Everything in Baton belongs to one.
-        </p>
-      </div>
+      <PageHeader
+        title="Workspaces"
+        description="A workspace is one business. Everything in Baton belongs to one."
+      />
 
       {workspaces.length > 0 ? (
         <ul className="grid gap-3">

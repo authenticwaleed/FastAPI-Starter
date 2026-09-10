@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { FieldError, FormError, SubmitButton } from "@/components/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { updateOrder } from "@/lib/order-actions";
 import type { FormState } from "@/lib/form-state";
@@ -54,11 +55,10 @@ export function OrderForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="status">Status</Label>
-          <select
+          <NativeSelect
             id="status"
             name="status"
             defaultValue={order.status}
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
             disabled={!canEdit}
           >
             {STATUSES.map((value) => (
@@ -66,7 +66,7 @@ export function OrderForm({
                 {value}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <p className="text-muted-foreground text-xs">
             Confirming is its own button below — it records a decision rather
             than an observation.

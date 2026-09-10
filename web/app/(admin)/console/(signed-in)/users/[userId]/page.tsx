@@ -9,6 +9,8 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { Fact, Facts } from "@/components/console/facts";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsoleRefused, consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { readUser } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -91,27 +93,23 @@ export default async function ConsoleUserPage({
       <AccountActions user={user} />
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Workspaces</h2>
-          <p className="text-muted-foreground text-xs">
-            Including the ones they have left and the ones that have closed.
-          </p>
-        </div>
+        <SectionHeader
+          title="Workspaces"
+          description="Including the ones they have left and the ones that have closed."
+        />
 
         {user.memberships.length === 0 ? (
-          <p
-            className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm"
+          <EmptyState
+            title="This account is not in any workspace"
             data-testid="no-memberships"
-          >
-            This account is not in any workspace.
-          </p>
+          />
         ) : (
           <ul className="grid gap-2" data-testid="membership-list">
             {user.memberships.map((membership) => (
               <li key={membership.workspace_id}>
                 <ConsoleLink
                   href={`/console/workspaces/${membership.workspace_id}`}
-                  className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                  className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
                 >
                   <span className="text-sm font-medium">{membership.name}</span>
                   <span className="text-muted-foreground font-mono text-xs">
@@ -138,27 +136,19 @@ export default async function ConsoleUserPage({
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Signed in</h2>
-          <p className="text-muted-foreground text-xs">
-            The same list the account&rsquo;s owner sees, and no token — what
-            is stored is a digest, and nothing anywhere returns it.
-          </p>
-        </div>
+        <SectionHeader
+          title="Signed in"
+          description="The same list the account’s owner sees, and no token — what is stored is a digest, and nothing anywhere returns it."
+        />
 
         {user.sessions.length === 0 ? (
-          <p
-            className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm"
-            data-testid="no-sessions"
-          >
-            Nothing is signed in.
-          </p>
+          <EmptyState title="Nothing is signed in" data-testid="no-sessions" />
         ) : (
           <ul className="grid gap-2" data-testid="session-list">
             {user.sessions.map((session) => (
               <li
                 key={session.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {/* Best effort, and to be recognised rather than trusted. */}

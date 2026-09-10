@@ -1,3 +1,4 @@
+import { SectionHeader } from "@/components/page-header";
 import { METRIC_LABEL, ceilingLabel, fractionUsed } from "@/lib/plans";
 import type { UsageSummary } from "@/lib/types";
 
@@ -20,12 +21,10 @@ function when(value: string): string {
 export function UsageMeters({ usage }: { usage: UsageSummary }) {
   return (
     <section className="grid gap-3">
-      <div>
-        <h2 className="text-sm font-medium">Usage</h2>
-        <p className="text-muted-foreground text-xs">
-          {when(usage.period_start)} to {when(usage.period_end)}
-        </p>
-      </div>
+      <SectionHeader
+        title="Usage"
+        description={`${when(usage.period_start)} to ${when(usage.period_end)}`}
+      />
 
       <ul className="grid gap-3" data-testid="usage-meters">
         {usage.metrics.map((metric) => {
@@ -51,7 +50,7 @@ export function UsageMeters({ usage }: { usage: UsageSummary }) {
                   value={filled}
                   max={100}
                   aria-label={`${METRIC_LABEL[metric.metric] ?? metric.metric}: ${filled}% of the plan's allowance`}
-                  className="h-1.5 w-full"
+                  className="meter"
                 />
               )}
             </li>
