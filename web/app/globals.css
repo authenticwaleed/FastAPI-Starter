@@ -2,88 +2,231 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * Dark is a class on <html>.
+ *
+ * `:where` rather than `:is` so the variant costs no specificity, and the
+ * selector list includes `.dark` itself rather than only its descendants:
+ * the class lands on the root element, and a utility written on that same
+ * element -- `color-scheme`, a scrollbar colour -- would otherwise never
+ * see it.
+ *
+ * Which class it is comes from the root layout: a cookie when somebody has
+ * chosen, the system preference when they have not. Both are settled
+ * before the first paint, so nothing here flashes.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
+  /* ---------------------------------------------------------------- *
+   * Colour
+   *
+   * Every one of these is semantic and every one is a variable. A screen
+   * naming `bg-emerald-500` is a screen that will disagree with the next
+   * one and be invisible in dark mode; there is exactly one such colour
+   * left in the client and it is on its way out.
+   * ---------------------------------------------------------------- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
+
+  /* Panels. `card` is the shadcn name and the one its components use;
+     `surface` is the same paint under the name the rest of the client
+     says out loud, and `surface-muted` is the recessed strip -- a table
+     head, a footer, the quiet half of a split panel. */
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-card-foreground: var(--card-foreground);
+  --color-surface: var(--card);
+  --color-surface-foreground: var(--card-foreground);
+  --color-surface-muted: var(--surface-muted);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /*
+   * Four states, and each one is a *state* rather than a decoration.
+   *
+   * Each is an ink colour, tinted at the point of use the way the
+   * destructive button already was -- `bg-warning/10 text-warning` --
+   * because one token that reads correctly as text, as an icon and as a
+   * 10% fill is one token to keep contrast-checked instead of three.
+   */
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* `border` separates things that are different; `border-subtle`
+     divides things that are the same. */
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* The rail. Nothing renders one yet -- phase 2 does -- but the palette
+     it will be built from belongs with the rest of the palette. */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--ring);
+  /* shadcn's own names for the two above, so a component pulled from the
+     registry lands on this palette instead of inventing one. */
+  --color-sidebar-accent: var(--sidebar-hover);
+  --color-sidebar-accent-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+
   --color-data: var(--data);
   --color-data-soft: var(--data-soft);
   --color-grid: var(--grid);
+
+  /* ---------------------------------------------------------------- *
+   * Type
+   * ---------------------------------------------------------------- */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+
+  /*
+   * One step below `xs`, because dense metadata kept reaching for
+   * `text-[10px]` and `text-[11px]` and landing on two different answers
+   * to the same question. 11px is the floor: anything smaller is not
+   * being read, it is being squinted at.
+   */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* ---------------------------------------------------------------- *
+   * Radius
+   *
+   * Explicit rather than multiplied off a single `--radius`, which is how
+   * a 10px base quietly became a 26px badge. Four steps, each a whole
+   * pixel, and the largest of them is a dialog.
+   * ---------------------------------------------------------------- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  /* ---------------------------------------------------------------- *
+   * Elevation
+   *
+   * Two, and they mean two different things. `raised` is a panel sitting
+   * on the page; `overlay` is something in front of it that the page can
+   * be dismissed back to. Anything reaching for a third is decorating.
+   * ---------------------------------------------------------------- */
+  --shadow-raised: var(--elevation-raised);
+  --shadow-overlay: var(--elevation-overlay);
+
+  /* ---------------------------------------------------------------- *
+   * Motion
+   *
+   * 150ms is the house speed and the default every bare `transition-*`
+   * picks up. `fast` is for something under the cursor right now, `slow`
+   * for something entering. Nothing in this client animates for longer.
+   * ---------------------------------------------------------------- */
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /*
+   * A cool near-neutral rather than a pure grey. The chroma is small
+   * enough that nobody would call it blue and large enough that the
+   * greys stop looking like a screenshot of a wireframe.
+   *
+   * The page is a shade off white so that a panel can *be* white and
+   * read as raised. Cards on a pure-white ground are cards you can only
+   * see by their border, which is how a design system ends up drawing
+   * borders around everything.
+   */
+  --background: oklch(0.985 0.002 255);
+  --foreground: oklch(0.205 0.008 258);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.205 0.008 258);
+  --surface-muted: oklch(0.968 0.003 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.205 0.008 258);
+
+  /*
+   * Near-black with a little blue in it. Deliberately not a brand
+   * colour: the blue in this client belongs to data and to focus, and a
+   * primary button competing with a chart is a button that gets read as
+   * part of the chart.
+   */
+  --primary: oklch(0.235 0.014 260);
+  --primary-foreground: oklch(0.985 0.002 255);
+  --secondary: oklch(0.955 0.004 255);
+  --secondary-foreground: oklch(0.3 0.01 258);
+  --muted: oklch(0.968 0.003 255);
+  /*
+   * 5.2:1 on the page ground. The old value was 4.7:1 on pure white and
+   * would have dropped to 4.5:1 against the ground above -- passing by
+   * a hair, on the colour roughly four hundred lines of this client use
+   * for every timestamp, every hint and every count.
+   */
+  --muted-foreground: oklch(0.525 0.012 258);
+  --accent: oklch(0.955 0.004 255);
+  --accent-foreground: oklch(0.235 0.014 260);
+
+  --destructive: oklch(0.53 0.205 27);
+  --destructive-foreground: oklch(0.985 0.002 255);
+  --success: oklch(0.505 0.115 155);
+  --success-foreground: oklch(0.985 0.002 255);
+  --warning: oklch(0.535 0.125 70);
+  --warning-foreground: oklch(0.985 0.002 255);
+  --info: oklch(0.505 0.145 258);
+  --info-foreground: oklch(0.985 0.002 255);
+
+  --border: oklch(0.905 0.005 255);
+  --border-subtle: oklch(0.938 0.004 255);
+  /*
+   * Distinctly stronger than `border`, and measured rather than eyeballed:
+   * 3:1 against the page ground, which is what WCAG asks of the boundary
+   * of a control somebody has to find. The old value was 1.35:1 -- a line
+   * you could see only because you already knew a field was there.
+   *
+   * This is the one place the palette is deliberately heavier than it
+   * would be if it were only being looked at. A form should look like a
+   * form.
+   */
+  --input: oklch(0.655 0.01 258);
+  /*
+   * Focus is blue and nothing else here is. A grey ring on a grey border
+   * is a focus state you have to look for, which is the one state that
+   * has to be findable without looking.
+   */
+  --ring: oklch(0.55 0.15 258);
+
+  --sidebar: oklch(0.972 0.003 255);
+  --sidebar-foreground: oklch(0.33 0.01 258);
+  --sidebar-hover: oklch(0.945 0.004 255);
+  /* The active item is the white one. A rail that is slightly recessed
+     lets the current section be raised out of it without any colour. */
+  --sidebar-active: oklch(1 0 0);
+  --sidebar-active-foreground: oklch(0.2 0.014 260);
+  --sidebar-border: oklch(0.912 0.005 255);
+
+  --elevation-raised: 0 1px 2px 0 oklch(0.2 0.02 258 / 0.05);
+  --elevation-overlay:
+    0 10px 30px -8px oklch(0.2 0.02 258 / 0.14),
+    0 2px 6px -2px oklch(0.2 0.02 258 / 0.08);
 
   /*
    * The one hue any chart uses.
@@ -99,56 +242,214 @@
    */
   --data: #2a78d6;
   --data-soft: #2a78d61f;
-  --grid: oklch(0.922 0 0);
+  --grid: oklch(0.912 0.004 255);
+
+  color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /*
+   * Lifted off black on purpose. A near-black ground with white text is
+   * the setting people turn dark mode off again over: the text glows,
+   * the borders vanish, and every panel has to be outlined to exist.
+   * Starting at 0.178 leaves room for three surfaces above it.
+   */
+  --background: oklch(0.178 0.006 258);
+  --foreground: oklch(0.955 0.003 255);
+
+  --card: oklch(0.214 0.007 258);
+  --card-foreground: oklch(0.955 0.003 255);
+  --surface-muted: oklch(0.243 0.008 258);
+  --popover: oklch(0.238 0.008 258);
+  --popover-foreground: oklch(0.955 0.003 255);
+
+  /* Inverted, as it was: on a dark ground the emphatic button is the
+     pale one. */
+  --primary: oklch(0.93 0.004 255);
+  --primary-foreground: oklch(0.21 0.01 258);
+  --secondary: oklch(0.268 0.008 258);
+  --secondary-foreground: oklch(0.94 0.003 255);
+  --muted: oklch(0.258 0.008 258);
+  --muted-foreground: oklch(0.715 0.012 258);
+  --accent: oklch(0.278 0.009 258);
+  --accent-foreground: oklch(0.96 0.003 255);
+
+  /*
+   * Each of the four is a different step of its own ramp, picked against
+   * this ground rather than lightened from the light one. A colour that
+   * passes on white and is merely brightened does not pass here.
+   */
+  --destructive: oklch(0.71 0.175 24);
+  --destructive-foreground: oklch(0.18 0.01 258);
+  --success: oklch(0.755 0.135 158);
+  --success-foreground: oklch(0.18 0.01 258);
+  --warning: oklch(0.795 0.125 78);
+  --warning-foreground: oklch(0.18 0.01 258);
+  --info: oklch(0.715 0.125 258);
+  --info-foreground: oklch(0.18 0.01 258);
+
+  /*
+   * Solid, not `white / 10%`. A translucent border is a different colour
+   * on every surface it crosses, which on a screen with three surfaces
+   * means a table whose lines change shade halfway down.
+   */
+  --border: oklch(0.302 0.009 258);
+  --border-subtle: oklch(0.262 0.008 258);
+  /* 3:1 against the dark ground, picked for it the same way. */
+  --input: oklch(0.515 0.012 258);
+  --ring: oklch(0.665 0.145 258);
+
+  --sidebar: oklch(0.198 0.007 258);
+  --sidebar-foreground: oklch(0.72 0.012 258);
+  --sidebar-hover: oklch(0.245 0.008 258);
+  --sidebar-active: oklch(0.285 0.009 258);
+  --sidebar-active-foreground: oklch(0.97 0.003 255);
+  --sidebar-border: oklch(0.285 0.009 258);
+
+  /* Heavier and blacker, because a shadow on a dark ground is doing the
+     job the light one did with a highlight. */
+  --elevation-raised: 0 1px 2px 0 oklch(0 0 0 / 0.4);
+  --elevation-overlay:
+    0 12px 34px -8px oklch(0 0 0 / 0.6),
+    0 2px 8px -2px oklch(0 0 0 / 0.45);
 
   /* Step 400, chosen for this surface rather than flipped from light. */
   --data: #3987e5;
   --data-soft: #3987e529;
-  --grid: oklch(1 0 0 / 12%);
+  --grid: oklch(0.302 0.009 258);
+
+  color-scheme: dark;
+}
+
+/*
+ * The two shapes this client draws over and over.
+ *
+ * Thirty-six places wrote `rounded-md border px-3 py-2.5` by hand for a
+ * row in a list, and a dozen more wrote some spelling of `px-4 py-3` for a
+ * block of content. Utilities rather than components, because what repeats
+ * is the *paint* -- the markup inside is a conversation, an order, a
+ * subscription, and no component should pretend those are the same thing.
+ *
+ * Both are filled. On a ground a shade below white an unfilled bordered
+ * row reads as an outline, and a list of thirty reads as a ladder; filling
+ * them is what makes a list look like rows of records. It is also the same
+ * decision already taken for inputs and secondary buttons, so the three
+ * agree.
+ *
+ * Row density lives here and only here. Phase 5 builds the operational
+ * table on top of it and changing that number is how.
+ */
+@utility row {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+}
+
+/*
+ * A usage bar, in this palette rather than the browser's.
+ *
+ * `<progress>` unstyled is whatever Chrome feels like -- a green fill on a
+ * dark grey track -- which on the billing screen was the only green in the
+ * client and the only colour nothing had chosen. Firefox and Safari each
+ * pick something else, so it was not even one wrong answer.
+ *
+ * Styling it needs the vendor pseudo-elements; there is no standard one.
+ * `color` is there for Firefox, which takes the value colour from it.
+ *
+ * The hue is `--data`, the one this client uses for measured quantities,
+ * because that is what a usage bar is. Phase 6 decides what it does as it
+ * approaches a ceiling.
+ */
+@utility meter {
+  appearance: none;
+  inline-size: 100%;
+  block-size: calc(var(--spacing) * 1.5);
+  border: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background-color: var(--muted);
+  color: var(--data);
+
+  &::-webkit-progress-bar {
+    background-color: var(--muted);
+    border-radius: var(--radius-sm);
+  }
+
+  &::-webkit-progress-value {
+    background-color: var(--data);
+    border-radius: var(--radius-sm);
+  }
+
+  &::-moz-progress-bar {
+    background-color: var(--data);
+    border-radius: var(--radius-sm);
+  }
+}
+
+@utility panel {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
+  }
+
+  /*
+   * Everything that can take focus gets a visible ring, not just the
+   * components that remembered to ask for one. Eighty-odd plain links in
+   * this client had nothing at all; a keyboard reaching one of those had
+   * no way to know where it was.
+   *
+   * Components that draw their own ring set `outline-none` in the
+   * utilities layer, which wins over this whatever its specificity.
+   */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--ring) 22%, transparent);
+  }
+
+  /*
+   * Numbers that are read down a column are read as columns. Money,
+   * counts and timestamps all sit in lists here, and proportional digits
+   * make a list of them ripple.
+   */
+  th,
+  td,
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Asked not to move, do not move. The transitions in this client are
+   * all 150ms hover and open/close states, so removing them costs
+   * nothing and keeps the rule honest for whatever is added later.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
