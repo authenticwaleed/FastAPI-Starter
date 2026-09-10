@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 
 import { CloseWorkspace } from "./close-workspace";
 import { SettingsForm } from "./settings-form";
+import { PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
@@ -49,34 +52,41 @@ export default async function WorkspaceSettingsPage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {workspace.name}
-          </h1>
-          {role ? <Badge variant="secondary">{role}</Badge> : null}
-          {workspace.status !== "active" ? (
-            <Badge variant="outline" className="uppercase">
-              {workspace.status}
-            </Badge>
-          ) : null}
-        </div>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">
-          {workspace.slug}
-        </p>
-        <Link
-          href={`/workspaces/${workspace.id}/team`}
-          className="mt-2 inline-block text-sm underline underline-offset-4"
-        >
-          Team and invitations
-        </Link>
-      </div>
+      <PageHeader
+        title={workspace.name}
+        meta={
+          <>
+            {role ? <Badge variant="secondary">{role}</Badge> : null}
+            {workspace.status !== "active" ? (
+              <StatusBadge
+                tone={workspace.status === "suspended" ? "critical" : "quiet"}
+                status={workspace.status}
+              >
+                {workspace.status}
+              </StatusBadge>
+            ) : null}
+          </>
+        }
+        description={
+          <span className="font-mono">{workspace.slug}</span>
+        }
+        actions={
+          <Link
+            href={`/workspaces/${workspace.id}/team`}
+            className="hover:text-foreground text-sm underline underline-offset-4"
+          >
+            Team and invitations
+          </Link>
+        }
+      />
 
       {workspace.status === "suspended" ? (
-        <p className="border-destructive/40 text-muted-foreground rounded-md border px-3 py-2 text-sm">
-          This workspace is suspended, so nothing here can be changed. It can
-          still be read, and its data has not gone anywhere.
-        </p>
+        <Alert variant="warning" role="status">
+          <AlertDescription>
+            This workspace is suspended, so nothing here can be changed. It
+            can still be read, and its data has not gone anywhere.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <SettingsForm

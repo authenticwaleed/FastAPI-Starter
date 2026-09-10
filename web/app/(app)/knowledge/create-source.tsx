@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { createSource } from "@/lib/knowledge-actions";
 import type { FormState } from "@/lib/form-state";
 
@@ -65,16 +66,15 @@ export function CreateSource({ workspaceId }: { workspaceId: string }) {
 
           <div className="grid gap-2">
             <Label htmlFor="source-type">Kind</Label>
-            <select
+            <NativeSelect
               id="source-type"
               name="source_type"
               defaultValue="text"
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
             >
               <option value="text">Text — typed or pasted</option>
               <option value="file">File — uploaded PDFs or text</option>
               <option value="manual_faq">FAQ — questions and answers</option>
-            </select>
+            </NativeSelect>
             <p className="text-muted-foreground text-xs">
               A label for your own sorting. It does not restrict what you can
               put in the source.

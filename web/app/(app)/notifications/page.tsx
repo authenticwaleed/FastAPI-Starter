@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { NotificationList } from "./notification-list";
+import { FilterTabs } from "@/components/filter-tabs";
+import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { api } from "@/lib/api";
 import type { Notification, Page, Workspace } from "@/lib/types";
 import { listWorkspaces } from "@/lib/workspace";
@@ -40,69 +42,44 @@ export default async function NotificationsPage({
   ]);
 
   const names = new Map(workspaces.map((w: Workspace) => [w.id, w.name]));
-  const lastPage = Math.max(1, Math.ceil(feed.total / feed.page_size));
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Everything you have been told, across every workspace.
-          </p>
-        </div>
+      <PageHeader
+        title="Notifications"
+        description="Everything you have been told, across every workspace."
+      />
 
-        <div className="flex gap-3 text-sm">
-          <Link
-            href="/notifications"
-            className={
-              unreadOnly
-                ? "text-muted-foreground underline-offset-4 hover:underline"
-                : "font-medium underline underline-offset-4"
-            }
-          >
-            All
-          </Link>
-          <Link
-            href="/notifications?unread=1"
-            className={
-              unreadOnly
-                ? "font-medium underline underline-offset-4"
-                : "text-muted-foreground underline-offset-4 hover:underline"
-            }
-          >
-            Unread
-          </Link>
-        </div>
-      </div>
+      <FilterTabs
+        label="Show"
+        options={[
+          {
+            value: "all",
+            label: "All",
+            href: "/notifications",
+            active: !unreadOnly,
+          },
+          {
+            value: "unread",
+            label: "Unread",
+            href: "/notifications?unread=1",
+            active: unreadOnly,
+          },
+        ]}
+      />
 
       <NotificationList items={feed.items} workspaceNames={Object.fromEntries(names)} />
 
-      {lastPage > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Pages">
-          <span className="text-muted-foreground tabular-nums">
-            Page {feed.page} of {lastPage} · {feed.total} in total
-          </span>
-          <span className="flex gap-3">
-            {page > 1 ? (
-              <Link
-                href={`/notifications?page=${page - 1}${unreadOnly ? "&unread=1" : ""}`}
-                className="underline underline-offset-4"
-              >
-                Newer
-              </Link>
-            ) : null}
-            {page < lastPage ? (
-              <Link
-                href={`/notifications?page=${page + 1}${unreadOnly ? "&unread=1" : ""}`}
-                className="underline underline-offset-4"
-              >
-                Older
-              </Link>
-            ) : null}
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        page={feed.page}
+        total={feed.total}
+        pageSize={feed.page_size}
+        noun="notifications"
+        labels={{ previous: "Newer", next: "Older" }}
+        href={(to) =>
+          `/notifications?page=${to}${unreadOnly ? "&unread=1" : ""}`
+        }
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { FieldError, FormError } from "@/components/form";
+import { SectionHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { searchKnowledge } from "@/lib/knowledge-actions";
@@ -39,14 +40,11 @@ export function SearchPanel({ workspaceId }: { workspaceId: string }) {
   const result = state?.search;
 
   return (
-    <section className="grid gap-3 rounded-md border px-3 py-3">
-      <div>
-        <h2 className="text-sm font-medium">Try a question</h2>
-        <p className="text-muted-foreground text-xs">
-          The same retrieval the assistant runs. What comes back is what it
-          would be given.
-        </p>
-      </div>
+    <section className="grid gap-3 panel">
+      <SectionHeader
+        title="Try a question"
+        description="The same retrieval the assistant runs. What comes back is what it would be given."
+      />
 
       <form action={ask} className="flex flex-wrap items-start gap-2">
         <input type="hidden" name="workspace_id" value={workspaceId} />
@@ -80,7 +78,7 @@ export function SearchPanel({ workspaceId }: { workspaceId: string }) {
         ) : (
           <ol className="grid gap-2" data-testid="search-results">
             {result.matches.map((match) => (
-              <li key={match.chunk_id} className="grid gap-1 rounded-md border px-3 py-2">
+              <li key={match.chunk_id} className="row grid gap-1">
                 <div className="flex items-center gap-2 text-xs">
                   <Link
                     href={`/knowledge/${match.document_id}`}

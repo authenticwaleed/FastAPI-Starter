@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -37,14 +39,10 @@ export default async function HomePage() {
   if (!workspace) {
     return (
       <div className="grid gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Welcome, {firstName}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            One thing to do before anything else works.
-          </p>
-        </div>
+        <PageHeader
+          title={`Welcome, ${firstName}`}
+          description="One thing to do before anything else works."
+        />
 
         <Card>
           <CardHeader>
@@ -69,32 +67,23 @@ export default async function HomePage() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome, {firstName}
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          You are working in {workspace.name}.
-        </p>
-      </div>
+      <PageHeader
+        title={`Welcome, ${firstName}`}
+        description={`You are working in ${workspace.name}.`}
+      />
 
       {workspace.status === "suspended" ? (
-        <Card className="border-destructive/40">
-          <CardHeader>
-            <CardTitle>
-              <h2>This workspace is suspended</h2>
-            </CardTitle>
-            <CardDescription>
-              {/*
-                An operational decision, not a billing one, and the copy must
-                not imply otherwise. Reads keep working throughout, which is
-                the whole shape of a suspension in this API.
-              */}
-              Everything here can still be read. Nothing can be changed until
-              it is lifted. Your data has not gone anywhere.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        // A warning rather than a refusal, and not a card. Suspension is
+        // an operational decision, not a billing one, and reads keep
+        // working throughout -- which is the whole shape of it in this API.
+        // Red would tell a business its account had failed.
+        <Alert variant="warning" role="status">
+          <AlertTitle>This workspace is suspended</AlertTitle>
+          <AlertDescription>
+            Everything here can still be read. Nothing can be changed until
+            it is lifted. Your data has not gone anywhere.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <Card>

@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { TENANT_WORDING, type InboxWording } from "@/lib/labels";
 import type { Message } from "@/lib/types";
@@ -38,12 +39,7 @@ export function MessageThread({
 }) {
   if (messages.length === 0) {
     return (
-      <p
-        data-testid="message-thread"
-        className="text-muted-foreground rounded-md border border-dashed px-3 py-8 text-center text-sm"
-      >
-        Nothing has been said yet.
-      </p>
+      <EmptyState title="Nothing has been said yet" data-testid="message-thread" />
     );
   }
 
@@ -87,12 +83,12 @@ export function MessageThread({
                 <span>{wording.voice[message.sender_type]}</span>
                 <span>{when(message.created_at)}</span>
                 {message.status === "queued" ? (
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-2xs">
                     Queued
                   </Badge>
                 ) : null}
                 {message.status === "failed" ? (
-                  <Badge variant="destructive" className="text-[10px]">
+                  <Badge variant="destructive" className="text-2xs">
                     Failed
                   </Badge>
                 ) : null}

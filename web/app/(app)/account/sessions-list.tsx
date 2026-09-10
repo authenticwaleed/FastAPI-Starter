@@ -91,7 +91,7 @@ export function SessionsList({ sessions }: { sessions: Session[] }) {
           {sessions.map((session) => (
             <li
               key={session.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2"
+              className="row flex flex-wrap items-center gap-x-3 gap-y-1"
             >
               <div className="grid min-w-0 flex-1 gap-0.5">
                 <span className="flex items-center gap-2 text-sm">

@@ -34,7 +34,7 @@ test("a source has to exist before anything can go in it", async ({ page }) => {
   await page.goto("/knowledge");
 
   await expect(page.getByRole("heading", { name: "Knowledge" })).toBeVisible();
-  await expect(page.getByText("None yet. A source is a grouping")).toBeVisible();
+  await expect(page.getByText("A source is a grouping")).toBeVisible();
   // Both ways of adding say the same thing rather than offering a form
   // whose only outcome is a refusal.
   await expect(page.getByText("Add a source first").first()).toBeVisible();
@@ -181,7 +181,7 @@ test("deleting a source says what goes with it, and asks for its name", async ({
   await page.getByLabel(/Type .* to confirm/).fill("Temporary notes");
   await page.getByRole("button", { name: "Delete this source" }).click();
 
-  await expect(page.getByText("None yet. A source is a grouping")).toBeVisible();
+  await expect(page.getByText("A source is a grouping")).toBeVisible();
   await expect(page.getByTestId("document-list")).toHaveCount(0);
 });
 

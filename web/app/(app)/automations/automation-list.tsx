@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { EmptyState } from "@/components/empty-state";
 import { Refusal } from "@/components/refusal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,9 +52,10 @@ export function AutomationList({
 
   if (automations.length === 0) {
     return (
-      <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-        None switched on yet.
-      </p>
+      <EmptyState title="None switched on yet">
+        An automation does something on its own — chases an unanswered
+        conversation, tidies up an old one — so nobody has to remember to.
+      </EmptyState>
     );
   }
 
@@ -70,7 +72,7 @@ export function AutomationList({
               key={automation.id}
               data-kind={automation.kind}
               data-status={automation.status}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 row"
             >
               <div className="grid min-w-0 flex-1 gap-0.5">
                 <Link

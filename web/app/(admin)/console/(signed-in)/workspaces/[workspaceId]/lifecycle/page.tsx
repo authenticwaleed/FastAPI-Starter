@@ -7,6 +7,8 @@ import { WorkspaceStatusBadge } from "@/components/console/badges";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { DangerZone } from "@/components/danger-zone";
+import { SectionHeader } from "@/components/page-header";
 import { readWorkspace } from "@/lib/console";
 import type { AdminWorkspaceDetail } from "@/lib/types";
 
@@ -66,36 +68,23 @@ export default async function ConsoleLifecyclePage({
       />
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">
-            {suspended ? "Lift the suspension" : "Suspend"}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            {/*
-              An operational decision, and the copy must not imply the
-              customer failed to pay -- most suspensions are not about
-              money, and telling a business it has when it has not is the
-              worst thing this screen could say.
-            */}
-            A suspended account is reachable, readable and unchangeable. Its
-            inbox keeps receiving; nothing of theirs is taken away.
-          </p>
-        </div>
+        <SectionHeader
+          title={suspended ? "Lift the suspension" : "Suspend"}
+          // An operational decision, and the copy must not imply the
+          // customer failed to pay -- most suspensions are not about money,
+          // and telling a business it has when it has not is the worst thing
+          // this screen could say.
+          description="A suspended account is reachable, readable and unchangeable. Its inbox keeps receiving; nothing of theirs is taken away."
+        />
 
         <Suspension workspaceId={workspaceId} status={workspace.status} />
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">
-            {closed ? "Restore this account" : "Close this account"}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            Closing takes the same path the customer&rsquo;s own close does:
-            the same status, the same grace period, the same erasure job.
-            Nothing is destroyed today.
-          </p>
-        </div>
+        <SectionHeader
+          title={closed ? "Restore this account" : "Close this account"}
+          description="Closing takes the same path the customer’s own close does: the same status, the same grace period, the same erasure job. Nothing is destroyed today."
+        />
 
         <Closure
           workspaceId={workspaceId}
@@ -107,14 +96,10 @@ export default async function ConsoleLifecyclePage({
 
       {closed ? (
         <section className="grid gap-3">
-          <div>
-            <h2 className="text-sm font-medium">When its records go</h2>
-            <p className="text-muted-foreground text-xs">
-              Both directions. Sooner is a customer asking to be forgotten;
-              later is a dispute or a legal hold. Without this, one of those
-              happens in a database console.
-            </p>
-          </div>
+          <SectionHeader
+            title="When its records go"
+            description="Both directions. Sooner is a customer asking to be forgotten; later is a dispute or a legal hold. Without this, one of those happens in a database console."
+          />
           <EraseAfter
             workspaceId={workspaceId}
             eraseAfter={workspace.erase_after}
@@ -122,22 +107,22 @@ export default async function ConsoleLifecyclePage({
         </section>
       ) : null}
 
-      <section className="border-destructive/40 grid gap-3 rounded-md border px-4 py-3">
-        <div>
-          <h2 className="text-sm font-medium">Erase everything, now</h2>
-          <p className="text-muted-foreground text-xs">
-            The one act on this surface with nothing behind it afterwards.
-            An owner, this workspace&rsquo;s address typed back, and a
-            colleague who agreed — on its own screen.
-          </p>
-        </div>
+      {/*
+        The shared danger zone rather than a section with a red border, so
+        that the one irreversible act on this surface is marked the same way
+        the customer app marks its own.
+      */}
+      <DangerZone
+        title="Erase everything, now"
+        description="The one act on this surface with nothing behind it afterwards. An owner, this workspace’s address typed back, and a colleague who agreed — on its own screen."
+      >
         <ConsoleLink
           href={`/console/workspaces/${workspaceId}/erase`}
-          className="w-fit text-sm underline underline-offset-4"
+          className="hover:text-foreground w-fit text-sm underline underline-offset-4"
         >
           Go to erasure
         </ConsoleLink>
-      </section>
+      </DangerZone>
     </div>
   );
 }

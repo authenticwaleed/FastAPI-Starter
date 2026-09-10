@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { Badge } from "@/components/ui/badge";
 import type { DocumentStatus, KnowledgeDocument } from "@/lib/types";
 
@@ -34,26 +37,24 @@ export function DocumentList({
   pageSize: number;
   sourceId: string | null;
 }) {
-  const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const scope = sourceId ? `&source=${sourceId}` : "";
 
   return (
     <section className="grid gap-3">
-      <h2 className="text-sm font-medium">
-        Documents{sourceId ? " in this source" : ""}
-      </h2>
+      <SectionHeader title={`Documents${sourceId ? " in this source" : ""}`} />
 
       {documents.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm">
-          Nothing here yet.
-        </p>
+        <EmptyState title="Nothing here yet">
+          Upload a file or write something, and the assistant will be able to
+          answer from it.
+        </EmptyState>
       ) : (
         <ul className="grid gap-2" data-testid="document-list">
           {documents.map((document) => (
             <li key={document.id} data-status={document.status}>
               <Link
                 href={`/knowledge/${document.id}`}
-                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {document.title}
@@ -77,31 +78,13 @@ export function DocumentList({
         </ul>
       )}
 
-      {lastPage > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Pages">
-          <span className="text-muted-foreground tabular-nums">
-            Page {page} of {lastPage} · {total} in total
-          </span>
-          <span className="flex gap-3">
-            {page > 1 ? (
-              <Link
-                href={`/knowledge?page=${page - 1}${scope}`}
-                className="underline underline-offset-4"
-              >
-                Previous
-              </Link>
-            ) : null}
-            {page < lastPage ? (
-              <Link
-                href={`/knowledge?page=${page + 1}${scope}`}
-                className="underline underline-offset-4"
-              >
-                Next
-              </Link>
-            ) : null}
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        total={total}
+        pageSize={pageSize}
+        noun="documents"
+        href={(to) => `/knowledge?page=${to}${scope}`}
+      />
     </section>
   );
 }

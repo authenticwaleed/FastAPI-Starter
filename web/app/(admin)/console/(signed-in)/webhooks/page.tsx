@@ -4,9 +4,11 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { when } from "@/lib/console-labels";
 import { listWebhookFailures, PLATFORM_PAGE_SIZE } from "@/lib/platform";
 import type { AdminWebhookFailure, Page as Paged } from "@/lib/types";
@@ -70,11 +72,10 @@ export default async function ConsoleWebhookFailuresPage({
           <Label htmlFor="reason" className="text-xs">
             Reason
           </Label>
-          <select
+          <NativeSelect
             id="reason"
             name="reason"
             defaultValue={reason ?? ""}
-            className="border-input bg-background h-8 rounded-md border px-2 text-sm shadow-xs"
           >
             <option value="">Any</option>
             {REASONS.map((value) => (
@@ -82,7 +83,7 @@ export default async function ConsoleWebhookFailuresPage({
                 {value}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <Button type="submit" variant="outline" size="sm">
@@ -105,16 +106,14 @@ export default async function ConsoleWebhookFailuresPage({
       </form>
 
       {failures.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing has been turned away.
-        </p>
+        <EmptyState title="Nothing has been turned away" />
       ) : (
         <ul className="grid gap-2" data-testid="webhook-failures">
           {failures.items.map((failure) => (
             <li
               key={failure.id}
               data-reason={failure.reason}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 row"
             >
               <Badge variant="outline">{failure.provider}</Badge>
               <span className="font-mono text-xs">{failure.path}</span>

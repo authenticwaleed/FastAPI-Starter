@@ -4,6 +4,8 @@ import { PlanOverrideControls } from "./plan-override";
 import { Fact, Facts } from "@/components/console/facts";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { readWorkspaceSubscription } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -53,38 +55,28 @@ export default async function ConsoleWorkspaceSubscriptionPage({
       />
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">What applies</h2>
-          <p className="text-muted-foreground text-xs">
-            After overrides and status. This is what the workspace may
-            actually do right now, and it is the answer to give a customer.
-          </p>
-        </div>
+        <SectionHeader
+          title="What applies"
+          description="After overrides and status. This is what the workspace may actually do right now, and it is the answer to give a customer."
+        />
         <p className="text-2xl font-semibold tracking-tight" data-testid="entitled-plan">
           {billing.plan}
         </p>
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">What is being paid for</h2>
-          <p className="text-muted-foreground text-xs">
-            The provider&rsquo;s side of it. Display only — never the plan to
-            answer &ldquo;can they use this&rdquo; with.
-          </p>
-        </div>
+        <SectionHeader
+          title="What is being paid for"
+          description="The provider’s side of it. Display only — never the plan to answer “can they use this” with."
+        />
 
         {subscription === null ? (
-          <p
-            className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm"
+          <EmptyState
+            // Null means never subscribed, which is not the same as a
+            // payment that failed. The plan above still applies.
+            title="This workspace has never had a subscription"
             data-testid="never-subscribed"
-          >
-            {/*
-              Null means never subscribed, which is not the same as a
-              payment that failed. The plan above still applies.
-            */}
-            This workspace has never had a subscription.
-          </p>
+          />
         ) : (
           <Facts>
             <Fact label="Status">
@@ -132,15 +124,10 @@ export default async function ConsoleWorkspaceSubscriptionPage({
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Grant a plan</h2>
-          <p className="text-muted-foreground text-xs">
-            A pilot, a comp, an enterprise contract invoiced offline. It
-            outranks whatever the provider says and survives every delivery
-            that follows — which is exactly why it is worth being careful
-            with.
-          </p>
-        </div>
+        <SectionHeader
+          title="Grant a plan"
+          description="A pilot, a comp, an enterprise contract invoiced offline. It outranks whatever the provider says and survives every delivery that follows — which is exactly why it is worth being careful with."
+        />
 
         <PlanOverrideControls workspaceId={workspaceId} />
       </section>

@@ -5,6 +5,7 @@ import { StatRow, StatTile } from "@/components/charts/stat-tile";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
 import { DaysPicker, windowOf } from "../days-picker";
+import { SectionHeader } from "@/components/page-header";
 import { readAiSpend } from "@/lib/platform";
 import type { AdminAiSpend } from "@/lib/types";
 
@@ -85,7 +86,7 @@ export default async function ConsoleAiSpendPage({
 
       <section className="grid gap-3">
         <div>
-          <h2 className="text-sm font-medium">Replies by model</h2>
+          <SectionHeader title="Replies by model" />
           <p className="text-muted-foreground text-xs">
             {/*
               What a migration between two models looks like from here --

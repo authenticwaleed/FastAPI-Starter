@@ -7,6 +7,7 @@ import { FieldError, SubmitButton } from "@/components/form";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { STAFF_ROLE_LABEL, when } from "@/lib/console-labels";
 import type { FormState } from "@/lib/form-state";
@@ -77,19 +78,19 @@ export function GrantAccess({
 
         <div className="grid gap-2">
           <Label htmlFor="role">Rank</Label>
-          <select
+          <NativeSelect
             id="role"
             name="role"
             value={role}
             onChange={(event) => setRole(event.target.value as StaffRole)}
-            className="border-input bg-background h-8 w-48 rounded-md border px-2 text-sm shadow-xs"
+            className="w-48"
           >
             {RANKS.map((rank) => (
               <option key={rank} value={rank}>
                 {STAFF_ROLE_LABEL[rank]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         {ready ? (
@@ -115,7 +116,7 @@ export function GrantAccess({
 
       {needsColleague ? (
         waiting ? (
-          <div className="grid gap-2 rounded-md border px-3 py-2.5" data-testid="owner-approval-pending">
+          <div className="grid gap-2 row" data-testid="owner-approval-pending">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">Waiting for a colleague</span>
               <Badge variant="outline">pending</Badge>
@@ -127,7 +128,7 @@ export function GrantAccess({
             </p>
           </div>
         ) : (
-          <form action={ask} className="grid gap-3 rounded-md border px-3 py-2.5">
+          <form action={ask} className="grid gap-3 row">
             <input type="hidden" name="user_id" value={userId ?? ""} />
 
             <Refused state={askState} />

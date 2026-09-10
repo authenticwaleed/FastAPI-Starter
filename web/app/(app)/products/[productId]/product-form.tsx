@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 
 import { FieldError, FormError, SubmitButton } from "@/components/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { NativeSelect } from "@/components/ui/native-select";
 import { VariantFields } from "@/components/variant-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,11 +47,13 @@ export function ProductForm({
       ) : null}
 
       {product.external_id ? (
-        <p className="text-muted-foreground rounded-md border px-3 py-2 text-sm">
-          This product came from a connected storefront. That shop is the
-          system of record, so anything changed here is replaced the next
-          time it syncs.
-        </p>
+        <Alert role="status">
+          <AlertDescription>
+            This product came from a connected storefront. That shop is the
+            system of record, so anything changed here is replaced the next
+            time it syncs.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <div className="grid gap-2">
@@ -111,17 +115,16 @@ export function ProductForm({
 
         <div className="grid gap-2">
           <Label htmlFor="status">Status</Label>
-          <select
+          <NativeSelect
             id="status"
             name="status"
             defaultValue={product.status}
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
             disabled={!canEdit}
           >
             <option value="active">Active</option>
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
-          </select>
+          </NativeSelect>
         </div>
       </div>
 

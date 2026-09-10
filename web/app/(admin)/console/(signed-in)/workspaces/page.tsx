@@ -6,6 +6,7 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { searchWorkspaces } from "@/lib/console";
 import { day } from "@/lib/console-labels";
@@ -61,21 +62,19 @@ export default async function ConsoleWorkspacesPage({
       <WorkspaceFilters q={q ?? null} status={status ?? null} plan={plan ?? null} />
 
       {found.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          {/*
-            A 404 on this surface means no such row, and so does an empty
-            search: no hedging about membership, because whoever is reading
-            is staff and there is nothing to keep from them (§3.2).
-          */}
-          Nothing matches that.
-        </p>
+        <EmptyState
+          // A 404 on this surface means no such row, and so does an empty
+          // search: no hedging about membership, because whoever is reading
+          // is staff and there is nothing to keep from them (§3.2).
+          title="Nothing matches that"
+        />
       ) : (
         <ul className="grid gap-2" data-testid="workspace-results">
           {found.items.map((workspace) => (
             <li key={workspace.id}>
               <ConsoleLink
                 href={`/console/workspaces/${workspace.id}`}
-                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="text-sm font-medium">{workspace.name}</span>
                 <span className="text-muted-foreground font-mono text-xs">

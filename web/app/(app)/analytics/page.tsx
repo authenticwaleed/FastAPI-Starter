@@ -5,6 +5,7 @@ import { RangePicker } from "./range-picker";
 import { DaySeries } from "@/components/charts/day-series";
 import { MagnitudeBars } from "@/components/charts/magnitude-bars";
 import { StatRow, StatTile } from "@/components/charts/stat-tile";
+import { PageHeader, SectionHeader } from "@/components/page-header";
 import { Refusal } from "@/components/refusal";
 import {
   duration,
@@ -66,7 +67,7 @@ export default async function AnalyticsPage({
     ) {
       return (
         <div className="grid gap-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+          <PageHeader title="Analytics" />
           <Refusal state={{ error: error.sentence, code: error.code }} />
           <RangePicker start={start ?? null} end={end ?? null} />
         </div>
@@ -80,12 +81,10 @@ export default async function AnalyticsPage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {workspace.name}, counted in {workspace.timezone}.
-        </p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        description={`${workspace.name}, counted in ${workspace.timezone}.`}
+      />
 
       <RangePicker start={start ?? null} end={end ?? null} />
 
@@ -115,23 +114,19 @@ export default async function AnalyticsPage({
       </StatRow>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Conversations opened</h2>
-          <p className="text-muted-foreground text-xs">
-            One point per day. Days with none are zero rather than missing.
-          </p>
-        </div>
+        <SectionHeader
+          title="Conversations opened"
+          description="One point per day. Days with none are zero rather than missing."
+        />
         <DaySeries points={conversations.by_day} label="conversations" />
       </section>
 
       <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
         <section className="grid gap-3">
-          <div>
-            <h2 className="text-sm font-medium">Where conversations stand</h2>
-            <p className="text-muted-foreground text-xs">
-              Right now, not over the range.
-            </p>
-          </div>
+          <SectionHeader
+            title="Where conversations stand"
+            description="Right now, not over the range."
+          />
           <MagnitudeBars
             rows={[
               { label: "Open", value: overview.conversations.open },
@@ -149,7 +144,7 @@ export default async function AnalyticsPage({
 
         <section className="grid gap-3">
           <div>
-            <h2 className="text-sm font-medium">What the assistant decided</h2>
+            <SectionHeader title="What the assistant decided" />
             <p className="text-muted-foreground text-xs">
               {percentage(assistant.answer_rate)} of the times it was asked, it
               had something to send.
@@ -185,7 +180,7 @@ export default async function AnalyticsPage({
       </div>
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">What the assistant cost</h2>
+        <SectionHeader title="What the assistant cost" />
         <StatRow>
           <StatTile label="Input tokens" value={assistant.cost.input_tokens} />
           <StatTile label="Output tokens" value={assistant.cost.output_tokens} />

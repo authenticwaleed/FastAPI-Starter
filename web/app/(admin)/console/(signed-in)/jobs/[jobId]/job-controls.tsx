@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { Refused } from "@/components/console/refused";
+import { SectionHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { FormState } from "@/lib/form-state";
 import { cancelJob, retryJob } from "@/lib/platform-actions";
@@ -32,7 +33,7 @@ export function JobControls({
 
   return (
     <section className="grid gap-3">
-      <h2 className="text-sm font-medium">What can be done</h2>
+      <SectionHeader title="What can be done" />
 
       <Refused state={retryState} />
       <Refused state={cancelState} />

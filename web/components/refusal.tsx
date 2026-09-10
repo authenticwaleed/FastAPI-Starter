@@ -14,7 +14,9 @@ import type { FormState } from "@/lib/form-state";
  * chose its status codes to make:
  *
  * - **402** — the *plan* is what is in the way, and the plan is something
- *   this person can change. So it links to billing.
+ *   this person can change. So it links to billing, and it is blue rather
+ *   than red: the same colour as a refusal would say the account is not
+ *   allowed to do this, when in fact it could be, for money.
  * - **403** — *you* may not, and no amount of paying fixes it. Sending
  *   somebody to the billing page for that would be worse than saying
  *   nothing, because they would spend money and still be refused.
@@ -28,7 +30,7 @@ export function Refusal({ state }: { state: FormState }) {
 
   if (isPlanRefusal(state.code)) {
     return (
-      <Alert role="alert" data-testid="upgrade-prompt">
+      <Alert variant="info" role="alert" data-testid="upgrade-prompt">
         <AlertDescription className="grid gap-1">
           <span>{state.error}</span>
           <Link

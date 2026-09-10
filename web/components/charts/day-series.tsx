@@ -121,7 +121,7 @@ export function DaySeries({
                 x={pad.left - 8}
                 y={y(value) + 4}
                 textAnchor="end"
-                className="fill-muted-foreground text-[11px] tabular-nums"
+                className="fill-muted-foreground text-2xs tabular-nums"
               >
                 {value}
               </text>
@@ -168,7 +168,7 @@ export function DaySeries({
           <text
             x={pad.left}
             y={height - 6}
-            className="fill-muted-foreground text-[11px]"
+            className="fill-muted-foreground text-2xs"
           >
             {points[0].day}
           </text>
@@ -177,7 +177,7 @@ export function DaySeries({
               x={width - pad.right}
               y={height - 6}
               textAnchor="end"
-              className="fill-muted-foreground text-[11px]"
+              className="fill-muted-foreground text-2xs"
             >
               {points[points.length - 1].day}
             </text>

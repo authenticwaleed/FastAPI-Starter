@@ -3,7 +3,9 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { EmptyState } from "@/components/empty-state";
 import { FormError } from "@/components/form";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { revokeInvitation } from "@/lib/invitation-actions";
@@ -53,17 +55,18 @@ export function InvitationList({
   if (invitations.length === 0) {
     return (
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Invitations</h2>
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm">
-          None sent yet.
-        </p>
+        <SectionHeader title="Invitations" />
+        <EmptyState title="None sent yet">
+          An invitation is a link you hand over. It is shown once, when you
+          create it.
+        </EmptyState>
       </section>
     );
   }
 
   return (
     <section className="grid gap-3">
-      <h2 className="text-sm font-medium">Invitations</h2>
+      <SectionHeader title="Invitations" />
 
       <FormError>{state?.error}</FormError>
 
@@ -72,7 +75,7 @@ export function InvitationList({
           <li
             key={invitation.id}
             data-status={invitation.status}
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 row"
           >
             <div className="grid min-w-0 flex-1 gap-0.5">
               <span className="truncate text-sm">{invitation.email}</span>

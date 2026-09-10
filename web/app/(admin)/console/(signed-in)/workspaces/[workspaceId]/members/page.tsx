@@ -4,6 +4,7 @@ import { MembershipStatusBadge } from "@/components/console/badges";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { readWorkspaceMembers } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -49,23 +50,19 @@ export default async function ConsoleWorkspaceMembersPage({
       />
 
       {members.length === 0 ? (
-        <p
-          className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm"
+        <EmptyState
+          // A real state rather than an error. A workspace whose owner
+          // closed their account has nobody in it, and that is exactly the
+          // sort of thing a ticket is about.
+          title="Nobody is in this workspace"
           data-testid="no-members"
-        >
-          {/*
-            A real state rather than an error. A workspace whose owner
-            closed their account has nobody in it, and that is exactly the
-            sort of thing a ticket is about.
-          */}
-          Nobody is in this workspace.
-        </p>
+        />
       ) : (
         <ul className="grid gap-2" data-testid="member-list">
           {members.map((member) => (
             <li
               key={member.user_id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 row"
             >
               <ConsoleLink
                 href={`/console/users/${member.user_id}`}

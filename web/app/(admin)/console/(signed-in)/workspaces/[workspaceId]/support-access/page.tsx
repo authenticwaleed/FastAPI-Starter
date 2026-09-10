@@ -5,6 +5,8 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { RequestAccess } from "@/components/console/request-access";
 import { SupportWindow } from "@/components/console/support-window";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { listSupportGrants } from "@/lib/console";
 import { when } from "@/lib/console-labels";
@@ -85,35 +87,30 @@ export default async function ConsoleSupportAccessPage({
         </section>
       ) : (
         <section className="grid gap-4">
-          <h2 className="text-sm font-medium">Ask for a window</h2>
+          <SectionHeader title="Ask for a window" />
           <RequestAccess workspaceId={workspaceId} />
         </section>
       )}
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Who has been in this account</h2>
-          <p className="text-muted-foreground text-xs">
-            History as well as what is live. A list of only the live ones is
-            almost always empty, and the question is about the past.
-          </p>
-        </div>
+        <SectionHeader
+          title="Who has been in this account"
+          description="History as well as what is live. A list of only the live ones is almost always empty, and the question is about the past."
+        />
 
         {historyRefusal !== null ? (
           <p className="text-muted-foreground text-sm" data-testid="history-refused">
             {historyRefusal}
           </p>
         ) : grants!.length === 0 ? (
-          <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-            Nobody has ever asked to read this account.
-          </p>
+          <EmptyState title="Nobody has ever asked to read this account" />
         ) : (
           <ul className="grid gap-2" data-testid="grant-list">
             {grants!.map((grant) => (
               <li
                 key={grant.id}
                 data-live={grant.live ? "" : undefined}
-                className="grid gap-1 rounded-md border px-3 py-2.5"
+                className="grid gap-1 row"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-sm font-medium">{grant.staff_email}</span>

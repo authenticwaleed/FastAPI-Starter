@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { Refusal } from "@/components/refusal";
 import { Badge } from "@/components/ui/badge";
 import { listAuditLogs } from "@/lib/analytics";
@@ -47,12 +49,10 @@ export default async function AuditPage({
     if (error instanceof ApiError && error.status === 402) {
       return (
         <div className="grid gap-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Who changed what, and when.
-            </p>
-          </div>
+          <PageHeader
+            title="Audit log"
+            description="Who changed what, and when."
+          />
 
           {/*
             The criterion: a prompt, not a wall. Every other 402 in this
@@ -74,12 +74,10 @@ export default async function AuditPage({
       // it sends somebody: to an administrator, not to the billing page.
       return (
         <div className="grid gap-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Who changed what, and when.
-            </p>
-          </div>
+          <PageHeader
+            title="Audit log"
+            description="Who changed what, and when."
+          />
           <p className="text-muted-foreground text-sm" data-testid="not-permitted">
             Only an owner or an admin can read this workspace&rsquo;s audit log.
           </p>
@@ -90,28 +88,25 @@ export default async function AuditPage({
     throw error;
   }
 
-  const lastPage = Math.max(1, Math.ceil(log.total / log.page_size));
-
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Who changed what in {workspace.name}, and when.
-        </p>
-      </div>
+      <PageHeader
+        title="Audit log"
+        description={`Who changed what in ${workspace.name}, and when.`}
+      />
 
       {log.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nothing recorded yet.
-        </p>
+        <EmptyState title="Nothing recorded yet">
+          Entries appear here when somebody changes something — a role, a
+          setting, a connected number.
+        </EmptyState>
       ) : (
         <ul className="grid gap-2" data-testid="audit-log">
           {log.items.map((entry) => (
             <li
               key={entry.id}
               data-event={entry.event}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 row"
             >
               <span className="min-w-0 flex-1 text-sm">{describeEvent(entry.event)}</span>
 
@@ -123,7 +118,7 @@ export default async function AuditPage({
                 {when(entry.created_at)}
               </span>
 
-              <Badge variant="outline" className="font-mono text-[10px]">
+              <Badge variant="outline" className="font-mono text-2xs">
                 {entry.event}
               </Badge>
             </li>
@@ -131,31 +126,14 @@ export default async function AuditPage({
         </ul>
       )}
 
-      {lastPage > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Pages">
-          <span className="text-muted-foreground tabular-nums">
-            Page {page} of {lastPage} · {log.total} entries
-          </span>
-          <span className="flex gap-3">
-            {page > 1 ? (
-              <Link
-                href={`/audit?page=${page - 1}`}
-                className="underline underline-offset-4"
-              >
-                Newer
-              </Link>
-            ) : null}
-            {page < lastPage ? (
-              <Link
-                href={`/audit?page=${page + 1}`}
-                className="underline underline-offset-4"
-              >
-                Older
-              </Link>
-            ) : null}
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        total={log.total}
+        pageSize={log.page_size}
+        noun="entries"
+        labels={{ previous: "Newer", next: "Older" }}
+        href={(to) => `/audit?page=${to}`}
+      />
     </div>
   );
 }

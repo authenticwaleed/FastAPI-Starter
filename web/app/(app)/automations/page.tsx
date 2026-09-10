@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AutomationList } from "./automation-list";
 import { CreateAutomation } from "./create-automation";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import { listAutomations } from "@/lib/integrations";
 import { admits } from "@/lib/plans";
@@ -44,13 +45,10 @@ export default async function AutomationsPage() {
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Automations</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Things that happen on their own, so nobody has to remember to do
-          them.
-        </p>
-      </div>
+      <PageHeader
+        title="Automations"
+        description="Things that happen on their own, so nobody has to remember to do them."
+      />
 
       <AutomationList
         workspaceId={workspace.id}

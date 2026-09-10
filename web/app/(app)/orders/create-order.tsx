@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { createOrder } from "@/lib/order-actions";
 import type { FormState } from "@/lib/form-state";
@@ -74,10 +75,9 @@ export function CreateOrder({
 
           <div className="grid gap-2">
             <Label htmlFor="order-contact">Customer</Label>
-            <select
+            <NativeSelect
               id="order-contact"
               name="contact_id"
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
               required
             >
               {contacts.map((contact) => (
@@ -85,7 +85,7 @@ export function CreateOrder({
                   {contact.name ?? contact.phone_number}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <FieldError>{state?.fields?.contact_id}</FieldError>
           </div>
 

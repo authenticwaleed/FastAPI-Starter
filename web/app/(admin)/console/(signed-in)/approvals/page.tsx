@@ -5,6 +5,7 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { listApprovals } from "@/lib/approvals";
 import { whoami } from "@/lib/console";
@@ -77,9 +78,7 @@ export default async function ConsoleApprovalsPage({
       />
 
       {waiting.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm">
-          Nothing is waiting on anybody.
-        </p>
+        <EmptyState title="Nothing is waiting on anybody" />
       ) : (
         <p className="text-sm" data-testid="waiting-count">
           {waiting.length} request{waiting.length === 1 ? "" : "s"} waiting.
@@ -97,7 +96,7 @@ export default async function ConsoleApprovalsPage({
                 key={approval.id}
                 data-action={approval.action}
                 data-state={shown.label}
-                className="grid gap-2 rounded-md border px-3 py-2.5"
+                className="grid gap-2 row"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-sm font-medium">

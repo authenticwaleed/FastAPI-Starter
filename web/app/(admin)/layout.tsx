@@ -29,7 +29,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       <header className="bg-primary text-primary-foreground">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4">
           <span className="font-semibold tracking-tight">Baton</span>
-          <span className="text-[11px] tracking-widest uppercase opacity-70">
+          <span className="text-2xs tracking-widest uppercase opacity-70">
             Platform console
           </span>
         </div>

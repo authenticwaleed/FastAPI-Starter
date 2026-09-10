@@ -3,17 +3,9 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { DangerZone, TypedConfirm } from "@/components/danger-zone";
 import { FormError } from "@/components/form";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { leaveWorkspace } from "@/lib/member-actions";
 import type { FormState } from "@/lib/form-state";
 import type { Member, Workspace } from "@/lib/types";
@@ -50,47 +42,27 @@ export function LeaveWorkspace({
   const strandedAsOwner = state?.error?.includes("at least one owner");
 
   return (
-    <Card className="border-destructive/40">
-      <CardHeader>
-        <CardTitle>
-          <h2>Leave {workspace.name}</h2>
-        </CardTitle>
-        <CardDescription>
-          You lose access to its inbox, its contacts and everything else in
-          it. Somebody who administers it can invite you back.
-        </CardDescription>
-      </CardHeader>
+    <DangerZone
+      title={`Leave ${workspace.name}`}
+      description="You lose access to its inbox, its contacts and everything else in it. Somebody who administers it can invite you back."
+    >
+      <form action={action} className="grid gap-4">
+        <input type="hidden" name="workspace_id" value={workspace.id} />
+        <input type="hidden" name="user_id" value={me.user_id} />
 
-      <CardContent>
-        <form action={action} className="grid max-w-md gap-4">
-          <input type="hidden" name="workspace_id" value={workspace.id} />
-          <input type="hidden" name="user_id" value={me.user_id} />
+        <FormError>{state?.error}</FormError>
 
-          <FormError>{state?.error}</FormError>
+        {strandedAsOwner ? (
+          <p className="text-muted-foreground text-sm">
+            Give somebody else the owner role in the list above, then come
+            back. A workspace with no owner is one nobody can administer.
+          </p>
+        ) : null}
 
-          {strandedAsOwner ? (
-            <p className="text-muted-foreground text-sm">
-              Give somebody else the owner role in the list above, then come
-              back. A workspace with no owner is one nobody can administer.
-            </p>
-          ) : null}
+        <TypedConfirm phrase="LEAVE" id="leave-confirm" />
 
-          <div className="grid gap-2">
-            <Label htmlFor="leave-confirm">
-              Type <span className="font-mono">LEAVE</span> to confirm
-            </Label>
-            <Input
-              id="leave-confirm"
-              name="confirm"
-              autoComplete="off"
-              className="font-mono"
-              required
-            />
-          </div>
-
-          <LeaveButton />
-        </form>
-      </CardContent>
-    </Card>
+        <LeaveButton />
+      </form>
+    </DangerZone>
   );
 }

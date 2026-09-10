@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/page-header";
 import { Refusal } from "@/components/refusal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,17 +58,18 @@ export function KeyList({
   if (keys.length === 0) {
     return (
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">Keys</h2>
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm">
-          None yet.
-        </p>
+        <SectionHeader title="Keys" />
+        <EmptyState title="No keys yet">
+          A key lets your own software reach this workspace. It is shown once,
+          when you create it.
+        </EmptyState>
       </section>
     );
   }
 
   return (
     <section className="grid gap-3">
-      <h2 className="text-sm font-medium">Keys</h2>
+      <SectionHeader title="Keys" />
 
       <Refusal state={state} />
 
@@ -80,7 +83,7 @@ export function KeyList({
             <li
               key={key.id}
               data-revoked={revoked ? "" : undefined}
-              className="grid gap-2 rounded-md border px-3 py-2.5"
+              className="grid gap-2 row"
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="text-sm font-medium">{key.name}</span>

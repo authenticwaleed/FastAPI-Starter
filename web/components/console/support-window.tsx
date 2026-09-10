@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { ConsoleLink } from "@/components/console/console-link";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { timeLeft } from "@/lib/console-labels";
 
 /**
@@ -47,32 +48,40 @@ export function SupportWindow({
 
   if (left === null) {
     return (
-      <p
+      <Alert
+        variant="destructive"
         role="alert"
         data-testid="support-window"
         data-state="closed"
-        className="border-destructive/40 text-destructive rounded-md border px-4 py-3 text-sm"
       >
-        This window has closed. Nothing further can be read here until you{" "}
-        <ConsoleLink
-          href={`/console/workspaces/${workspaceId}/support-access`}
-          className="underline underline-offset-4"
-        >
-          ask for access again
-        </ConsoleLink>
-        .
-      </p>
+        <AlertDescription>
+          This window has closed. Nothing further can be read here until you{" "}
+          <ConsoleLink
+            href={`/console/workspaces/${workspaceId}/support-access`}
+          >
+            ask for access again
+          </ConsoleLink>
+          .
+        </AlertDescription>
+      </Alert>
     );
   }
 
   return (
-    <div
+    <Alert
+      // A warning while it is open, because that is what it is: a window
+      // onto somebody else's data that a colleague granted and that is
+      // running out. Neutral would let it be scrolled past, and red would
+      // say something had gone wrong.
+      variant="warning"
+      role="status"
       data-testid="support-window"
       data-state="open"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-4 py-3 text-sm"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1"
     >
       <span>
-        You are reading a customer&rsquo;s own data. <strong>{left}</strong> left.
+        You are reading a customer&rsquo;s own data. <strong>{left}</strong>{" "}
+        left.
       </span>
 
       <ConsoleLink
@@ -81,6 +90,6 @@ export function SupportWindow({
       >
         End access
       </ConsoleLink>
-    </div>
+    </Alert>
   );
 }

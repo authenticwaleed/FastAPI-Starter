@@ -5,6 +5,7 @@ import { StaffRow } from "./staff-row";
 import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
+import { SectionHeader } from "@/components/page-header";
 import { approvalsFor, pendingApproval, usableApproval } from "@/lib/approvals";
 import { listStaff, whoami } from "@/lib/console";
 import type { Approval, StaffMember } from "@/lib/types";
@@ -67,7 +68,7 @@ export default async function ConsoleStaffPage({
   const granting = (
     <section className="grid gap-4">
       <div>
-        <h2 className="text-sm font-medium">Give somebody access</h2>
+        <SectionHeader title="Give somebody access" />
         <p className="text-muted-foreground text-xs">
           Staff are ordinary accounts that have been promoted, so whoever
           belongs here has registered already. Find them under{" "}
@@ -102,7 +103,7 @@ export default async function ConsoleStaffPage({
 
       <section className="grid gap-3">
         <div>
-          <h2 className="text-sm font-medium">With access</h2>
+          <SectionHeader title="With access" />
           <p className="text-muted-foreground text-xs">
             A ladder rather than a set: everything support may do, an
             administrator may do too. {owners} owner{owners === 1 ? "" : "s"},
@@ -126,13 +127,10 @@ export default async function ConsoleStaffPage({
 
       {gone.length > 0 ? (
         <section className="grid gap-3">
-          <div>
-            <h2 className="text-sm font-medium">Access taken away</h2>
-            <p className="text-muted-foreground text-xs">
-              Kept, because this is the half of the screen somebody needs
-              after an incident: who used to have this, and when it stopped.
-            </p>
-          </div>
+          <SectionHeader
+            title="Access taken away"
+            description="Kept, because this is the half of the screen somebody needs after an incident: who used to have this, and when it stopped."
+          />
 
           <ul className="grid gap-2" data-testid="revoked-staff">
             {gone.map((member) => (

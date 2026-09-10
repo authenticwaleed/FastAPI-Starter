@@ -33,7 +33,18 @@ export function NeedsAccess({
         back={{ href: `/console/workspaces/${workspaceId}`, label: "Workspace" }}
       />
 
-      <Alert role="alert" data-testid="needs-access" data-code="support_access_required">
+      {/*
+        Blue, not red. This is the same distinction the 402 makes on the
+        customer side: a refusal with exactly one thing to do about it is
+        information, and colouring it as a fault sends somebody looking for
+        what they did wrong instead of at the form below.
+      */}
+      <Alert
+        variant="info"
+        role="alert"
+        data-testid="needs-access"
+        data-code="support_access_required"
+      >
         <AlertDescription>{sentenceFor("support_access_required")}</AlertDescription>
       </Alert>
 

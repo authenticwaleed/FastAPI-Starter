@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 
+import { SectionHeader } from "@/components/page-header";
 import { PlanCard } from "@/components/plan-card";
 import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ export function PlanPicker({
 
   return (
     <section className="grid gap-3">
-      <h2 className="text-sm font-medium">Plans</h2>
+      <SectionHeader title="Plans" />
 
       <Refusal state={state} />
 

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { updateContact } from "@/lib/contact-actions";
 import type { FormState } from "@/lib/form-state";
 import type { Contact } from "@/lib/types";
@@ -95,16 +96,15 @@ export function ContactForm({
 
             <div className="grid gap-2">
               <Label htmlFor="status">Status</Label>
-              <select
+              <NativeSelect
                 id="status"
                 name="status"
                 defaultValue={contact.status}
-                className="border-input bg-background h-9 rounded-md border px-2 text-sm"
               >
                 <option value="lead">Lead</option>
                 <option value="customer">Customer</option>
                 <option value="blocked">Blocked</option>
-              </select>
+              </NativeSelect>
             </div>
           </div>
 

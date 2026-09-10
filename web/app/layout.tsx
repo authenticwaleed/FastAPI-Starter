@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
+import { ThemeScript } from "@/components/theme";
 
-const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+// Both named for the family they load, and both read by `@theme` under
+// those names. The sans one used to be called `--font-sans`, which is also
+// the name Tailwind gives the resolved theme value -- one variable
+// standing for two things, each defined in terms of the other.
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -29,8 +34,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The script below adds `dark` to this element before React sees it.
+      // Without this, that correction is reported as a hydration error on
+      // every dark-mode page load.
+      suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <ThemeScript />
+        {children}
+      </body>
     </html>
   );
 }

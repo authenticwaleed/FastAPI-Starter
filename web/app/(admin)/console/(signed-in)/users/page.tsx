@@ -4,6 +4,7 @@ import { ConsoleLink } from "@/components/console/console-link";
 import { ConsoleHeading } from "@/components/console/heading";
 import { ConsolePages } from "@/components/console/pages";
 import { consoleRefusal } from "@/components/console/refusal";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,16 +82,14 @@ export default async function ConsoleUsersPage({
       </form>
 
       {found.items.length === 0 ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-          Nobody matches that.
-        </p>
+        <EmptyState title="Nobody matches that" />
       ) : (
         <ul className="grid gap-2" data-testid="user-results">
           {found.items.map((user) => (
             <li key={user.id}>
               <ConsoleLink
                 href={`/console/users/${user.id}`}
-                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2.5"
+                className="hover:bg-accent/50 flex flex-wrap items-center gap-x-3 gap-y-1 row"
               >
                 <span className="text-sm font-medium">{user.name}</span>
                 <span className="text-muted-foreground truncate text-xs">

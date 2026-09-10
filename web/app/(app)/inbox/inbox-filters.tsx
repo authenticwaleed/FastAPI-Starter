@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { FilterBar, FilterGroup } from "@/components/filter-tabs";
 import { Input } from "@/components/ui/input";
 import type { ConversationStatus } from "@/lib/types";
 
@@ -16,12 +15,6 @@ import type { ConversationStatus } from "@/lib/types";
  * person in mind, and searching message bodies is a different feature with
  * a different index behind it.
  */
-function tab(active: boolean) {
-  return active
-    ? "font-medium underline underline-offset-4"
-    : "text-muted-foreground underline-offset-4 hover:underline";
-}
-
 export function InboxFilters({
   statuses,
   assigned,
@@ -56,29 +49,48 @@ export function InboxFilters({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y py-3 text-sm">
-      <div className="flex items-center gap-3">
-        <span className="text-muted-foreground text-xs uppercase">Status</span>
-        <Link href={withStatus(["open", "pending"])} className={tab(!showingClosed)}>
-          Live
-        </Link>
-        <Link href={withStatus(["closed"])} className={tab(showingClosed)}>
-          Closed
-        </Link>
-      </div>
+    <FilterBar>
+      <FilterGroup
+        label="Status"
+        options={[
+          {
+            value: "live",
+            label: "Live",
+            href: withStatus(["open", "pending"]),
+            active: !showingClosed,
+          },
+          {
+            value: "closed",
+            label: "Closed",
+            href: withStatus(["closed"]),
+            active: showingClosed,
+          },
+        ]}
+      />
 
-      <div className="flex items-center gap-3">
-        <span className="text-muted-foreground text-xs uppercase">Who</span>
-        <Link href={withAssigned(null)} className={tab(assigned === null)}>
-          Everyone
-        </Link>
-        <Link href={withAssigned("me")} className={tab(assigned === "me")}>
-          Mine
-        </Link>
-        <Link href={withAssigned("none")} className={tab(assigned === "none")}>
-          Unassigned
-        </Link>
-      </div>
+      <FilterGroup
+        label="Who"
+        options={[
+          {
+            value: "everyone",
+            label: "Everyone",
+            href: withAssigned(null),
+            active: assigned === null,
+          },
+          {
+            value: "me",
+            label: "Mine",
+            href: withAssigned("me"),
+            active: assigned === "me",
+          },
+          {
+            value: "none",
+            label: "Unassigned",
+            href: withAssigned("none"),
+            active: assigned === "none",
+          },
+        ]}
+      />
 
       <form action="/inbox" className="ml-auto flex items-center gap-2">
         {statuses.map((status) => (
@@ -90,11 +102,11 @@ export function InboxFilters({
           name="search"
           defaultValue={search ?? ""}
           placeholder="Search contacts"
-          className="h-8 w-48"
+          className="w-48"
           maxLength={150}
           aria-label="Search contacts"
         />
       </form>
-    </div>
+    </FilterBar>
   );
 }

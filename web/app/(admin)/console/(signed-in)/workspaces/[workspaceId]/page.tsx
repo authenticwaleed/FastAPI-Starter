@@ -6,6 +6,8 @@ import { Fact, Facts } from "@/components/console/facts";
 import { ConsoleHeading } from "@/components/console/heading";
 import { consoleRefusal } from "@/components/console/refusal";
 import { StatRow, StatTile } from "@/components/charts/stat-tile";
+import { SectionHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { readWorkspace } from "@/lib/console";
 import { day, when } from "@/lib/console-labels";
@@ -105,18 +107,19 @@ export default async function ConsoleWorkspacePage({
       />
 
       {workspace.erase_after ? (
-        <p
-          className="border-destructive/40 text-destructive rounded-md border px-4 py-3 text-sm"
-          data-testid="erase-after"
-        >
-          This workspace is closed. Its records are due to be destroyed on{" "}
-          {day(workspace.erase_after)}, and after that there is nothing to
-          restore.
-        </p>
+        // A warning rather than a refusal. Nothing has gone yet, and a
+        // support engineer reading this needs the date, not an alarm.
+        <Alert variant="warning" role="status" data-testid="erase-after">
+          <AlertDescription>
+            This workspace is closed. Its records are due to be destroyed on{" "}
+            {day(workspace.erase_after)}, and after that there is nothing to
+            restore.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">How much it holds</h2>
+        <SectionHeader title="How much it holds" />
         <StatRow>
           <StatTile label="Members" value={workspace.counts.members} />
           <StatTile label="Contacts" value={workspace.counts.contacts} />
@@ -131,7 +134,7 @@ export default async function ConsoleWorkspacePage({
       </section>
 
       <section className="grid gap-3">
-        <h2 className="text-sm font-medium">The account</h2>
+        <SectionHeader title="The account" />
         <Facts>
           <Fact label="Owner">{workspace.owner_email}</Fact>
           <Fact label="Time zone">{workspace.timezone}</Fact>
@@ -145,20 +148,17 @@ export default async function ConsoleWorkspacePage({
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Look further</h2>
-          <p className="text-muted-foreground text-xs">
-            Each of these is a separate read, and each is recorded. Nothing
-            below has been loaded.
-          </p>
-        </div>
+        <SectionHeader
+          title="Look further"
+          description="Each of these is a separate read, and each is recorded. Nothing below has been loaded."
+        />
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {SECTIONS.map((section) => (
             <ConsoleLink
               key={section.slug}
               href={`/console/workspaces/${workspace.id}/${section.slug}`}
-              className="hover:bg-accent/50 grid content-start gap-1 rounded-md border px-4 py-3"
+              className="hover:bg-accent/50 grid content-start gap-1 panel"
             >
               <span className="text-sm font-medium">{section.title}</span>
               <span className="text-muted-foreground text-xs">{section.body}</span>
@@ -172,7 +172,7 @@ export default async function ConsoleWorkspacePage({
           */}
           <ConsoleLink
             href={`/console/audit?workspace_id=${workspace.id}`}
-            className="hover:bg-accent/50 grid content-start gap-1 rounded-md border px-4 py-3"
+            className="hover:bg-accent/50 grid content-start gap-1 panel"
           >
             <span className="text-sm font-medium">What staff did here</span>
             <span className="text-muted-foreground text-xs">

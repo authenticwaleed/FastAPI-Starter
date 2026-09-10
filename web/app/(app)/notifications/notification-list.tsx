@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { EmptyState } from "@/components/empty-state";
 import { FormError } from "@/components/form";
 import { Button } from "@/components/ui/button";
 import { markAllRead, markRead } from "@/lib/notification-actions";
@@ -46,10 +47,10 @@ export function NotificationList({
 
   if (items.length === 0) {
     return (
-      <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
-        Nothing here. Notifications arrive when something needs you — a
-        payment that did not go through, a conversation handed to you.
-      </p>
+      <EmptyState title="Nothing here">
+        Notifications arrive when something needs you — a payment that did not
+        go through, a conversation handed to you.
+      </EmptyState>
     );
   }
 
@@ -75,7 +76,7 @@ export function NotificationList({
           <li
             key={item.id}
             data-unread={item.read_at === null ? "" : undefined}
-            className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-md border px-3 py-2.5 data-unread:border-l-2 data-unread:border-l-primary"
+            className="flex flex-wrap items-start gap-x-3 gap-y-2 row data-unread:border-l-2 data-unread:border-l-primary"
           >
             <div className="grid min-w-0 flex-1 gap-0.5">
               <span className="text-sm font-medium">{item.title}</span>

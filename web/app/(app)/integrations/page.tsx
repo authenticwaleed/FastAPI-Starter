@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { StorefrontPanel } from "./storefront-panel";
 import { WhatsAppPanel } from "./whatsapp-panel";
+import { PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/lib/api";
 import { readSubscription } from "@/lib/billing";
 import { readStorefronts, readWhatsApp } from "@/lib/integrations";
@@ -51,22 +53,18 @@ export default async function IntegrationsPage({
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Where your customers reach you, and where your catalogue comes from.
-        </p>
-      </div>
+      <PageHeader
+        title="Integrations"
+        description="Where your customers reach you, and where your catalogue comes from."
+      />
 
       {connected ? (
-        <p
-          className="rounded-md border px-3 py-2 text-sm"
-          role="status"
-          data-testid="install-outcome"
-        >
-          {connected} is connected. Its catalogue and orders will come across
-          on the first sync.
-        </p>
+        <Alert variant="success" role="status" data-testid="install-outcome">
+          <AlertDescription>
+            {connected} is connected. Its catalogue and orders will come
+            across on the first sync.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {failed ? (
@@ -74,14 +72,12 @@ export default async function IntegrationsPage({
         // provider sends the browser back whatever happened, and a page
         // that only handled success would leave somebody staring at a
         // screen that had not changed.
-        <p
-          className="border-destructive/40 rounded-md border px-3 py-2 text-sm"
-          role="alert"
-          data-testid="install-outcome"
-        >
-          That shop was not connected. The approval may have been declined, or
-          the link may have expired — starting again is safe.
-        </p>
+        <Alert variant="destructive" role="alert" data-testid="install-outcome">
+          <AlertDescription>
+            That shop was not connected. The approval may have been declined,
+            or the link may have expired — starting again is safe.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <WhatsAppPanel
